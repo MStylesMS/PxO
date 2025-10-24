@@ -8,7 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const EdnConfigLoader = require('../game/src/edn-config-loader');
+const EdnConfigLoader = require('../src/edn-config-loader');
 
 function usage() {
     console.log('Usage: node tools/edn-to-json.js <input.edn> [output.json]');

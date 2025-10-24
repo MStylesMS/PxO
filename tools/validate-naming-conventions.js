@@ -38,7 +38,7 @@ class NamingValidator {
         };
 
         this.directories = [
-            'game/src',
+            'src',
             'tools',
             'test'
         ];

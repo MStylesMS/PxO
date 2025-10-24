@@ -11,7 +11,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const CONFIG_DIR = path.join(ROOT, 'config');
-const { loadConfig } = require(path.join(ROOT, 'game', 'src', 'config'));
+const { loadConfig } = require(path.join(ROOT, 'src', 'config'));
 
 function fail(msg) {
   console.error('CONFIG VALIDATION ERROR:', msg);
