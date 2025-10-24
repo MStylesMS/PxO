@@ -89,7 +89,9 @@ sudo systemctl start mosquitto
 2. **Run the game engine**:
 
 ```bash
-node src/game.js --config game.edn --mode demo
+node src/game.js --edn game.edn --mode demo
+
+# See CLI.md for complete options (--edn, --config, --mode, etc.)
 ```
 
 3. **Control via MQTT**:
@@ -138,6 +140,7 @@ ready → intro → gameplay → paused/solved/failed → sleeping
 - 📖 **[User Guide](docs/USER_GUIDE.md)** — Tutorial for building your first game
 - 📋 **[Specification](docs/SPEC.md)** — Complete functional specification
 - 🔌 **[MQTT API](docs/MQTT_API.md)** — MQTT topics and message formats
+- 💻 **[CLI Reference](docs/CLI.md)** — Command line options and usage
 - ⚙️ **[EDN Configuration](docs/CONFIG_EDN.md)** — EDN config reference
 - 🛠️ **[INI Configuration](docs/CONFIG_INI.md)** — System settings reference
 - 🚀 **[Setup & Deployment](docs/SETUP.md)** — Installation and systemd services

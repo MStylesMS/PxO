@@ -1,0 +1,272 @@
+;; Paradox Orchestrator (PxO) - Example Game Configuration
+;; Demo: 5-minute escape room experience
+
+{
+  ;; Game metadata
+  :game-name "Demo Escape Room"
+  :game-description "A quick 5-minute demo showcasing PxO features"
+  :version "1.0.0"
+  :format "EDN"
+  
+  ;; === GLOBAL BUILDING BLOCKS ===
+  ;; Shared configuration used across all game modes
+  :global {
+    ;; Global settings
+    :settings {
+      :default-mode :demo
+      :sequence-max-depth 3
+      :hint-duration-sec 15
+      :game-heartbeat-ms 1000
+      :strict-validation true
+    }
+    
+    ;; MQTT broker configuration
+    :mqtt {
+      :broker "mqtt://127.0.0.1"
+      :port 1883
+      :client-id "pxo-demo"
+      :keepalive 60
+    }
+    
+    ;; Zone definitions (device control)
+    :zones {
+      :lights {
+        :type "pfx-lights"
+        :baseTopic "paradox/demo/lights"
+      }
+      :mirror {
+        :type "pfx-media"
+        :baseTopic "paradox/demo/mirror"
+      }
+      :audio {
+        :type "pfx-media"
+        :baseTopic "paradox/demo/audio"
+      }
+      :clock {
+        :type "houdini-clock"
+        :baseTopic "paradox/demo/clock"
+      }
+    }
+    
+    ;; Media file references
+    :media {
+      :intro-video "media/video/intro.mp4"
+      :intro-music "media/audio/intro-music.mp3"
+      :ambient-music "media/audio/ambient.mp3"
+      :victory-video "media/video/victory.mp4"
+      :victory-music "media/audio/victory-music.mp3"
+      :failure-video "media/video/failure.mp4"
+      :hint-01-audio "media/audio/hints/hint-01.mp3"
+      :hint-02-audio "media/audio/hints/hint-02.mp3"
+    }
+    
+    ;; Reusable commands (atomic actions)
+    :commands {
+      :play-intro-video {
+        :zone "mirror"
+        :command "playVideo"
+        :file :intro-video
+      }
+      :play-intro-music {
+        :zone "audio"
+        :command "playAudioFX"
+        :file :intro-music
+        :volume 60
+      }
+      :stop-all-media {
+        :zones ["mirror" "audio"]
+        :command "stopAudio"
+      }
+      :show-clock {
+        :zone "mirror"
+        :command "showBrowser"
+      }
+    }
+    
+    ;; Named cues (fire-and-forget shortcuts)
+    :cues {
+      ; Lighting scenes
+      :lights-dim {:zone "lights" :command "scene" :name "dim"}
+      :lights-red {:zone "lights" :command "scene" :name "red"}
+      :lights-green {:zone "lights" :command "scene" :name "green"}
+      :lights-blue {:zone "lights" :command "scene" :name "blue"}
+      :lights-rainbow {:zone "lights" :command "scene" :name "rainbow"}
+      
+      ; Command references
+      :play-intro :play-intro-video
+      :stop-all :stop-all-media
+      
+      ; Multi-command cues (parallel execution)
+      :victory-celebration [
+        {:zone "lights" :command "scene" :name "rainbow"}
+        {:zone "audio" :command "playAudioFX" :file :victory-music :volume 90}
+        {:zone "mirror" :command "playVideo" :file :victory-video}
+      ]
+      
+      :failure-scene [
+        {:zone "lights" :command "scene" :name "red"}
+        {:zone "mirror" :command "playVideo" :file :failure-video}
+      ]
+    }
+    
+    ;; Timeline sequences (time-based execution)
+    :sequences {
+      ; Introduction sequence (30 seconds)
+      :intro-sequence {
+        :duration 30
+        :timeline [
+          ; T=0: Dim lights
+          {:at 30 :cue :lights-dim}
+          
+          ; T=3: Start intro video and music
+          {:at 27 :zone "mirror" :command "playVideo" :file :intro-video}
+          {:at 27 :zone "audio" :command "playAudioFX" :file :intro-music :volume 60}
+          
+          ; T=10: Lights transition to red
+          {:at 20 :cue :lights-red}
+          
+          ; T=25: Show countdown clock
+          {:at 5 :cue :show-clock}
+          
+          ; T=27: Lights green (ready to start)
+          {:at 3 :cue :lights-green}
+        ]
+      }
+      
+      ; Gameplay sequence (300 seconds = 5 minutes)
+      :gameplay-sequence {
+        :duration 300
+        :timeline [
+          ; T=0: Start countdown timer
+          {:at 300 :zone "clock" :command "startCountdown" :duration 300}
+          {:at 300 :cue :lights-green}
+          
+          ; T=30: Start ambient music
+          {:at 270 :zone "audio" :command "playAudioFX" :file :ambient-music :loop true :volume 40}
+          
+          ; T=60 (4 minutes left): First warning
+          {:at 240 :cue :lights-blue}
+          
+          ; T=240 (1 minute left): Final warning
+          {:at 60 :cue :lights-red}
+          {:at 60 :zone "audio" :command "playAudioFX" :file "media/audio/warning.mp3" :volume 70}
+        ]
+      }
+      
+      ; Victory sequence (15 seconds)
+      :victory-sequence {
+        :duration 15
+        :timeline [
+          {:at 15 :cue :stop-all}
+          {:at 15 :cue :victory-celebration}
+          {:at 10 :zone "clock" :command "showMessage" :text "YOU WIN!" :color "green"}
+        ]
+      }
+      
+      ; Failure sequence (10 seconds)
+      :failure-sequence {
+        :duration 10
+        :timeline [
+          {:at 10 :cue :stop-all}
+          {:at 10 :cue :failure-scene}
+          {:at 5 :zone "clock" :command "showMessage" :text "TIME'S UP!" :color "red"}
+        ]
+      }
+      
+      ; Reset sequence
+      :reset-sequence {
+        :duration 3
+        :timeline [
+          {:at 3 :cue :stop-all}
+          {:at 3 :cue :lights-dim}
+          {:at 3 :zone "clock" :command "reset"}
+        ]
+      }
+    }
+    
+    ;; Phase mappings (game state → sequences)
+    :phases {
+      :intro [:intro-sequence]
+      :gameplay [:gameplay-sequence]
+      :solved [:victory-sequence]
+      :failed [:failure-sequence]
+    }
+    
+    ;; Hints (multi-type hint system)
+    :hints [
+      ; Text-only hint
+      {
+        :id 1
+        :name "First Hint"
+        :type "text"
+        :text "Look for the hidden key under the desk"
+      }
+      
+      ; Speech hint (audio + text)
+      {
+        :id 2
+        :name "Speech Hint"
+        :type "speech"
+        :text "The code is hidden in the painting"
+        :speech-file :hint-01-audio
+        :delay 5
+        :volume 80
+      }
+      
+      ; Video hint
+      {
+        :id 3
+        :name "Video Clue"
+        :type "video"
+        :text "Watch the screen carefully"
+        :video-file "media/video/hints/hint-03.mp4"
+        :video-zone "mirror"
+        :delay 10
+      }
+      
+      ; Background audio hint
+      {
+        :id 4
+        :name "Ambient Music Hint"
+        :type "audio"
+        :audio-file "media/audio/hints/hint-music.mp3"
+        :volume 40
+        :loop true
+      }
+    ]
+  }
+  
+  ;; === GAME MODES ===
+  ;; Different duration configurations
+  :game-modes {
+    ; Demo mode (5 minutes)
+    :demo {
+      :intro-duration 30
+      :game-duration 300
+      :hint-interval 60
+      :description "Quick 5-minute demo"
+    }
+    
+    ; Extended demo (10 minutes)
+    :extended {
+      :intro-duration 30
+      :game-duration 600
+      :hint-interval 120
+      :description "10-minute extended demo"
+      
+      ; Override gameplay sequence for longer duration
+      :sequences {
+        :gameplay-sequence {
+          :duration 600
+          :timeline [
+            {:at 600 :zone "clock" :command "startCountdown" :duration 600}
+            {:at 600 :cue :lights-green}
+            {:at 570 :zone "audio" :command "playAudioFX" :file :ambient-music :loop true :volume 40}
+            {:at 300 :cue :lights-blue}
+            {:at 60 :cue :lights-red}
+          ]
+        }
+      }
+    }
+  }
+}
