@@ -1,0 +1,50 @@
+{
+  "name": "paradox-orchestrator",
+  "version": "1.0.0",
+  "description": "Paradox Orchestrator (PxO) — Zone-based game engine for escape rooms and interactive experiences",
+  "main": "src/game.js",
+  "bin": {
+    "pxo": "src/game.js"
+  },
+  "scripts": {
+    "start": "node src/game.js",
+    "validate": "node tools/validate-config.js",
+    "validate:edn": "node tools/validate-edn.js",
+    "validate:ini": "node tools/validate-ini.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "escape-room",
+    "game-engine",
+    "orchestrator",
+    "mqtt",
+    "interactive",
+    "zone-based",
+    "paradox",
+    "pxo"
+  ],
+  "author": "Mark Stevens <mark@paradoxrooms.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MStylesMS/PxO.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MStylesMS/PxO/issues"
+  },
+  "homepage": "https://github.com/MStylesMS/PxO#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "edn-data": "^1.1.2",
+    "ini": "^5.0.0",
+    "minimist": "^1.2.8",
+    "mqtt": "^5.14.0",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

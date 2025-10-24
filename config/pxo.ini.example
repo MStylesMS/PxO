@@ -1,0 +1,38 @@
+# Paradox Orchestrator (PxO) Configuration Example
+# Copy to pxo.ini and customize for your deployment
+
+[mqtt]
+broker = localhost
+port = 1883
+client_id = pxo-game-engine
+
+# Optional authentication
+# username = paradox
+# password = secret123
+
+[logging]
+level = info
+directory = /opt/paradox/logs/pxo
+max_files = 10
+max_size_mb = 10
+console = true
+colorize = true
+
+[game]
+default_mode = 60min
+heartbeat_ms = 1000
+auto_reset_enabled = false
+auto_reset_delay = 300
+
+[zones]
+# Override zone base topics from EDN
+# lights = paradox/game/lights
+# mirror = paradox/game/mirror
+# audio = paradox/game/audio
+# clock = paradox/game/clock
+
+[server]
+# Optional HTTP/WebSocket server
+enabled = false
+port = 4000
+websocket = false
