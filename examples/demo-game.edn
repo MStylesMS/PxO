@@ -86,99 +86,100 @@
     ;; Named cues (fire-and-forget shortcuts)
     :cues {
       ; Lighting scenes
-      :lights-dim {:zone "lights" :command "scene" :name "dim"}
-      :lights-red {:zone "lights" :command "scene" :name "red"}
-      :lights-green {:zone "lights" :command "scene" :name "green"}
-      :lights-blue {:zone "lights" :command "scene" :name "blue"}
-      :lights-rainbow {:zone "lights" :command "scene" :name "rainbow"}
+      :lights-dim {:zone "lights" :command "scene" :scene "dim"}
+      :lights-red {:zone "lights" :command "scene" :scene "red"}
+      :lights-green {:zone "lights" :command "scene" :scene "green"}
+      :lights-blue {:zone "lights" :command "scene" :scene "blue"}
+      :lights-rainbow {:zone "lights" :command "scene" :scene "rainbow"}
       
-      ; Command references
-      :play-intro :play-intro-video
-      :stop-all :stop-all-media
+      ; Media commands
+      :play-intro-video {:zone "mirror" :command "playVideo" :file "media/video/intro.mp4"}
+      :play-intro-music {:zone "audio" :command "playAudioFX" :file "media/audio/intro-music.mp3" :volume 60}
+      :stop-all-mirror {:zone "mirror" :command "stopAudio"}
+      :stop-all-audio {:zone "audio" :command "stopAudio"}
+      :show-clock {:zone "mirror" :command "showBrowser"}
       
-      ; Multi-command cues (parallel execution)
-      :victory-celebration [
-        {:zone "lights" :command "scene" :name "rainbow"}
-        {:zone "audio" :command "playAudioFX" :file :victory-music :volume 90}
-        {:zone "mirror" :command "playVideo" :file :victory-video}
-      ]
-      
-      :failure-scene [
-        {:zone "lights" :command "scene" :name "red"}
-        {:zone "mirror" :command "playVideo" :file :failure-video}
-      ]
+      ; Victory/failure
+      :victory-lights {:zone "lights" :command "scene" :scene "rainbow"}
+      :victory-audio {:zone "audio" :command "playAudioFX" :file "media/audio/victory-music.mp3" :volume 90}
+      :victory-video {:zone "mirror" :command "playVideo" :file "media/video/victory.mp4"}
+      :failure-lights {:zone "lights" :command "scene" :scene "red"}
+      :failure-video {:zone "mirror" :command "playVideo" :file "media/video/failure.mp4"}
     }
     
     ;; Timeline sequences (time-based execution)
     :sequences {
       ; Introduction sequence (30 seconds)
-      :intro-sequence {
+      :welcome {
         :duration 30
         :timeline [
           ; T=0: Dim lights
-          {:at 30 :cue :lights-dim}
+          {:at 30 :fire :lights-dim}
           
           ; T=3: Start intro video and music
-          {:at 27 :zone "mirror" :command "playVideo" :file :intro-video}
-          {:at 27 :zone "audio" :command "playAudioFX" :file :intro-music :volume 60}
+          {:at 27 :fire :play-intro-video}
+          {:at 27 :fire :play-intro-music}
           
           ; T=10: Lights transition to red
-          {:at 20 :cue :lights-red}
+          {:at 20 :fire :lights-red}
           
           ; T=25: Show countdown clock
-          {:at 5 :cue :show-clock}
+          {:at 5 :fire :show-clock}
           
           ; T=27: Lights green (ready to start)
-          {:at 3 :cue :lights-green}
+          {:at 3 :fire :lights-green}
         ]
       }
       
       ; Gameplay sequence (300 seconds = 5 minutes)
-      :gameplay-sequence {
+      :main-game {
         :duration 300
         :timeline [
-          ; T=0: Start countdown timer
-          {:at 300 :zone "clock" :command "startCountdown" :duration 300}
-          {:at 300 :cue :lights-green}
-          
-          ; T=30: Start ambient music
-          {:at 270 :zone "audio" :command "playAudioFX" :file :ambient-music :loop true :volume 40}
+          ; T=0: Lights green and start ambient music
+          {:at 300 :fire :lights-green}
+          {:at 270 :zone "audio" :command "playAudioFX" :file "media/audio/ambient.mp3" :loop true :volume 40}
           
           ; T=60 (4 minutes left): First warning
-          {:at 240 :cue :lights-blue}
+          {:at 240 :fire :lights-blue}
           
           ; T=240 (1 minute left): Final warning
-          {:at 60 :cue :lights-red}
+          {:at 60 :fire :lights-red}
           {:at 60 :zone "audio" :command "playAudioFX" :file "media/audio/warning.mp3" :volume 70}
         ]
       }
       
       ; Victory sequence (15 seconds)
-      :victory-sequence {
+      :win {
         :duration 15
         :timeline [
-          {:at 15 :cue :stop-all}
-          {:at 15 :cue :victory-celebration}
+          {:at 15 :fire :stop-all-mirror}
+          {:at 15 :fire :stop-all-audio}
+          {:at 14 :fire :victory-lights}
+          {:at 14 :fire :victory-audio}
+          {:at 14 :fire :victory-video}
           {:at 10 :zone "clock" :command "showMessage" :text "YOU WIN!" :color "green"}
         ]
       }
       
       ; Failure sequence (10 seconds)
-      :failure-sequence {
+      :lose {
         :duration 10
         :timeline [
-          {:at 10 :cue :stop-all}
-          {:at 10 :cue :failure-scene}
+          {:at 10 :fire :stop-all-mirror}
+          {:at 10 :fire :stop-all-audio}
+          {:at 9 :fire :failure-lights}
+          {:at 9 :fire :failure-video}
           {:at 5 :zone "clock" :command "showMessage" :text "TIME'S UP!" :color "red"}
         ]
       }
       
       ; Reset sequence
-      :reset-sequence {
+      :cleanup {
         :duration 3
         :timeline [
-          {:at 3 :cue :stop-all}
-          {:at 3 :cue :lights-dim}
+          {:at 3 :fire :stop-all-mirror}
+          {:at 3 :fire :stop-all-audio}
+          {:at 3 :fire :lights-dim}
           {:at 3 :zone "clock" :command "reset"}
         ]
       }
@@ -186,10 +187,10 @@
     
     ;; Phase mappings (game state → sequences)
     :phases {
-      :intro [:intro-sequence]
-      :gameplay [:gameplay-sequence]
-      :solved [:victory-sequence]
-      :failed [:failure-sequence]
+      :intro [:welcome]
+      :gameplay [:main-game]
+      :solved [:win]
+      :failed [:lose]
     }
     
     ;; Hints (multi-type hint system)
@@ -256,14 +257,13 @@
       
       ; Override gameplay sequence for longer duration
       :sequences {
-        :gameplay-sequence {
+        :main-game {
           :duration 600
           :timeline [
-            {:at 600 :zone "clock" :command "startCountdown" :duration 600}
-            {:at 600 :cue :lights-green}
-            {:at 570 :zone "audio" :command "playAudioFX" :file :ambient-music :loop true :volume 40}
-            {:at 300 :cue :lights-blue}
-            {:at 60 :cue :lights-red}
+            {:at 600 :fire :lights-green}
+            {:at 570 :zone "audio" :command "playAudioFX" :file "media/audio/ambient.mp3" :loop true :volume 40}
+            {:at 300 :fire :lights-blue}
+            {:at 60 :fire :lights-red}
           ]
         }
       }
