@@ -1,0 +1,462 @@
+;; moved from project root to config/houdini.edn
+
+ ;; Houdini's Challenge Game Configuration
+
+ ;; EDN (Extensible Data Notation) Format
+ ;; Keywords use :kebab-case, sets use #{}, vectors use []
+ ;; Comments use ; for inline documentation
+
+ {;; Configuration metadata 
+  :game-name "Houdini's Challenge"
+  :game-description "A thrilling escape room experience inspired by the legendary magician Harry Houdini. Solve puzzles, uncover secrets, and beat the clock to escape!"
+  :gameplay-by "Mystery Escape Rooms, copyright 2015"
+  :automation-by "Paradox Challenge Rooms, copyright 2016-2025"
+  :version "2.2.0"
+  :format "EDN"
+  :create-date "2025-06-09"
+  :edit-date "2025-06-09"
+
+  ;; === GLOBAL BUILDING BLOCKS ===
+  ;; Shared across all games - define once, reference everywhere
+  :global {;; Global settings and defaults
+           :settings {:default-mode :hc-60
+                      :sequence-max-depth 3
+                      :hint-duration-sec 15
+                      :game-heartbeat-ms 1000
+                      :intro-debounce-ms 50
+                      :strict-validation true}
+
+           ;; MQTT communication configuration
+           :mqtt {:broker "mqtt://127.0.0.1"
+                  :game-topic "paradox/houdini"
+                  ;; Zone-based configuration with explicit adapter types
+                  :zones {:mirror {:type "pfx-media" :base-topic "paradox/houdini/mirror"}
+                          :picture {:type "pfx-media" :base-topic "paradox/houdini/picture"}
+                          :audio {:type "pfx-media" :base-topic "paradox/houdini/audio"}
+                          :lights {:type "pfx-lights" :base-topic "paradox/houdini/lights"}
+                          :clock {:type "houdini-clock" :base-topic "paradox/houdini/clock"}}}
+
+           ;; Media catalog removed after refactor (files referenced directly in cues)
+
+           ;; === REUSABLE VIDEO CUES ===
+           ;; Can be referenced by any game at any timing (single commands, fire-and-forget)
+           :cues {;; Video cues
+                  :intro-video {:zone "picture" :command "playVideo" :file "intro.mp4" :description "Full intro video, duration 148s"}
+                  :intro-video-short {:zone "picture" :command "playVideo" :file "intro_short.mp4" :description "Short demo intro video, duration 31s"}
+                  :win-video {:zone "mirror" :command "playVideo" :file "win_mm.mp4" :description "Victory video"}
+                  :fail-video {:zone "mirror" :command "playVideo" :file "fail.mp4" :description "Failure video with high volume"}
+                  :first-mm {:zone "mirror" :command "playVideo" :file "50min_mm.mp4" :description "50 minute countdown video, duration 23s"}
+                  :humphrey-peek-mm {:zone "mirror" :command "playVideo" :file "36min.mp4" :description "36 minute countdown video, duration 12s"}
+
+                  ;; Time-based video cues
+                  :45min {:zone "mirror" :command "playVideo" :file "45min_mm.mp4" :description "45 minute countdown video, duration 14s"}
+                  :30min {:zone "mirror" :command "playVideo" :file "30min_mm.mp4" :description "30 minute countdown video, duration 15s"}
+                  :23min {:zone "mirror" :command "playVideo" :file "23min.mp4" :description "23 minute countdown video, duration 12s"}
+                  :15min {:zone "mirror" :command "playVideo" :file "15min_mm.mp4" :description "15 minute countdown video, duration 17s"}
+                  :5min {:zone "mirror" :command "playVideo" :file "5min_mm.mp4" :description "5 minute countdown video, duration 23s"}
+
+                  :50-tp {:zone "picture" :command "playVideo" :file "50min_tp.mp4" :description "________, duration __s"}
+                  :48min {:zone "mirror" :command "playVideo" :file "48min.mp4" :description "________, duration __s"}
+                  :45-tp {:zone "picture" :command "playVideo" :file "45min_tp.mp4" :description "________, duration __s"}
+                  :30-tp {:zone "picture" :command "playVideo" :file "30min_tp.mp4" :description "________, duration __s"}
+                  :15-tp {:zone "picture" :command "playVideo" :file "15min_tp.mp4" :description "________, duration __s"}
+                  :5-tp  {:zone "picture" :command "playVideo" :file "5min_tp.mp4" :description "________, duration __s"}
+
+                  ;; Audio control cues
+                  :start-music {:zone "mirror" :command "playBackground" :file "music.mp3" :loop true :volume 30 :description "Start background music at comfortable volume"}
+                  :stop-music {:zone "mirror" :command "stopBackground" :description "Stop background music"}
+                  :fade-out-music {:zone "mirror" :command "stopBackground" :fadeTime 3 :description "Fade out background music"}
+                  :stop-all-audio {:zones ["mirror" "picture" "audio"] :command "stopAudio" :description "Stop all audio, but skip images/videos to avoid screen flicker"}
+                  :fade-out-all-media {:zones ["mirror" "picture" "audio"] :command "stopAll" :fadeTime 3 :description "Stop all audio with 3 second fadeout"}
+
+                  ;; Lighting control cues
+                  :lights-green {:zone "lights" :command "scene" :name "green" :description "Change lights to green - success/go indicator"}
+                  :lights-soft-white {:zone "lights" :command "scene" :name "softWhite" :description "Change lights to soft white - normal state"}
+                  :lights-bright-white {:zone "lights" :command "scene" :name "brightWhite" :description "Change lights to bright white - reset/neutral state"}
+                  :lights-red {:zone "lights" :command "scene" :name "red" :description "Change lights to red - failure/warning indicator"}
+                  :lights-blue {:zone "lights" :command "scene" :name "blue" :description "Change lights to blue - demo failure indicator"}
+                  :lights-off {:zone "lights" :command "scene" :name "off" :description "Turn off all lights"}
+
+                  ;; Dramatic audio effects
+                  :huge-braam {:zone "mirror" :command "playAudioFX" :file "Huge_Braam.mp3" :adjustVolume 10 :description "Dramatic audio effect - huge impact, duration 9"}
+                  :deep-braam {:zone "mirror" :command "playAudioFX" :file "Deep_Braam_Long.mp3" :adjustVolume 10 :description "Dramatic speech effect - deep tension, duration 9"}
+                  :hint-ding {:zone "mirror" :command "playAudioFX" :file "ding.wave" :adjustVolume 5 :description "Subtle hint sound effect, duration 2s"}
+                  :hint-bell {:zone "mirror" :command "playAudioFX" :file "hint.mp3" :adjustVolume 5 :description "Soft bell hint sound effect, duration 3s"}
+
+                  ;; Houdini Clock Command Sequences for Mirror (handles Mirror browser and Clock adapter)
+                  :start-clock {:zone "clock" :command "start" :description "Start external clock, which automatically syncs time"}
+                  :stop-clock {:zone "clock" :command "stop" :description "Stop external clock"}
+                  :pause-clock {:zone "clock" :command "pause" :description "Pause external clock"}
+                  :resume-clock {:zone "clock" :command "resume" :description "Resume external clock"}
+                  :sync-clock {:zone "clock" :command "setTime" :description "Sync external clock to current gameplay time without starting"}
+                  :fade-in-clock {:zone "clock" :command "fadeIn" :description "Fade in the clock"}
+                  :fade-out-clock {:zone "clock" :command "fadeOut" :description "Fade out the clock"}
+                  :show-clock {:zone "clock" :command "fadeIn" :fadeTime 0 :description "Show clock immeadately"}
+                  :hide-clock {:zone "clock" :command "fadeOut" :fadeTime 0 :description "Show clock immeadately"}
+                  :show-browser {:zone "mirror" :command "showBrowser" :description "Show clock browser immeadately"}
+                  :hide-browser {:zone "mirror" :command "hideBrowser" :description "Hide clock browser immeadately"}
+
+                  ;; Future Use 
+                  ;; ==========
+
+                  ;; Trigger response cues (converted from old trigger-cues format to proper three-tier syntax)
+                  :unlock-door {:type "mqtt" :topic "paradox/escape/actuators/main_door" :payload {:command "unlock"} :description "Raw MQTT unlock main door"}
+                  :unlock-door-lights {:zone "lights" :command "scene" :scene "green" :description "Green lights for door unlock"}
+                  :win-game {:type "mqtt" :topic "paradox/houdini/game" :payload {:command "win"} :description "Trigger game win via MQTT"}
+                  :reset-game {:type "mqtt" :topic "paradox/houdini/game" :payload {:command "reset"} :description "Reset game state via MQTT"}
+                  :secret-door {:type "mqtt" :topic "paradox/escape/doors/secret" :payload {:action "open"} :description "Open secret door via raw MQTT"}
+                  :secret-door-audio {:zone "mirror" :command "play" :file "Huge_Braam.mp3" :volume 110 :description "Audio effect for secret door (converted from fire-cue)"}
+                  :secret-door-hint {:zone "clock" :command "hint" :text "Secret door opened!" :description "Hint for secret door"}};; End of cues
+
+           ;; Hint definitions - reusable across games
+           :hints {:humphrey-close {:type "text" :text "Humphrey is getting close!" :duration 15 :description "Clock hint about Humphrey approaching"}
+                   :look-everywhere {:type "text" :text "Look everywhere, high and low." :duration 15 :description "Demo hint for clock display"}
+                   
+                   ;; Example hints of each type
+                   :picture-horror-speech {:type "speech" :zone "picture" :file "Aztec_Vocals_Horror.mp3" :description "Long horror chord played as speech"}
+                   :picture-cymbal-fx {:type "audioFx" :zone "picture" :file "Cymbal_Strange.mp3" :adjustVolume 5 :description "Cymbal on picture using audio fx"}
+                   :picture-5min-video {:type "video" :file "5min_tp.mp4" :zone "picture" :description "5 min video warning on picture"}
+                   :flash-lights-hint {:type "action" :action "flash-lights" :zone "lights" :duration 5 :description "Action hint - flash lights to reveal hidden items"}
+
+                   ;; End of hints
+                   }
+
+           ;; Optional global named triggers for quick references and testing
+           :triggers {:door-switch-unlock {:description "Door switch activation trigger" :topic "paradox/escape/sensors/door_switch" :condition {:state "activated"}}
+                      :puzzle-solved-win {:description "Main puzzle solved trigger" :topic "paradox/escape/puzzles/main_puzzle" :condition {:status "solved"}}
+                      :emergency-reset {:description "Emergency reset button trigger" :topic "paradox/escape/emergency" :condition {:button "pressed"}}
+                      :keypad-correct-code {:description "Correct keypad code entered" :topic "paradox/escape/keypad/main" :condition {:code "1234" :status "entered"}}
+
+                      ;; End of triggers
+                      }
+
+           ;; Lighting configuration (color-scenes now hardcoded in UI)
+           :lights {:flash-pattern {:times 3 :interval-ms 750}}
+
+           ;; === TIMELINE SEQUENCES ===
+           ;; Multi-step coordinated actions with precise timing (blocking execution)
+           :sequences {;; Houdini Clock Command Sequences for Mirror (handles Mirror browser and Clock adapter)
+                       ;; These must be defined first since they're referenced by other sequences
+                       :show-clock-seq {:description "Reveal countdown clock on mirror"
+                                        :sequence [{:zone "clock" :command "start" :description "Start external clock, includes time sync"}
+                                                   {:zone "mirror" :command "showBrowser" :description "Show clock browser on mirror"}
+                                                   {:wait 2 :description "Give it time to sync and move to front"}
+                                                   {:zone "clock" :command "fadeIn" :fadeTime 3}]}
+                       :hide-clock-seq {:description "Hide countdown clock on mirror "
+                                        :sequence [{:zone "clock" :command "fadeOut" :fadeTime 3}
+                                                   {:wait 4 :description "Wait for fade to complete"}
+                                                   {:zone "mirror" :command "hideBrowser"}
+                                                   {:wait 2 :description "Give it time to fully hide"}]}
+
+                       ;; Verification sequences (blocking operations - use :fire to wait for completion)
+                       :set-mirror-black {:description "Verify mirror shows black screen image"
+                                          :sequence [{:zone "mirror" :command "verifyImage" :file "black_screen.png"}]}
+                       :set-picture-intro {:description "Verify picture shows intro video as image"
+                                           :sequence [{:zone "picture" :command "verifyImage" :file "intro.mp4"}]}
+                       :set-picture-intro-short {:description "Verify picture shows intro short video as image"
+                                                 :sequence [{:zone "picture" :command "verifyImage" :file "intro_short.mp4"}]}
+                       :enable-clock {:description "Enable and verify clock browser on mirror"
+                                      :sequence [{:zone "mirror" :command "verifyBrowser" :url "http://localhost/clock/index.html" :visible false}]}
+                       :disable-clock {:description "Disable clock browser on mirror"
+                                       :sequence [{:zone "mirror" :command "disableBrowser"}]}
+
+                       ;; Easter egg videos in magic mirror
+                       :hint-mm-first {:description "First appearance of Houdini in Magic Mirror. Leaves clock up."
+                                       :sequence [{:fire :lights-green}
+                                                  {:fire :hide-clock}
+                                                  {:fire :hide-browser}
+                                                  {:wait 2 :description "Wait for clock to hide"}
+                                                  {:fire :huge-braam}
+                                                  {:fire :first-mm}
+                                                  {:wait 24 :description "Wait for video to finish"}
+                                                  {:fire :lights-soft-white}
+                                                  {:fire :show-browser}
+                                                  {:wait 2 :description "Give it time to fully show"}
+                                                  {:fire :show-clock}]}
+                       :hint-humphery-peek1 {:description "36 minute sequence (lead + humprehy peek 1 video + post actions)"
+                                             :sequence [{:fire :lights-red}
+                                                        {:fire :hide-clock-seq}
+                                                        {:fire :huge-braam}
+                                                        {:fire :humphrey-peek-mm}
+                                                        {:wait 13 :duration "Wait for video to finish"}
+                                                        {:fire :lights-soft-white}
+                                                        {:fire :show-clock-seq}]}
+                       :hint-humphery-peek2 {:description "23 minute sequence (lead + humpery peek 2 + post actions)"
+                                             :sequence [{:fire :lights-red}
+                                                        {:fire :hide-clock-seq}
+                                                        {:fire :23min}
+                                                        {:wait 13 :description "Wait for video to finish"}
+                                                        {:fire :lights-soft-white}
+                                                        {:fire :show-clock-seq}]}
+
+                       ;; Timeline specific videos in magic mirror
+                       :hint-mm-45 {:description "Houdini says 45 minutes left in Magic Mirror"
+                                    :sequence [{:fire :lights-green}
+                                               {:fire :hide-clock-seq}
+                                               {:fire :45min}
+                                               {:wait 15 :description "Wait for video to finish"}
+                                               {:fire :lights-soft-white}
+                                               {:fire :show-clock-seq}]}
+                       :hint-mm-30 {:description "30 minute sequence (lead + 30min video + post actions)"
+                                    :sequence [{:fire :lights-green}
+                                               {:fire :hide-clock-seq}
+                                               {:fire :30min}
+                                               {:wait 16 :description "Wait for video to finish"}
+                                               {:fire :lights-soft-white}
+                                               {:fire :show-clock-seq}]}
+                       :hint-mm-15 {:description "15 minute sequence (lead + 15min video + post actions)"
+                                    :sequence [{:fire :lights-green}
+                                               {:fire :hide-clock-seq}
+                                               {:fire :15min}
+                                               {:wait 18 :description "Wait for video to finish"}
+                                               {:fire :lights-soft-white}
+                                               {:fire :show-clock-seq}]}
+                       :hint-mm-5 {:description "5 minute sequence (lead + 5min video + post actions)"
+                                   :sequence [{:fire :lights-green}
+                                              {:fire :hide-clock-seq}
+                                              {:fire :5min}
+                                              {:wait 23 :description "Wait for video to finish"}
+                                              {:fire :lights-soft-white}
+                                              {:fire :show-clock-seq}]}
+
+                       ;; Houdini Game Default Sequences 
+                       :standard-intro {:description "Game introduction"
+                                        :sequence [{:fire :lights-soft-white :description "Make sure lights are set to soft white"}
+                                                   {:fire :intro-video :description "Play intro video in picture"}]}
+
+                       :standard-solved {:description "Victory celebration phase"
+                                         :duration 180
+                                         :schedule [{:at 180 :fire :lights-blue :description "Celebrate with green lights"}
+                                                    ;;{:at 180 :fire :fade-out-all-media :description "Fade out all media over 3 seconds"}
+                                                    {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
+                                                    {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
+                                                    {:at 175 :fire :win-video :description "Play victory video 3 seconds after win starts"}
+                                                    {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
+                                                    {:at 30  :fire :lights-bright-white :description "Bright lights for reset"}
+                                                    ;; End of solved schedule
+                                                    ]}
+
+                       :standard-failed {:description "Failure handling phase"
+                                         :duration 180
+                                         :schedule [{:at 180 :fire :lights-red :description "Quick failure celebration"}
+                                                    ;;{:at 180 :fire :fade-out-all-media :description "Fade out all media over 3 seconds"}
+                                                    {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
+                                                    {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
+                                                    {:at 179 :fire :deep-braam :description "Dramatic failure sound 1 second after fail starts"}
+                                                    {:at 175 :fire :fail-video :description "Play failure video with 3 second fade"}
+                                                    {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
+                                                    {:at 0 :fire :lights-bright-white :description "Bright lights for reset"}
+                                                    ;; End of failed schedule
+                                                    ]}
+
+                       :standard-reset {:description "Enhanced demo reset with media and browser verification"
+                                        :sequence [{:fire :stop-all-audio}
+                                                   {:fire :set-mirror-black}
+                                                   {:fire :set-picture-intro}
+                                                   {:fire :enable-clock}
+                                                   {:fire :hide-clock}
+                                                   {:fire :hide-browser}
+                                                   {:fire :lights-soft-white}]}
+
+                       ;; Raw MQTT sequence for complex operations 
+                       :start-music-mirror-raw {:description "Start BG music (raw MQTT)"
+                                                :duration 1
+                                                :timeline [{:at 0 :zone "mirror" :command "playBackground" :file "music.mp3" :volume 50 :loop true}]}
+                       ;;
+                       };; End of sequences
+
+           :system-sequences {;; System-level operational sequences - user-defined with some having hardcoded final actions 
+                              :halt-sequence {:description "Graceful halt without process termination" ;; Execute before halting program
+                                              :timeline []}
+
+                              :machine-shutdown-sequence {:description "Graceful machine shutdown with warnings" ;; Execute before system shutdown
+                                                          :timeline []}
+
+                              :machine-reboot-sequence {:description "System reboot with restart cycle" ;; Execute before system reboot
+                                                        :timeline []}
+
+                              :wake-sequence {:description "Wake from sleep/standby mode" ;; Execute after waking from sleep mode
+                                              :timeline []}
+
+                              :sleep-sequence {:description "Enter sleep/standby mode" ;; Execute before entering sleep mode
+                                               :timeline []}
+
+                              :restart-adapters {}
+                              ;;
+                              };; End of systemsequences
+
+           :command-sequences {;; Core game control sequences - some with hardcoded actions
+                               :gameplay-start-sequence {:description "Transition from ready into running (after optional intro)"
+                                                         :sequence []} ;; When game starts, execute before gameplay timer begins
+
+                               :pause-sequence {:description "Pause side effects" ;; When game is paused, stop gameplay timer before executing
+                                                :timeline [{:at 0 :zone "mirror" :command "hideBrowser"}
+                                                           {:at 0 :type "mqtt" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"pause\"}"}
+                                                           {:at 0 :type "mqtt" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"fadeOut\",\"duration\":1}"}]}
+
+                               :resume-sequence {:description "Resume side effects" ;; When game is resumed, restart gameplay timer timer after executing
+                                                 :timeline [{:at 0 :zone "mirror" :command "showBrowser"}
+                                                            {:at 0 :type "mqtt" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"resume\"}"}
+                                                            {:at 1 :type "mqtt" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"fadeIn\",\"duration\":1}"}]}
+
+                               :gameplay-end-sequence {} ;; When game timer runs out, execute before proceeding to solved/failed
+
+                               :idle-sequence {:description "Idle ready-state pulse" :repeat-seconds 120 ;; Optional idle sequence to run periodically when in ready state (future)
+                                               :sequence []}
+                               
+                               ;; Hint execution sequence - sends text hint to clock
+                               :hint-text-seq {:description "Send text hint to clock display"
+                                               :sequence [{:zone "mirror" :command "playAudioFX" :file "hint.mp3"}
+                                                          {:zone "clock" :command "hint" :text "{{hintText}}" :duration 25}]}
+                               
+                               };; End of command sequences
+           ;;
+           };; End of global section
+
+  ;; === GAME-SPECIFIC ORCHESTRATION ===
+  ;; Each game references global building blocks with custom timing
+  :game-modes {;; === 60-MINUTE FULL EXPERIENCE ===
+               :hc-60 {:description "60-minute full Houdini's Challenge experience"
+                       :short-label "60 Min"
+                       :game-label "Houdini's Challenge - 60 Minute"
+                       :hints ["Humphrey is getting close!"]
+
+                       :phases {:intro {:description "Game introduction"
+                                        :duration 147
+                                        :sequence "standard-intro"}
+
+                                :gameplay {:description "Main game phase with timed events"
+                                           :duration 3600
+                                           :schedule [{:at 3600 :fire :start-clock}
+                                                      {:at 3600 :fire :start-music}
+                                                      ;; Game hints and timed events
+                                                      {:at 3300 :fire :hint-mm-first} ;; Houdini's first appearance and reveal clock
+                                                      {:at 2700 :fire :hint-mm-45}
+                                                      {:at 2220 :fire :hint-humphery-peek1} ;; Humphery peek 1 at 36 minutes left
+                                                      {:at 1800 :fire :hint-mm-30}
+                                                      {:at 1380 :fire :hint-humphery-peek2} ;; Humphery peek 2 at 23 minutes left
+                                                      {:at  900 :fire :hint-mm-15}
+                                                      {:at  300 :fire :hint-mm-5}]};; End of gameplay schedule
+
+                                :solved {:description "Victory celebration phase"
+                                         :duration 180
+                                         :schedule [{:at 180 :fire :lights-blue :description "Celebrate with green lights"}
+                                                    ;;{:at 180 :fire :fade-out-all-media :description "Fade out all media over 3 seconds"}
+                                                    {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
+                                                    {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
+                                                    {:at 175 :fire :win-video :description "Play victory video 3 seconds after win starts"}
+                                                    {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
+                                                    {:at 30  :fire :lights-bright-white :description "Bright lights for reset"}]};; End of solved schedule
+
+                                :failed {:description "Failure handling phase"
+                                         :duration 180
+                                         :schedule [{:at 180 :fire :lights-red :description "Quick failure celebration"}
+                                                    ;;{:at 180 :fire :fade-out-all-media :description "Fade out all media over 3 seconds"}
+                                                    {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
+                                                    {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
+                                                    {:at 179 :fire :deep-braam :description "Dramatic failure sound 1 second after fail starts"}
+                                                    {:at 175 :fire :fail-video :description "Play failure video with 3 second fade"}
+                                                    {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
+                                                    {:at 0 :fire :lights-bright-white :description "Bright lights for reset"}]};; End of failed schedule
+
+                                :reset {:description "Cleanup and return to ready" :sequence "standard-reset"}};; End of phases 
+                       };; End of hc-60 game mode
+
+               ;; === 30-MINUTE CONDENSED EXPERIENCE ===
+               :hc-30 {:description "30-minute condensed Houdini's Challenge experience"
+                       :short-label "30 Min"
+                       :game-label "Houdini's Challenge - 30 Minute"
+                       :hints ["Look everywhere, high and low."]
+                       :phases {:intro {:description "Game introduction"
+                                        :duration 147
+                                        :sequence "standard-intro"}
+
+                                :gameplay {:description "Main game phase with timed events"
+                                           :duration 1800
+                                           :schedule [{:at 1800 :fire :start-clock}
+                                                      {:at 1800 :fire :start-music}
+                                                      ;; Game hints and timed events
+                                                      {:at 1500 :fire :hint-mm-first} ;; Houdini's first appearance and reveal clock
+                                                      {:at 1200 :fire :hint-humphery-peek2} ;; Humphery peek 2 at 20 minutes left
+                                                      {:at  900 :fire :hint-mm-15}
+                                                      {:at  300 :fire :hint-mm-5}]};; End of gameplay schedule
+
+                                :solved {:description "Victory celebration phase"
+                                         :duration 180
+                                         :schedule [{:at 180 :fire :lights-blue :description "Celebrate with green lights"}
+                                                    ;;{:at 180 :fire :fade-out-all-media :description "Fade out all media over 3 seconds"}
+                                                    {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
+                                                    {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
+                                                    {:at 175 :fire :win-video :description "Play victory video 3 seconds after win starts"}
+                                                    {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
+                                                    {:at 30  :fire :lights-bright-white :description "Bright lights for reset"}]};; End of solved schedule
+
+                                :failed {:description "Failure handling phase"
+                                         :duration 180
+                                         :schedule [{:at 180 :fire :lights-red :description "Quick failure celebration"}
+                                                    ;;{:at 180 :fire :fade-out-all-media :description "Fade out all media over 3 seconds"}
+                                                    {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
+                                                    {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
+                                                    {:at 179 :fire :deep-braam :description "Dramatic failure sound 1 second after fail starts"}
+                                                    {:at 175 :fire :fail-video :description "Play failure video with 3 second fade"}
+                                                    {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
+                                                    {:at 0 :fire :lights-bright-white :description "Bright lights for reset"}]};; End of failed schedule
+
+                                :reset {:description "Cleanup and return to ready" :sequence "standard-reset"}};; End of phases
+                       };; End of hc-30 game-mode
+
+               ;; === 90-SECOND DEMONSTRATION ===
+               :hc-demo {:description "90 second demonstration experience"
+                         :short-label "Demo"
+                         :game-label "Houdini's Challenge - Demo"
+                         :hints ["Humphrey is getting close!"]
+
+                         :phases {:intro {:description "Short demo intro video"
+                                          :duration 32
+                                          :sequence [{:fire :lights-soft-white :description "Make sure lights are set to soft white"}
+                                                     {:fire :intro-video-short :description "Play short intro video using global cue"}]} ;; End of intro phase
+
+                                  :gameplay {:description "Main game phase with timed events"
+                                             :duration 90
+                                             :schedule [{:at 90 :fire :start-clock}
+                                                        {:at 89 :fire :start-music}
+                                                        {:at 80 :fire :show-clock-seq}
+                                                        {:at 60 :fire :lights-green}
+                                                        {:at 60 :hint :look-everywhere}
+                                                        {:at 50 :fire :picture-cymbal-fx}
+                                                        {:at 45 :fire :lights-soft-white}
+                                                        {:at 30 :fire :hide-clock-seq}]} ;; End of gameplay schedule
+
+                                  :solved {:description "Victory celebration phase"
+                                           :duration 60
+                                           :schedule [{:at 60 :fire :lights-blue}
+                                                      {:at 60 :fire :fade-out-music}
+                                                      {:at 60 :fire :hide-clock-seq}
+                                                      {:at 55 :fire :win-video}
+                                                      {:at 30 :fire :lights-bright-white}]} ;; End of solved schedule
+
+                                  :failed {:description "Failure handling phase"
+                                           :duration 60
+                                           :schedule [{:at 60 :fire :lights-red}
+                                                      {:at 60 :fire :fade-out-music}
+                                                      {:at 60 :fire :hide-clock-seq}
+                                                      {:at 59 :fire :deep-braam}
+                                                      {:at 55 :fire :fail-video}
+                                                      {:at 30 :fire :lights-bright-white}]} ;; End of failed schedule
+
+                                  :reset {:description "Cleanup and return to ready" :sequence "demo-reset"}};; End of phases
+
+                         ;; Per-mode sequence overrides - demonstrate Priority 3 feature
+                         :sequences {:demo-reset {:description "Enhanced demo reset with media and browser verification"
+                                                  :sequence [{:fire :stop-all-audio}
+                                                             {:fire :set-mirror-black}
+                                                             {:fire :set-picture-intro-short}
+                                                             {:fire :enable-clock}
+                                                             {:fire :hide-clock}
+                                                             {:fire :hide-browser}
+                                                             {:fire :lights-soft-white}]} ;; End of demo-reset sequence 
+                                     };; End of local sequence definitions 
+                         };; End of hc-demo
+               };; End of game modes
+  };; End of game
+;; End of file
