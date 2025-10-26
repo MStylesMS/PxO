@@ -11,7 +11,11 @@
     "validate": "node tools/validate-config.js",
     "validate:edn": "node tools/validate-edn.js",
     "validate:ini": "node tools/validate-ini.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test/run-tests.js",
+    "test:unified": "node test/run-unified.js",
+    "test:contract": "node test/command-contract.test.js",
+    "test:scheduler": "node test/scheduler.test.js",
+    "test:e2e": "node test/e2e-playAudioFX-smoke.js"
   },
   "keywords": [
     "escape-room",
