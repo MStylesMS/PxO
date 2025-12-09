@@ -163,9 +163,15 @@ class ConfigValidator {
         }
 
         // Prohibited timing/blocking keywords in cues
+        const isClockHint = (
+            (cmd.zone === 'clock') || (Array.isArray(cmd.zones) && cmd.zones.includes('clock'))
+        ) && cmd.command === 'hint';
+
         const prohibitedKeys = ['timeline', 'duration', 'wait', 'fire-cue', 'fire-seq', 'at'];
         prohibitedKeys.forEach(key => {
             if (cmd[key] !== undefined) {
+                // Allow duration on clock hints; all other timing keys remain forbidden
+                if (key === 'duration' && isClockHint) return;
                 this.addError(`Cue command in ${context} cannot contain '${key}' - use sequences for timing/blocking`);
             }
         });
