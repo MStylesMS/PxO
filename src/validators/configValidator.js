@@ -76,6 +76,23 @@ class ConfigValidator {
      * Validate game mode configuration
      */
     validateGameMode(mode, modeKey) {
+        // Check for required labels for UI compatibility
+        if (!mode['short-label'] && !mode.shortLabel) {
+            this.addWarning(
+                `Game mode '${modeKey}' is missing 'short-label' field. ` +
+                `This will prevent the mode from appearing in the web control UI dropdown.`,
+                `game-mode.${modeKey}`
+            );
+        }
+
+        if (!mode['game-label'] && !mode.gameLabel) {
+            this.addWarning(
+                `Game mode '${modeKey}' is missing 'game-label' field. ` +
+                `This will prevent proper display in the web control UI.`,
+                `game-mode.${modeKey}`
+            );
+        }
+
         // Validate mode-specific cues
         if (mode.cues) {
             this.validateCues(mode.cues, `game-mode.${modeKey}`);
