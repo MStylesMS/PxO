@@ -180,7 +180,7 @@ function validateConfig(cfg) {
 }
 
 function validateZoneFormat(zones) {
-  const supportedTypes = ['pfx-media', 'pfx-lights', 'houdini-clock'];
+  const supportedTypes = ['pfx-media', 'pfx-lights', 'houdini-clock', 'pfx-clock'];
 
   Object.entries(zones).forEach(([zoneName, zoneConfig]) => {
     if (!zoneConfig || typeof zoneConfig !== 'object') {

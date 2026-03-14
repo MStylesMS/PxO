@@ -218,6 +218,7 @@ class PfxAdapterBase {
     }
   }
   playVideo(file, options = {}) {
+    // Use consistent media payload key 'file' for videos
     const command = { command: 'playVideo', file };
     // Absolute volume takes priority over relative adjustments
     if (options.volume !== undefined) {
@@ -226,6 +227,10 @@ class PfxAdapterBase {
       command.volumeAdjust = options.adjustVolume;
     } else if (options.volumeAdjust !== undefined) {
       command.volumeAdjust = options.volumeAdjust;
+    }
+    // Only include loop when explicitly true; default is play once
+    if (options.loop === true) {
+      command.loop = true;
     }
     log.info(`[MQTT] ${this.commandTopic} → ${JSON.stringify(command)}`);
     this.mqtt.publish(this.commandTopic, command);
@@ -326,7 +331,7 @@ class PfxAdapterBase {
   }
 
   setImage(file) {
-    // Use 'file' key consistently for all media commands
+    // Use consistent media payload key 'file' for images
     const command = { command: 'setImage', file };
     log.info(`[MQTT] ${this.commandTopic} → ${JSON.stringify(command)}`);
     this.mqtt.publish(this.commandTopic, command);
