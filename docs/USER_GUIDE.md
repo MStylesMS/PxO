@@ -553,6 +553,35 @@ Trigger sequences from within sequences:
 }
 ```
 
+### Browser Readiness Pattern
+
+Use this two-step approach for browser-backed displays (clock, overlays, web UIs):
+
+1. Start browser process with `enableBrowser` (usually in a cue or reset sequence)
+2. Use `verifyBrowser` in a sequence step before first `showBrowser`
+
+```clojure
+:cues {
+  :enable-clock-browser {
+    :zone "mirror"
+    :command "enableBrowser"
+    :url "http://localhost/clock/index.html"
+  }
+}
+
+:sequences {
+  :prepare-clock-browser {
+    :duration 3
+    :timeline [
+      {:at 3 :cue :enable-clock-browser}
+      {:at 2 :zone "mirror" :command "verifyBrowser" :url "http://localhost/clock/index.html" :visible false :timeout 15000}
+    ]
+  }
+}
+```
+
+Use `enableBrowser` for fire-and-forget startup. Use `verifyBrowser` when sequence timing depends on browser readiness.
+
 ---
 
 ### Wait/Delay Steps

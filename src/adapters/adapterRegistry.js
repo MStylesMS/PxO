@@ -130,6 +130,8 @@ class AdapterRegistry {
         switch (command) {
             case 'start':
                 return adapter.start ? adapter.start(options.time) : Promise.resolve();
+            case 'stop':
+                return adapter.stop ? adapter.stop() : Promise.resolve();
             case 'pause':
                 return adapter.pause ? adapter.pause() : Promise.resolve();
             case 'resume':

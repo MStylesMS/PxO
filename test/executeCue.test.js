@@ -10,11 +10,19 @@ describe('GameStateMachine fireCueByName', () => {
             cfg: {
                 global: {
                     mqtt: { zones: {} },
+                    media: {
+                        'logo-solved': 'images/Agent22-green-white.png'
+                    },
                     cues: {
                         testcue: {
                             actions: [
                                 { zone: 'mirror', play: { video: 'test.mp4' } },
                                 { publish: { topic: 'paradox/test', payload: 'hello' } }
+                            ]
+                        },
+                        imagecue: {
+                            actions: [
+                                { zone: 'mirror', command: 'setImage', file: 'logo-solved' }
                             ]
                         },
                         timelinecue: {
@@ -39,6 +47,7 @@ describe('GameStateMachine fireCueByName', () => {
             if (zone === 'lights') return lightsAdapter;
             return null;
         };
+        gsm.zones.execute = jest.fn();
     });
 
     it('should dispatch video and publish actions', () => {
@@ -60,5 +69,12 @@ describe('GameStateMachine fireCueByName', () => {
         jest.advanceTimersByTime(5000);
         expect(lightsAdapter.scene).toHaveBeenCalledWith('bright');
         jest.useRealTimers();
+    });
+
+    it('should resolve media aliases from global.media for command actions', () => {
+        gsm.fireCueByName('imagecue');
+        expect(gsm.zones.execute).toHaveBeenCalledWith('mirror', 'setImage', {
+            file: 'images/Agent22-green-white.png'
+        });
     });
 });

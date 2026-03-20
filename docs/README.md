@@ -141,6 +141,8 @@ Sequences (timeline-based execution with blocking semantics)
 }
 ```
 
+For browser-backed overlays (clock/UI), use `enableBrowser` for fire-and-forget startup, and use `verifyBrowser` in sequence steps when progression must wait for browser readiness.
+
 ### Zone-Based Architecture
 
 Each zone is an independent adapter that communicates via MQTT:

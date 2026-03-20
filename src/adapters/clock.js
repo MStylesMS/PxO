@@ -28,6 +28,8 @@ class ClockAdapter {
       switch (command) {
         case 'start':
           return this.start(options.time);
+        case 'stop':
+          return this.stop();
         case 'pause':
           return this.pause();
         case 'resume':
@@ -59,7 +61,7 @@ class ClockAdapter {
    * @returns {string[]} Array of supported command names
    */
   getCapabilities() {
-    return ['start', 'pause', 'resume', 'fade-in', 'fadeIn', 'fade-out', 'fadeOut', 'set-time', 'setTime', 'hint'];
+    return ['start', 'stop', 'pause', 'resume', 'fade-in', 'fadeIn', 'fade-out', 'fadeOut', 'set-time', 'setTime', 'hint'];
   }
 
   // Helper to derive current mm:ss based on game state
@@ -131,6 +133,10 @@ class ClockAdapter {
     if (t) payload.time = t;
     this._publish(this.commandTopic, payload);
     this._mirrorUI({ action: 'start', time: t });
+  }
+  stop() {
+    this.command('stop');
+    this._mirrorUI({ action: 'stop' });
   }
   hint(text, duration) {
     const payload = { hint: text };

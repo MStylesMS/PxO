@@ -350,10 +350,31 @@ Shows overlaid web browser (for clock UI, etc.).
 }
 ```
 
+**Enable Browser**:
+```json
+{
+  "command": "enableBrowser",
+  "url": "http://localhost/clock/index.html"
+}
+```
+
+Starts browser process in the background (does not force visibility).
+
+**Disable Browser**:
+```json
+{
+  "command": "disableBrowser"
+}
+```
+
+Stops browser process.
+
+**Important**: `verifyBrowser` is not a direct MQTT zone command. It is a PxO sequence-runner command that performs state polling and corrective actions (`enableBrowser`, URL update, show/hide) until the browser matches requested state or times out.
+
 **Example**:
 ```bash
 mosquitto_pub -h localhost -t 'paradox/game/mirror/commands' \
-  -m '{"command":"playVideo","file":"media/video/intro.mp4"}'
+  -m '{"command":"enableBrowser","url":"http://localhost/clock/index.html"}'
 ```
 
 ### Houdini Clock Zone (`houdini-clock`)

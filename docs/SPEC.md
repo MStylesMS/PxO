@@ -122,6 +122,7 @@ Sequences (Tier 3: Timeline-Based Execution)
 {:zone "lights" :command "scene" :name "green"}
 {:zone "audio" :command "playAudioFX" :file "music.mp3" :volume 80}
 {:zones ["mirror" "audio"] :command "stopAudio"}  ; Stop audio on multiple zones
+{:zone "mirror" :command "enableBrowser" :url "http://localhost/clock/index.html"}
 ```
 
 **Command Execution**:
@@ -194,6 +195,20 @@ Sequences (Tier 3: Timeline-Based Execution)
     ]
   }
 }
+```
+
+**Special Browser Verification Command**:
+
+`verifyBrowser` is sequence-aware and blocking. It is resolved by PxO sequence execution (not forwarded as a raw zone MQTT command), and it:
+- Requests current browser state
+- Calls `enableBrowser` if browser is not running
+- Corrects URL/visibility drift if needed
+- Polls until desired state is reached or timeout occurs
+
+Example:
+
+```clojure
+{:at 20 :zone "mirror" :command "verifyBrowser" :url "http://localhost/clock/index.html" :visible false :timeout 15000}
 ```
 
 **Sequence Execution**:

@@ -34,7 +34,7 @@ async function main() {
     const cleanupResult = await LogCleanup.cleanup(logDir, {
       maxAgeDays: 30,
       maxSizeMB: 100,
-      excludeFiles: ['game-latest.log']
+      excludeFiles: ['pxo-latest.log', 'game-latest.log']
     });
     if (cleanupResult.deleted > 0) {
       log.info(`Cleaned up ${cleanupResult.deleted} old log files (kept ${cleanupResult.kept}, total ${cleanupResult.totalSize}MB)`);
@@ -42,14 +42,18 @@ async function main() {
 
     // Create timestamped log file for this session
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
-    const logFile = path.join(logDir, `game-${timestamp}.log`);
+    const logFile = path.join(logDir, `pxo-${timestamp}.log`);
     logStream = fs.createWriteStream(logFile, { flags: 'a' });
 
     // Also create/update the latest log symlink
-    const latestLogFile = path.join(logDir, 'game-latest.log');
+    const latestLogFile = path.join(logDir, 'pxo-latest.log');
     try {
-      if (fs.existsSync(latestLogFile)) {
+      // Remove existing path even if it's a dangling symlink.
+      try {
+        fs.lstatSync(latestLogFile);
         fs.unlinkSync(latestLogFile);
+      } catch (_) {
+        // Path does not exist; nothing to remove.
       }
       fs.symlinkSync(path.basename(logFile), latestLogFile);
     } catch (err) {

@@ -68,6 +68,44 @@ class GameStateMachine extends EventEmitter {
     this.globalSequences = {}; // loaded from :global :sequences for reference resolution
   }
 
+  resolveMediaReference(value, context = 'media') {
+    if (typeof value !== 'string') {
+      return value;
+    }
+
+    const mediaCatalog = this.cfg?.global?.media;
+    if (!mediaCatalog || typeof mediaCatalog !== 'object') {
+      return value;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(mediaCatalog, value)) {
+      return value;
+    }
+
+    const resolvedValue = mediaCatalog[value];
+    if (typeof resolvedValue !== 'string') {
+      log.warn(`Media reference '${value}' in ${context} resolved to non-string value; using original reference`);
+      return value;
+    }
+
+    log.debug(`Resolved media reference '${value}' in ${context} -> '${resolvedValue}'`);
+    return resolvedValue;
+  }
+
+  resolveMediaFields(data, fields, context) {
+    if (!data || typeof data !== 'object') {
+      return data;
+    }
+
+    const resolved = { ...data };
+    for (const field of fields) {
+      if (resolved[field] !== undefined) {
+        resolved[field] = this.resolveMediaReference(resolved[field], `${context}.${field}`);
+      }
+    }
+    return resolved;
+  }
+
   // Execute a hint by id with optional text override
   async fireHint(hintId, source = 'direct', textOverride = null) {
     // Handle ad-hoc text hints (no id, only text)
@@ -180,7 +218,7 @@ class GameStateMachine extends EventEmitter {
 
   // Execute speech hint with playSpeech command (audio files only, no TTS)
   async executeSpeechHint(hint, source = 'direct') {
-    const file = hint.file;
+    const file = this.resolveMediaReference(hint.file, `hint:${hint.id || 'speech'}.file`);
     const zone = hint.zone || 'audio';
 
     if (!file) {
@@ -201,7 +239,7 @@ class GameStateMachine extends EventEmitter {
 
   // Execute audioFx hint with playAudioFX command
   async executeAudioHint(hint, source = 'direct') {
-    const file = hint.file || hint.audio;
+    const file = this.resolveMediaReference(hint.file || hint.audio, `hint:${hint.id || 'audio'}.file`);
     const zone = hint.zone || 'audio';
 
     if (!file) {
@@ -223,7 +261,7 @@ class GameStateMachine extends EventEmitter {
 
   // Execute video hint with playVideo command
   async executeVideoHint(hint, source = 'direct') {
-    const file = hint.file || hint.video;
+    const file = this.resolveMediaReference(hint.file || hint.video, `hint:${hint.id || 'video'}.file`);
     const zone = hint.zone || 'mirror';
 
     if (!file) {
@@ -825,6 +863,7 @@ class GameStateMachine extends EventEmitter {
 
     try {
       if (play) {
+        const resolvedPlay = this.resolveMediaFields(play, ['file', 'video', 'speech', 'fx', 'background', 'image'], `cue:${cueKey}.play`);
         // Route media commands to appropriate zone adapter(s)
         if (targetZones.length > 0) {
           for (const zoneName of targetZones) {
@@ -832,15 +871,15 @@ class GameStateMachine extends EventEmitter {
             try { adapter = this.zones.validateZone(zoneName); } catch (_) { adapter = null; }
             // Prefer 'file' key; support legacy 'video' as alias
             if (adapter) {
-              if (play.file || play.video) adapter.playVideo(play.file || play.video, { volumeAdjust: volume });
-              if (play.speech) adapter.playSpeech(play.speech, { volumeAdjust: volume });
-              if (play.fx) adapter.playAudioFX(play.fx, { volumeAdjust: volume });
-              if (play.background) {
+              if (resolvedPlay.file || resolvedPlay.video) adapter.playVideo(resolvedPlay.file || resolvedPlay.video, { volumeAdjust: volume });
+              if (resolvedPlay.speech) adapter.playSpeech(resolvedPlay.speech, { volumeAdjust: volume });
+              if (resolvedPlay.fx) adapter.playAudioFX(resolvedPlay.fx, { volumeAdjust: volume });
+              if (resolvedPlay.background) {
                 const loop = (action.loop !== undefined) ? !!action.loop : true;
-                adapter.playBackground(play.background, loop, { volumeAdjust: volume });
+                adapter.playBackground(resolvedPlay.background, loop, { volumeAdjust: volume });
               }
               // Prefer 'file' key; support legacy 'image' as alias
-              if (play.file || play.image) adapter.setImage(play.file || play.image);
+              if (resolvedPlay.file || resolvedPlay.image) adapter.setImage(resolvedPlay.file || resolvedPlay.image);
             }
           }
         } else {
@@ -881,7 +920,7 @@ class GameStateMachine extends EventEmitter {
               }
 
               // Handle file parameter for media commands
-              if (action.file) options.file = action.file;
+              if (action.file) options.file = this.resolveMediaReference(action.file, `cue:${cueKey}.file`);
 
               // Handle fadeTime parameter for audio commands
               if (action.fadeTime !== undefined) options.fadeTime = action.fadeTime;
