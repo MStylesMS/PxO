@@ -469,6 +469,8 @@ class PfxAdapterBase {
     const startTime = Date.now();
     const pollInterval = 2000; // Check every 2 seconds
     let changes = { restarted: false, urlChanged: false, visibilityChanged: false };
+    let windowRecoveryRequested = false;
+    let missingWindowIdObserved = false;
 
     while (Date.now() - startTime < timeout) {
       // Request fresh state
@@ -492,8 +494,31 @@ class PfxAdapterBase {
         log.info(`[PFX-${this.topics.baseTopic}] Browser not enabled, enabling with URL: ${desiredUrl}`);
         this.enableBrowser(desiredUrl);
         changes.restarted = true;
+        windowRecoveryRequested = true;
         allRequirementsMet = false;
       } else {
+        // Require a usable browser window id before reporting verification success.
+        // Without this, verifyBrowser can pass while later showBrowser fails.
+        const rawWindowId = browserState.window_id ?? browserState.windowId;
+        const normalizedWindowId = String(rawWindowId || '').trim().toLowerCase();
+        const hasUsableWindowId = normalizedWindowId && normalizedWindowId !== 'null' && normalizedWindowId !== 'undefined' && normalizedWindowId !== 'not-found';
+
+        if (!hasUsableWindowId) {
+          missingWindowIdObserved = true;
+          if (!windowRecoveryRequested) {
+            log.info(`[PFX-${this.topics.baseTopic}] Browser enabled but window_id is missing, re-enabling browser for recovery`);
+            this.enableBrowser(desiredUrl || browserState.url);
+            changes.restarted = true;
+            windowRecoveryRequested = true;
+          } else {
+            log.info(`[PFX-${this.topics.baseTopic}] Waiting for browser window_id to become available...`);
+          }
+          allRequirementsMet = false;
+        } else {
+          // Window id recovered/reset successfully in this verification cycle.
+          windowRecoveryRequested = false;
+        }
+
         // Browser is enabled, check URL if provided
         if (desiredUrl) {
           const currentUrl = String(browserState.url || '').trim();
@@ -532,8 +557,17 @@ class PfxAdapterBase {
     }
 
     // Timeout reached
+    if (missingWindowIdObserved) {
+      log.warn(`[PFX-${this.topics.baseTopic}] Browser verification timeout reason: missing_window_id`);
+    }
     log.warn(`[PFX-${this.topics.baseTopic}] Browser verification timeout after ${timeout}ms`);
-    return { ...changes, success: false, timeElapsed: Date.now() - startTime, timedOut: true };
+    return {
+      ...changes,
+      success: false,
+      timeElapsed: Date.now() - startTime,
+      timedOut: true,
+      missingWindowId: missingWindowIdObserved
+    };
   }
 
   // Enhanced media verification with automatic setImage and retry logic
