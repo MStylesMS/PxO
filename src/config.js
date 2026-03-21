@@ -24,7 +24,7 @@ function loadEdnConfig(configPath = null) {
     log.info(`Using specified EDN config file: ${ednFile}`);
   } else {
     // Default to game.edn in the game's config directory
-    ednFile = path.resolve(__dirname, '..', '..', 'config', 'game.edn');
+    ednFile = path.resolve(__dirname, '..', 'config', 'game.edn');
     log.info(`Using default EDN config file: ${ednFile}`);
   }
   
@@ -70,10 +70,10 @@ function loadEdnConfig(configPath = null) {
 function loadJsonConfig() {
   // Try to load modular configuration first (default)
   // Prefer room-level JSON mirror of EDN
-  const roomJson = path.resolve(__dirname, '..', '..', 'config', 'houdini.json');
+  const roomJson = path.resolve(__dirname, '..', 'config', 'game.json');
   const modularFile = fs.existsSync(roomJson)
     ? roomJson
-    : path.resolve(__dirname, '..', '..', 'config', 'example.json');
+    : path.resolve(__dirname, '..', 'config', 'example.json');
   log.info(`Attempting to load default config file: ${modularFile}`);
   try {
     const raw = fs.readFileSync(modularFile, 'utf8');
@@ -113,10 +113,11 @@ function loadJsonConfig() {
 function validateConfig(cfg) {
   // Basic structural validation
   if (!cfg.global || !cfg.global.mqtt || !cfg.global.mqtt.broker) throw new Error('Config.global.mqtt.broker required');
+  if (!cfg.global.mqtt['game-topic']) throw new Error('Config.global.mqtt.game-topic required');
 
   // Provide legacy topics tree if missing for backward compatibility tests
   if (!cfg.global.mqtt.topics) {
-    const base = cfg.global.mqtt['game-topic'] || 'paradox/houdini';
+    const base = cfg.global.mqtt['game-topic'];
     cfg.global.mqtt.topics = {
       ui: { base_topic: base },
       clock: { base_topic: `${base}/clock` },
@@ -180,7 +181,7 @@ function validateConfig(cfg) {
 }
 
 function validateZoneFormat(zones) {
-  const supportedTypes = ['pfx-media', 'pfx-lights', 'houdini-clock', 'pfx-clock'];
+  const supportedTypes = ['pfx-media', 'pfx-lights', 'pfx-clock'];
 
   Object.entries(zones).forEach(([zoneName, zoneConfig]) => {
     if (!zoneConfig || typeof zoneConfig !== 'object') {

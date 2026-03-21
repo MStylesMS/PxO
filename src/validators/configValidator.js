@@ -32,7 +32,7 @@ class ConfigValidator {
         // Validate game modes
         if (config['game-modes']) {
             Object.entries(config['game-modes']).forEach(([modeKey, mode]) => {
-                this.validateGameMode(mode, modeKey);
+                this.validateGameMode(mode, modeKey, config.global || {});
             });
         }
 
@@ -55,6 +55,10 @@ class ConfigValidator {
      * Validate global configuration section
      */
     validateGlobalConfig(global) {
+        if (global.hints) {
+            this.validateGlobalHints(global.hints, global, 'global');
+        }
+
         // Validate cues
         if (global.cues) {
             this.validateCues(global.cues, 'global');
@@ -72,10 +76,158 @@ class ConfigValidator {
         this.validateNameUniqueness(global, 'global');
     }
 
+    findCommandSequenceDefinition(commandSequences, sequenceName) {
+        if (!commandSequences || typeof commandSequences !== 'object' || !sequenceName) {
+            return undefined;
+        }
+
+        const raw = String(sequenceName);
+        const normalized = raw.endsWith('-sequence') ? raw : `${raw}-sequence`;
+        const base = normalized.replace(/-sequence$/, '');
+        const variants = [raw, normalized, base, `${base}-sequence`].filter(Boolean);
+
+        for (const key of variants) {
+            if (commandSequences[key]) return commandSequences[key];
+        }
+
+        for (const value of Object.values(commandSequences)) {
+            if (!value || typeof value !== 'object') continue;
+            for (const key of variants) {
+                if (value[key]) return value[key];
+            }
+        }
+
+        return undefined;
+    }
+
+    extractTemplateKeys(value, out = new Set()) {
+        if (typeof value === 'string') {
+            const re = /\{\{(\w+)\}\}/g;
+            let m;
+            while ((m = re.exec(value)) !== null) {
+                out.add(m[1]);
+            }
+            return out;
+        }
+
+        if (Array.isArray(value)) {
+            value.forEach(v => this.extractTemplateKeys(v, out));
+            return out;
+        }
+
+        if (value && typeof value === 'object') {
+            Object.values(value).forEach(v => this.extractTemplateKeys(v, out));
+        }
+
+        return out;
+    }
+
+    validateGlobalHints(hints, globalConfig, context) {
+        if (!hints || typeof hints !== 'object') return;
+
+        const commandSequences = globalConfig['command-sequences'] || {};
+        const isScalar = (value) => value === null || ['string', 'number', 'boolean'].includes(typeof value);
+
+        Object.entries(hints).forEach(([hintName, hintDef]) => {
+            const hintContext = `${context}.hints.${hintName}`;
+            if (!hintDef || typeof hintDef !== 'object') return;
+
+            const type = String(hintDef.type || 'text').toLowerCase();
+            if (type === 'audiofx') {
+                this.addWarning(
+                    `Hint '${hintName}' uses deprecated type 'audioFx'; prefer 'audio'`,
+                    hintContext
+                );
+            }
+
+            if (type !== 'sequence' && type !== 'text') {
+                if (hintDef.parameters && typeof hintDef.parameters === 'object') {
+                    this.addWarning(
+                        `Hint '${hintName}' defines 'parameters' but only sequence hints support parameters`,
+                        hintContext
+                    );
+                }
+                return;
+            }
+
+            const sequenceName = hintDef.sequence;
+            if (!sequenceName || typeof sequenceName !== 'string') {
+                this.addError(
+                    `${type === 'text' ? 'Text' : 'Sequence'} hint '${hintName}' must specify string 'sequence' field`,
+                    hintContext
+                );
+                return;
+            }
+
+            const sequenceDef = this.findCommandSequenceDefinition(commandSequences, sequenceName);
+            if (!sequenceDef) {
+                this.addError(
+                    `${type === 'text' ? 'Text' : 'Sequence'} hint '${hintName}' references '${sequenceName}' but it is not defined in global.command-sequences`,
+                    hintContext
+                );
+                return;
+            }
+
+            const parameters = hintDef.parameters;
+            if (type === 'sequence' && parameters !== undefined) {
+                if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) {
+                    this.addError(
+                        `Sequence hint '${hintName}' field 'parameters' must be a map/object when provided`,
+                        hintContext
+                    );
+                    return;
+                }
+
+                const invalidParamKeys = Object.entries(parameters)
+                    .filter(([, value]) => !isScalar(value))
+                    .map(([key]) => key);
+
+                if (invalidParamKeys.length > 0) {
+                    this.addError(
+                        `Sequence hint '${hintName}' has non-scalar parameter value(s): ${invalidParamKeys.join(', ')}`,
+                        hintContext
+                    );
+                    return;
+                }
+            }
+
+            if (type === 'text' && parameters !== undefined) {
+                this.addWarning(
+                    `Text hint '${hintName}' defines 'parameters' but text hints do not use parameters`,
+                    hintContext
+                );
+            }
+
+            const templateKeys = this.extractTemplateKeys(sequenceDef);
+            const reserved = new Set(['id', 'type', 'sequence', 'description', 'parameters']);
+            const providedKeys = Object.keys(hintDef).filter(k => !reserved.has(k));
+            const providedParamKeys = (type === 'sequence' && parameters && typeof parameters === 'object')
+                ? Object.keys(parameters)
+                : [];
+            const providedAll = [...providedKeys, ...providedParamKeys];
+
+            const unused = providedAll.filter(k => !templateKeys.has(k));
+            if (unused.length > 0) {
+                this.addWarning(
+                    `${type === 'text' ? 'Text' : 'Sequence'} hint '${hintName}' provides unused field(s): ${unused.join(', ')}`,
+                    hintContext
+                );
+            }
+
+            const missing = Array.from(templateKeys).filter(k => !providedAll.includes(k));
+            if (missing.length > 0) {
+                this.addWarning(
+                    `${type === 'text' ? 'Text' : 'Sequence'} hint '${hintName}' is missing field(s) required by template placeholders: ${missing.join(', ')}`,
+                    hintContext
+                );
+            }
+        });
+    }
+
     /**
      * Validate game mode configuration
      */
-    validateGameMode(mode, modeKey) {
+    validateGameMode(mode, modeKey, globalConfig = {}) {
         // Check for required labels for UI compatibility
         if (!mode['short-label'] && !mode.shortLabel) {
             this.addWarning(
@@ -92,6 +244,25 @@ class ConfigValidator {
                 `game-mode.${modeKey}`
             );
         }
+
+        const hintsList = Array.isArray(mode.hints) ? mode.hints : [];
+        const maxHintsValue = mode['max-hints'] ?? mode.maxHints;
+
+        if (maxHintsValue !== undefined) {
+            if (!Number.isInteger(maxHintsValue) || maxHintsValue < 0) {
+                this.addError(
+                    `Game mode '${modeKey}' has invalid max-hints '${maxHintsValue}'. Expected a non-negative integer.`,
+                    `game-mode.${modeKey}.max-hints`
+                );
+            } else if (Array.isArray(mode.hints) && maxHintsValue > hintsList.length) {
+                this.addWarning(
+                    `Game mode '${modeKey}' max-hints (${maxHintsValue}) exceeds configured hints (${hintsList.length}).`,
+                    `game-mode.${modeKey}.max-hints`
+                );
+            }
+        }
+
+        this.validateGameModeHintReferences(modeKey, hintsList, globalConfig);
 
         // Validate mode-specific cues
         if (mode.cues) {
@@ -112,6 +283,37 @@ class ConfigValidator {
 
         // Check for name conflicts within this mode
         this.validateNameUniqueness(mode, `game-mode.${modeKey}`);
+    }
+
+    /**
+     * Validate hint references in a game mode against globally defined hint ids.
+     */
+    validateGameModeHintReferences(modeKey, hintsList, globalConfig) {
+        if (!Array.isArray(hintsList) || hintsList.length === 0) return;
+
+        const globalHints = (globalConfig && globalConfig.hints) || {};
+        const hasGlobalHints = globalHints && typeof globalHints === 'object';
+
+        hintsList.forEach((hintEntry, index) => {
+            if (typeof hintEntry !== 'string') return;
+
+            const text = hintEntry.trim();
+            if (!text) return;
+
+            // Shorthand form (e.g., playVideo:file.mp4) is not a global id reference.
+            if (/^[a-zA-Z]+:/.test(text)) return;
+
+            // Hint names are fully unrestricted; check if this string exists in global hints.
+            // If a game-mode hint is not found globally, it will be treated as ad-hoc text at runtime.
+            const exists = hasGlobalHints && Object.prototype.hasOwnProperty.call(globalHints, text);
+            if (!exists) {
+                this.addWarning(
+                    `Game mode '${modeKey}' references hint '${text}' that is not defined under global.hints. ` +
+                    `It will be treated as ad-hoc text unless a global hint with this id exists.`,
+                    `game-mode.${modeKey}.hints[${index}]`
+                );
+            }
+        });
     }
 
     /**
@@ -272,7 +474,7 @@ class ConfigValidator {
         const stepTypes = this.getStepDiscriminators(step);
 
         if (stepTypes.length === 0) {
-            this.addError(`Sequence step in ${context} must have a valid discriminator (zone+command, fire-cue, fire-seq, wait)`);
+            this.addError(`Sequence step in ${context} must have a valid discriminator (zone+command, fire-cue, fire-seq, fire, hint, wait)`);
         } else if (stepTypes.length > 1) {
             this.addError(`Sequence step in ${context} has multiple discriminators: ${stepTypes.join(', ')}`);
         }
@@ -300,6 +502,10 @@ class ConfigValidator {
             if (typeof step['fire-seq'] !== 'string') {
                 this.addError(`Fire-seq step in ${context} must reference a string sequence name`);
             }
+        }
+
+        if (step.hint !== undefined && typeof step.hint !== 'string') {
+            this.addError(`Hint step in ${context} must reference a string hint id`);
         }
 
         if (step.zone || step.zones) {
@@ -384,7 +590,7 @@ class ConfigValidator {
         const discriminators = this.getScheduleDiscriminators(command);
 
         if (discriminators.length === 0) {
-            this.addError(`Schedule entry in ${context} must have a valid discriminator (fire-cue, fire-seq, zone+command)`);
+            this.addError(`Schedule entry in ${context} must have a valid discriminator (fire-cue, fire-seq, fire, hint, play-hint, zone+command, end)`);
         } else if (discriminators.length > 1) {
             this.addError(`Schedule entry in ${context} has multiple discriminators: ${discriminators.join(', ')}`);
         }
@@ -409,6 +615,18 @@ class ConfigValidator {
             if (typeof command['fire-seq'] !== 'string') {
                 this.addError(`Schedule entry ${context} fire-seq must reference a string sequence name`);
             }
+        }
+
+        if (command.hint !== undefined && typeof command.hint !== 'string') {
+            this.addError(`Schedule entry ${context} hint must reference a string hint id`);
+        }
+
+        if (command.playHint !== undefined && typeof command.playHint !== 'string') {
+            this.addError(`Schedule entry ${context} playHint must reference a string hint id`);
+        }
+
+        if (command['play-hint'] !== undefined && typeof command['play-hint'] !== 'string') {
+            this.addError(`Schedule entry ${context} play-hint must reference a string hint id`);
         }
 
         if (command.zone || command.zones) {
@@ -526,7 +744,7 @@ class ConfigValidator {
             if (!value || typeof value !== 'object') return;
 
             // Check if this looks like a sequence definition
-            const isSequenceDef = Array.isArray(value) 
+            const isSequenceDef = Array.isArray(value)
                 || Array.isArray(value.sequence)
                 || Array.isArray(value.timeline)
                 || Array.isArray(value.schedule);
@@ -548,6 +766,7 @@ class ConfigValidator {
         const discriminators = [];
 
         if (step.wait !== undefined) discriminators.push('wait');
+        if (step.hint !== undefined) discriminators.push('hint');
         if (step.fire) discriminators.push('fire');
         if (step['fire-cue']) discriminators.push('fire-cue');
         if (step['fire-seq']) discriminators.push('fire-seq');
@@ -564,6 +783,8 @@ class ConfigValidator {
         const discriminators = [];
 
         if (command.fire) discriminators.push('fire');
+        if (command.hint !== undefined) discriminators.push('hint');
+        if (command.playHint !== undefined || command['play-hint'] !== undefined) discriminators.push('play-hint');
         if (command['fire-cue']) discriminators.push('fire-cue');
         if (command['fire-seq']) discriminators.push('fire-seq');
         if (command.zone && command.command) discriminators.push('zone+command');

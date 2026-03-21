@@ -30,4 +30,25 @@ describe('getCombinedHints', () => {
         // normalized hints carry data/file under data or in displayText; ensure type mapping kept
         expect(g.type).toBe('video');
     });
+
+    test('treats game-mode string hint ids as references to global hints', () => {
+        const cfg = {
+            global: {
+                media: {
+                    hints: {
+                        'hint-01': { type: 'speech', file: 'h1.mp3', target: 'Audio', description: 'Hint one' },
+                        'hint-02': { type: 'text', text: 'Look under the desk', target: 'Mirror' }
+                    }
+                }
+            }
+        };
+
+        const out = getCombinedHints(cfg, ['hint-01', 'hint-02']);
+        expect(out.find(h => h.id === 'hint-01')).toBeDefined();
+        expect(out.find(h => h.id === 'hint-02')).toBeDefined();
+
+        // Ensure ids are not duplicated when referenced from game-mode list
+        expect(out.filter(h => h.id === 'hint-01').length).toBe(1);
+        expect(out.filter(h => h.id === 'hint-02').length).toBe(1);
+    });
 });

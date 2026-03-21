@@ -55,10 +55,10 @@ describe('AdapterRegistry', () => {
             expect(adapter.zoneType).toBe('pfx-lights');
         });
 
-        test('should initialize houdini-clock zones correctly', () => {
+        test('should initialize pfx-clock zones correctly', () => {
             const zonesConfig = {
                 'clock': {
-                    'type': 'houdini-clock',
+                    'type': 'pfx-clock',
                     'base-topic': 'paradox/houdini/clock'
                 }
             };
@@ -68,7 +68,7 @@ describe('AdapterRegistry', () => {
             const adapter = registry.getZone('clock');
             expect(adapter).toBeInstanceOf(ClockAdapter);
             expect(adapter.zoneName).toBe('clock');
-            expect(adapter.zoneType).toBe('houdini-clock');
+            expect(adapter.zoneType).toBe('pfx-clock');
         });
 
         test('should handle multiple zones of different types', () => {
@@ -76,7 +76,7 @@ describe('AdapterRegistry', () => {
                 'mirror': { 'type': 'pfx-media', 'base-topic': 'mirror' },
                 'picture': { 'type': 'pfx-media', 'base-topic': 'picture' },
                 'lights': { 'type': 'pfx-lights', 'base-topic': 'lights' },
-                'clock': { 'type': 'houdini-clock', 'base-topic': 'clock' }
+                'clock': { 'type': 'pfx-clock', 'base-topic': 'clock' }
             };
 
             registry = new AdapterRegistry(mockMqtt, zonesConfig);
@@ -149,7 +149,7 @@ describe('AdapterRegistry', () => {
             const zonesConfig = {
                 'mirror': { 'type': 'pfx-media', 'base-topic': 'mirror' },
                 'lights': { 'type': 'pfx-lights', 'base-topic': 'lights' },
-                'clock': { 'type': 'houdini-clock', 'base-topic': 'clock' }
+                'clock': { 'type': 'pfx-clock', 'base-topic': 'clock' }
             };
             registry = new AdapterRegistry(mockMqtt, zonesConfig);
         });
@@ -194,7 +194,7 @@ describe('AdapterRegistry', () => {
             expect(lightZones).toHaveLength(1);
             expect(lightZones[0].zoneName).toBe('lights');
 
-            const clockZones = registry.getZonesByType('houdini-clock');
+            const clockZones = registry.getZonesByType('pfx-clock');
             expect(clockZones).toHaveLength(1);
             expect(clockZones[0].zoneName).toBe('clock');
         });

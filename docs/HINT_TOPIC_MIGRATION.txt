@@ -1,0 +1,24 @@
+Hint Topic Migration (minimal)
+
+Purpose
+- Make Agent22 UI publish hints to whatever topic PxO advertises.
+
+What changed
+- PxO now publishes hintTopic in its UI config payload on {game-topic}/config.
+- Agent22 UI now reads hintTopic from config and uses it for sendHint().
+- Agent22 UI keeps a fallback of paradox/agent22/hints until config arrives.
+
+How to update another game UI quickly
+1. Keep subscribing to that game's config topic.
+2. Read payload.hintTopic from config if present.
+3. Use payload.hintTopic when publishing hint requests.
+4. Keep a local fallback topic for startup safety.
+
+Expected hint request payloads
+- Ad-hoc text hint: {"id": null, "text": "your text"}
+- Existing hint by id: {"id": "some-id"}
+- Editable text hint by id: {"id": "some-id", "text": "override text"}
+
+Notes
+- Hint ids are unrestricted names now (examples: hint-foo, foo-hint, foo, abc123).
+- If a game-mode hint string is not found in global.hints, runtime treats it as ad-hoc text.

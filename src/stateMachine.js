@@ -135,7 +135,7 @@ class GameStateMachine extends EventEmitter {
     }
 
     // If textOverride provided for a text hint, override the text
-    const effectiveHint = (textOverride && (hint.type === 'text' || !hint.type)) 
+    const effectiveHint = (textOverride && (hint.type === 'text' || !hint.type))
       ? { ...hint, text: textOverride }
       : hint;
 
@@ -144,6 +144,9 @@ class GameStateMachine extends EventEmitter {
       switch (effectiveHint.type || 'text') {
         case 'text':
           await this.executeTextHint(effectiveHint, source);
+          break;
+        case 'sequence':
+          await this.executeSequenceHint(effectiveHint, source);
           break;
         case 'speech':
           await this.executeSpeechHint(effectiveHint, source);
@@ -183,7 +186,11 @@ class GameStateMachine extends EventEmitter {
     const combined = this.getCombinedHints(gameHints);
 
     // Find hint by id
-    const hint = combined.find(h => h.id === hintId);
+    const normalizedHintId = this.normalizeHintId(hintId);
+    const hint = combined.find(h => {
+      if (!h || !h.id) return false;
+      return h.id === hintId || this.normalizeHintId(h.id) === normalizedHintId;
+    });
     if (!hint) {
       // Don't log here - this is called for every :fire check
       return null;
@@ -195,7 +202,7 @@ class GameStateMachine extends EventEmitter {
 
   // Execute text hint using :hint-text-seq sequence
   async executeTextHint(hint, source = 'direct') {
-    const text = hint.text || hint.displayText || '';
+    const text = hint.text || hint.description || hint.displayText || '';
     if (!text) {
       log.warn('Text hint has no text');
       return false;
@@ -203,13 +210,167 @@ class GameStateMachine extends EventEmitter {
 
     log.info(`Executing text hint: "${text}"`);
 
+    // Preferred path: text hints use an explicit sequence in global.command-sequences.
+    if (hint.sequence && typeof hint.sequence === 'string') {
+      return this.executeSequenceHint({ ...hint, type: 'text', text }, source);
+    }
+
     // Run the :hint-text-seq with hintText variable
-    const ctx = { hintText: text };
+    const ctx = {
+      hintText: text,
+      text,
+      duration: hint.duration
+    };
     const result = await this.sequenceRunner.runControlSequence('hint-text-seq', ctx);
 
     if (!result.ok) {
       log.warn(`Text hint sequence failed: ${result.error}`);
       this.publishWarning('hint_text_sequence_failed', { text, error: result.error });
+      return false;
+    }
+
+    return true;
+  }
+
+  getCommandSequenceDefinition(sequenceName) {
+    if (!sequenceName) return undefined;
+    const all = this.cfg?.global?.['command-sequences'];
+    if (!all || typeof all !== 'object') return undefined;
+
+    const normalizeName = (name) => {
+      if (!name) return [];
+      const raw = String(name);
+      const norm = this.sequenceRunner?.normalizeName ? this.sequenceRunner.normalizeName(raw) : raw;
+      const base = String(norm).replace(/-sequence$/, '');
+      return [raw, norm, base, `${base}-sequence`].filter(Boolean);
+    };
+
+    const variants = normalizeName(sequenceName);
+    for (const key of variants) {
+      if (all[key]) return all[key];
+    }
+
+    for (const group of Object.values(all)) {
+      if (!group || typeof group !== 'object') continue;
+      for (const key of variants) {
+        if (group[key]) return group[key];
+      }
+    }
+    return undefined;
+  }
+
+  extractTemplateKeys(obj) {
+    const keys = new Set();
+    const visit = (value) => {
+      if (typeof value === 'string') {
+        const re = /\{\{(\w+)\}\}/g;
+        let match;
+        while ((match = re.exec(value)) !== null) {
+          keys.add(match[1]);
+        }
+        return;
+      }
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        return;
+      }
+      if (value && typeof value === 'object') {
+        Object.values(value).forEach(visit);
+      }
+    };
+    visit(obj);
+    return keys;
+  }
+
+  async executeSequenceHint(hint, source = 'direct') {
+    const sequenceName = hint.sequence;
+    if (!sequenceName || typeof sequenceName !== 'string') {
+      this.publishWarning('hint_sequence_missing_name', {
+        id: hint.id,
+        source,
+        message: 'Sequence hint missing required string field: sequence'
+      });
+      return false;
+    }
+
+    const seqDef = this.getCommandSequenceDefinition(sequenceName);
+    if (!seqDef) {
+      this.publishWarning('hint_sequence_not_found', {
+        id: hint.id,
+        source,
+        sequence: sequenceName,
+        message: 'Sequence hint target must exist under global.command-sequences'
+      });
+      return false;
+    }
+
+    const hintType = String(hint.type || 'sequence').toLowerCase();
+    const reserved = new Set(['id', 'type', 'sequence', 'description', 'parameters']);
+    const context = {};
+    Object.entries(hint || {}).forEach(([key, value]) => {
+      if (!reserved.has(key) && value !== undefined) context[key] = value;
+    });
+
+    if (hintType === 'text' && !Object.prototype.hasOwnProperty.call(context, 'text')) {
+      const fallbackText = hint.text || hint.description;
+      if (fallbackText !== undefined) context.text = fallbackText;
+    }
+
+    if (hintType === 'sequence' && hint.parameters !== undefined) {
+      if (!hint.parameters || typeof hint.parameters !== 'object' || Array.isArray(hint.parameters)) {
+        this.publishWarning('hint_sequence_invalid_parameters', {
+          id: hint.id,
+          source,
+          sequence: sequenceName,
+          message: 'Sequence hint parameters must be an object map'
+        });
+      } else {
+        Object.entries(hint.parameters).forEach(([key, value]) => {
+          // Keep text/duration as reserved built-ins.
+          if (key === 'text' || key === 'duration') return;
+          if (value !== undefined) context[key] = value;
+        });
+      }
+    }
+
+    const templateKeys = this.extractTemplateKeys(seqDef);
+    const providedKeys = Object.keys(context);
+    const unusedKeys = providedKeys.filter(k => !templateKeys.has(k));
+    if (unusedKeys.length > 0) {
+      this.publishWarning('hint_sequence_unused_fields', {
+        id: hint.id,
+        source,
+        sequence: sequenceName,
+        unused: unusedKeys
+      });
+    }
+
+    const missingKeys = Array.from(templateKeys).filter(k => !Object.prototype.hasOwnProperty.call(context, k));
+    if (missingKeys.length > 0) {
+      this.publishWarning('hint_sequence_missing_fields', {
+        id: hint.id,
+        source,
+        sequence: sequenceName,
+        missing: missingKeys
+      });
+      // Option A behavior: warn and continue with empty substitutions.
+      missingKeys.forEach((key) => {
+        context[key] = '';
+      });
+    }
+
+    const result = await this.sequenceRunner.runSequence(sequenceName, {
+      gameMode: this.currentGameMode,
+      ...context
+    });
+
+    if (!result?.ok) {
+      this.publishWarning('hint_sequence_failed', {
+        id: hint.id,
+        source,
+        sequence: sequenceName,
+        error: result?.error || 'unknown_error'
+      });
       return false;
     }
 
@@ -262,7 +423,7 @@ class GameStateMachine extends EventEmitter {
   // Execute video hint with playVideo command
   async executeVideoHint(hint, source = 'direct') {
     const file = this.resolveMediaReference(hint.file || hint.video, `hint:${hint.id || 'video'}.file`);
-    const zone = hint.zone || 'mirror';
+    const zone = hint.zone || 'video';
 
     if (!file) {
       log.warn('Video hint has no file');
@@ -286,9 +447,9 @@ class GameStateMachine extends EventEmitter {
     const action = hint.action || hint.sequence;
 
     log.info(`Action hint requested: ${action} (not yet implemented)`);
-    this.publishWarning('hint_action_not_implemented', { 
-      action, 
-      message: 'Action hints are not yet implemented. Use sequences or cues instead.' 
+    this.publishWarning('hint_action_not_implemented', {
+      action,
+      message: 'Action hints are not yet implemented. Use sequences or cues instead.'
     });
 
     // Future: could execute a named sequence or cue
@@ -394,8 +555,8 @@ class GameStateMachine extends EventEmitter {
 
         // If v looks like a sequence definition, add it directly
         // Sequence indicators: array form, has :sequence array, has :timeline array, or has :schedule array
-        const isSeqDef = Array.isArray(v) 
-          || Array.isArray(v.sequence) 
+        const isSeqDef = Array.isArray(v)
+          || Array.isArray(v.sequence)
           || (Array.isArray(v.timeline) && typeof v.duration === 'number')
           || Array.isArray(v.schedule);
 
@@ -1107,7 +1268,7 @@ class GameStateMachine extends EventEmitter {
    */
   async fireByName(name) {
     if (!name) return;
-    
+
     // Check if this is a hint first (DEPRECATED usage)
     const hintCheck = this.lookupHint(name);
     if (hintCheck) {
@@ -1121,35 +1282,35 @@ class GameStateMachine extends EventEmitter {
       await this.fireHint(name, 'fire-deprecated');
       return;
     }
-    
+
     // Check if this is a cue (try current scope first, then global)
     const scopedCues = this.currentPhaseConfig?.cues || {};
     const globalCues = this.cfg.global?.cues || {};
-    
+
     if (scopedCues[name] || globalCues[name]) {
       log.debug(`fireByName: '${name}' resolved as CUE (non-blocking)`);
       this.fireCueByName(name);
       return; // Fire-and-forget
     }
-    
+
     // Check if this is a sequence (try multiple namespaces)
     let resolved = null;
     try {
       resolved = this.sequenceRunner.resolveSequenceNew(name, this.gameType);
     } catch (_) { /* ignore */ }
-    
+
     if (!resolved) {
-      try { 
-        resolved = this.sequenceRunner.resolveSequence(name, this.gameType); 
+      try {
+        resolved = this.sequenceRunner.resolveSequence(name, this.gameType);
       } catch (_) { /* ignore */ }
     }
-    
+
     if (resolved) {
       log.debug(`fireByName: '${name}' resolved as SEQUENCE (blocking)`);
       await this.fireSequenceByName(name);
       return;
     }
-    
+
     // Not found in either - log warning
     log.warn(`fireByName: '${name}' not found in cues or sequences`);
   }

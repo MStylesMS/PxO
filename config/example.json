@@ -1,0 +1,10 @@
+{
+  "global": {
+    "mqtt": {
+      "broker": "mqtt://127.0.0.1",
+      "game-topic": "paradox/example"
+    },
+    "cues": {}
+  },
+  "game-modes": {}
+}

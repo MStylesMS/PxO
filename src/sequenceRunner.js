@@ -35,9 +35,16 @@ class SequenceRunner {
     // Supports {{variableName}} syntax for variable substitution
     resolveVariables(obj, context = {}) {
         if (typeof obj === 'string') {
+            const exactToken = obj.match(/^\{\{(\w+)\}\}$/);
+            if (exactToken) {
+                const varName = exactToken[1];
+                if (Object.prototype.hasOwnProperty.call(context, varName)) {
+                    return context[varName];
+                }
+            }
             // Replace all {{variableName}} patterns with context values
             return obj.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
-                if (context.hasOwnProperty(varName)) {
+                if (Object.prototype.hasOwnProperty.call(context, varName)) {
                     return String(context[varName]);
                 }
                 // If variable not found, leave placeholder as-is
@@ -406,7 +413,7 @@ class SequenceRunner {
         if (Array.isArray(name)) return { sequence: name };
         if (typeof name === 'object') return name;
 
-    // Map legacy sequence names to new semantic names
+        // Map legacy sequence names to new semantic names
         const mappedName = this.mapLegacySequenceName(name);
 
         // Accept both with and without -sequence suffix; search multiple namespaces.
@@ -454,19 +461,19 @@ class SequenceRunner {
         const systemSeq = searchInCategory('system');
         if (systemSeq) return systemSeq;
 
-    // Try command-sequences (new name; replaces 'game-actions') or legacy nested game-actions
-    // Priority: explicit top-level 'command-sequences' -> hierarchical 'system-sequences' group 'game-actions' -> legacy nested under global.sequences
-    const cmdSeqsRoot = globalRoot['command-sequences'] || {};
-    const cmdHit = cmdSeqsRoot[normalized] || cmdSeqsRoot[base] || cmdSeqsRoot[`${base}-sequence`];
-    if (cmdHit) return cmdHit;
+        // Try command-sequences (new name; replaces 'game-actions') or legacy nested game-actions
+        // Priority: explicit top-level 'command-sequences' -> hierarchical 'system-sequences' group 'game-actions' -> legacy nested under global.sequences
+        const cmdSeqsRoot = globalRoot['command-sequences'] || {};
+        const cmdHit = cmdSeqsRoot[normalized] || cmdSeqsRoot[base] || cmdSeqsRoot[`${base}-sequence`];
+        if (cmdHit) return cmdHit;
 
-    const gameActionSeq = searchInCategory('game-actions');
-    if (gameActionSeq) return gameActionSeq;
+        const gameActionSeq = searchInCategory('game-actions');
+        if (gameActionSeq) return gameActionSeq;
 
-    // Legacy nested: global.sequences.game-actions[name]
-    const legacyGameActions = globalRoot.sequences && globalRoot.sequences['game-actions'] ? globalRoot.sequences['game-actions'] : {};
-    const legacyHit = legacyGameActions[normalized] || legacyGameActions[base] || legacyGameActions[`${base}-sequence`];
-    if (legacyHit) return legacyHit;
+        // Legacy nested: global.sequences.game-actions[name]
+        const legacyGameActions = globalRoot.sequences && globalRoot.sequences['game-actions'] ? globalRoot.sequences['game-actions'] : {};
+        const legacyHit = legacyGameActions[normalized] || legacyGameActions[base] || legacyGameActions[`${base}-sequence`];
+        if (legacyHit) return legacyHit;
 
         // LEGACY FALLBACK: Direct system-sequences access (old flat structure)
         const systemDirect = systemSeqs[normalized] || systemSeqs[base] || systemSeqs[`${base}-sequence`];

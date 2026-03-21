@@ -41,8 +41,13 @@ describe('GameStateMachine fireCueByName', () => {
 
         // Inject mock adapters via zones registry
         mirrorAdapter = { playVideo: jest.fn() };
-        lightsAdapter = { scene: jest.fn() };
+        lightsAdapter = { setScene: jest.fn() };
         gsm.zones.getZone = (zone) => {
+            if (zone === 'mirror') return mirrorAdapter;
+            if (zone === 'lights') return lightsAdapter;
+            return null;
+        };
+        gsm.zones.validateZone = (zone) => {
             if (zone === 'mirror') return mirrorAdapter;
             if (zone === 'lights') return lightsAdapter;
             return null;
@@ -50,15 +55,15 @@ describe('GameStateMachine fireCueByName', () => {
         gsm.zones.execute = jest.fn();
     });
 
-    it('should dispatch video and publish actions', () => {
-        gsm.fireCueByName('testcue');
+    it('should dispatch video and publish actions', async () => {
+        await gsm.fireCueByName('testcue');
         expect(mirrorAdapter.playVideo).toHaveBeenCalledWith('test.mp4', { volumeAdjust: undefined });
         expect(mqtt.publish).toHaveBeenCalledWith('paradox/test', 'hello');
     });
 
-    it('should schedule and execute timeline actions', () => {
+    it('should schedule and execute timeline actions', async () => {
         jest.useFakeTimers();
-        gsm.fireCueByName('timelinecue');
+        await gsm.fireCueByName('timelinecue');
         // Run pending timers (delay 0ms for at=10)
         jest.runOnlyPendingTimers();
         expect(mirrorAdapter.playVideo).toHaveBeenCalledWith('start.mp4', { volumeAdjust: undefined });
@@ -67,12 +72,12 @@ describe('GameStateMachine fireCueByName', () => {
         expect(mqtt.publish).toHaveBeenCalledWith('paradox/mid', 'midway');
         // Advance to 10s (10000ms delay for at=0)
         jest.advanceTimersByTime(5000);
-        expect(lightsAdapter.scene).toHaveBeenCalledWith('bright');
+        expect(lightsAdapter.setScene).toHaveBeenCalledWith('bright');
         jest.useRealTimers();
     });
 
-    it('should resolve media aliases from global.media for command actions', () => {
-        gsm.fireCueByName('imagecue');
+    it('should resolve media aliases from global.media for command actions', async () => {
+        await gsm.fireCueByName('imagecue');
         expect(gsm.zones.execute).toHaveBeenCalledWith('mirror', 'setImage', {
             file: 'images/Agent22-green-white.png'
         });

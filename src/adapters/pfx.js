@@ -250,7 +250,9 @@ class PfxAdapterBase {
     this.mqtt.publish(this.commandTopic, command);
   }
   playAudioFX(file, options = {}) {
-    const command = { command: 'playAudioFX', audio: file };
+    const command = { command: 'playAudioFX', file };
+    // Backward compatibility for older PFx consumers still reading `audio`.
+    command.audio = file;
     // Absolute volume takes priority over relative adjustments
     if (options.volume !== undefined) {
       command.volume = options.volume;
@@ -263,7 +265,9 @@ class PfxAdapterBase {
     this.mqtt.publish(this.commandTopic, command);
   }
   playSpeech(file, options = {}) {
-    const command = { command: 'playSpeech', audio: file };
+    const command = { command: 'playSpeech', file };
+    // Backward compatibility for older PFx consumers still reading `audio`.
+    command.audio = file;
     // Absolute volume takes priority over relative adjustments
     if (options.volume !== undefined) {
       command.volume = options.volume;

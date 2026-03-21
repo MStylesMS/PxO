@@ -3,6 +3,7 @@
 function hintEmoji(type) {
     switch ((type || '').toLowerCase()) {
         case 'text': return '🅣';
+        case 'sequence': return '🪄';
         case 'speech': return '💬';
         case 'audio': return '🔊';
         case 'video': return '🎥';
@@ -11,21 +12,35 @@ function hintEmoji(type) {
     }
 }
 
+function normalizeType(type) {
+    const value = String(type || 'text').toLowerCase();
+    if (value === 'audiofx') return 'audio';
+    return value;
+}
+
+function toDisplayLabel(emoji, type, zone, description) {
+    const zonePart = zone ? ` ${zone}` : '';
+    return `${emoji} ${type}${zonePart}: ${description}`;
+}
+
 function normalizeGlobalHint(key, h) {
-    const type = (h.type || 'text').toLowerCase();
+    const type = normalizeType(h.type || 'text');
     const emoji = hintEmoji(type);
-    const target = h.target || h.mirror || 'Mirror';
-    const displayText = h.description || h.text || h.file || key;
+    const zone = typeof h.zone === 'string' ? h.zone.trim() : '';
+    const description = (h.description || h.text || h.file || key || '').toString().trim();
     return {
         id: key,
         type,
         emoji,
-        target,
-        displayText: `${emoji} ${target}: ${displayText}`,
-        baseText: (h.text || h.description || h.file || String(key)).trim(),
+        zone,
+        target: zone,
+        description,
+        displayText: toDisplayLabel(emoji, type, zone, description),
+        baseText: (type === 'text' ? (h.text || h.description || '') : (h.description || h.file || h.text || String(key))).toString().trim(),
         isEditable: type === 'text',
         data: h,
-        text: h.text
+        text: h.text,
+        duration: h.duration
     };
 }
 
@@ -40,11 +55,13 @@ function normalizeGameHint(idx, h) {
                     id: `gm-${idx}`,
                     type: 'video',
                     emoji: hintEmoji('video'),
-                    target: 'Mirror',
-                    displayText: `${hintEmoji('video')} Mirror: ${payload}`,
+                    zone: '',
+                    target: '',
+                    description: payload,
+                    displayText: toDisplayLabel(hintEmoji('video'), 'video', '', payload),
                     baseText: payload.trim(),
                     isEditable: false,
-                    data: { type: 'video', file: payload, target: 'mirror' }
+                    data: { type: 'video', file: payload, target: '' }
                 };
             }
             if (action === 'playspeech') {
@@ -52,11 +69,13 @@ function normalizeGameHint(idx, h) {
                     id: `gm-${idx}`,
                     type: 'speech',
                     emoji: hintEmoji('speech'),
-                    target: 'Audio',
-                    displayText: `${hintEmoji('speech')} Audio: ${payload}`,
+                    zone: '',
+                    target: '',
+                    description: payload,
+                    displayText: toDisplayLabel(hintEmoji('speech'), 'speech', '', payload),
                     baseText: payload.trim(),
                     isEditable: false,
-                    data: { type: 'speech', file: payload, target: 'audio' }
+                    data: { type: 'speech', file: payload, target: '' }
                 };
             }
             if (action === 'playaudiofx') {
@@ -64,11 +83,13 @@ function normalizeGameHint(idx, h) {
                     id: `gm-${idx}`,
                     type: 'audio',
                     emoji: hintEmoji('audio'),
-                    target: 'Audio',
-                    displayText: `${hintEmoji('audio')} Audio: ${payload}`,
+                    zone: '',
+                    target: '',
+                    description: payload,
+                    displayText: toDisplayLabel(hintEmoji('audio'), 'audio', '', payload),
                     baseText: payload.trim(),
                     isEditable: false,
-                    data: { type: 'audio', file: payload, target: 'audio' }
+                    data: { type: 'audio', file: payload, target: '' }
                 };
             }
             const text = payload.trim();
@@ -76,8 +97,10 @@ function normalizeGameHint(idx, h) {
                 id: `gm-${idx}`,
                 type: 'text',
                 emoji: hintEmoji('text'),
-                target: 'Mirror',
-                displayText: `${hintEmoji('text')} Mirror: ${text}`,
+                zone: '',
+                target: '',
+                description: text,
+                displayText: toDisplayLabel(hintEmoji('text'), 'text', '', text),
                 baseText: text,
                 isEditable: true,
                 text
@@ -88,41 +111,63 @@ function normalizeGameHint(idx, h) {
             id: `gm-${idx}`,
             type: 'text',
             emoji: hintEmoji('text'),
-            target: 'Mirror',
-            displayText: `${hintEmoji('text')} Mirror: ${text}`,
+            zone: '',
+            target: '',
+            description: String(text).trim(),
+            displayText: toDisplayLabel(hintEmoji('text'), 'text', '', text),
             baseText: String(text).trim(),
             isEditable: true,
             text
         };
     }
     const id = h.id || `gm-${idx}`;
-    const type = (h.type || 'text').toLowerCase();
+    const type = normalizeType(h.type || 'text');
     const emoji = hintEmoji(type);
-    const target = h.target || h.mirror || 'Mirror';
-    const displayText = h.description || h.text || h.file || id;
+    const zone = typeof h.zone === 'string' ? h.zone.trim() : '';
+    const description = (h.description || h.text || h.file || id || '').toString().trim();
     return {
         id,
         type,
         emoji,
-        target,
-        displayText: `${emoji} ${target}: ${displayText}`,
-        baseText: (h.text || h.description || h.file || String(id)).trim(),
+        zone,
+        target: zone,
+        description,
+        displayText: toDisplayLabel(emoji, type, zone, description),
+        baseText: (type === 'text' ? (h.text || h.description || '') : (h.description || h.file || h.text || String(id))).toString().trim(),
         isEditable: type === 'text',
         data: h,
-        text: h.text
+        text: h.text,
+        duration: h.duration
     };
 }
 
 function getCombinedHints(cfg, gameHintsArray) {
     const out = [];
     const globalHintsObj = (cfg.global && cfg.global.media && cfg.global.media.hints) || {};
+    const referencedGlobalIds = new Set();
 
     if (Array.isArray(gameHintsArray)) {
-        gameHintsArray.forEach((h, idx) => out.push(normalizeGameHint(idx, h)));
+        gameHintsArray.forEach((h, idx) => {
+            // If a game-mode hint is a string that matches a global hint id,
+            // treat it as an explicit reference instead of plain text.
+            if (typeof h === 'string') {
+                const trimmed = h.trim();
+                if (trimmed && globalHintsObj && Object.prototype.hasOwnProperty.call(globalHintsObj, trimmed)) {
+                    out.push(normalizeGlobalHint(trimmed, globalHintsObj[trimmed]));
+                    referencedGlobalIds.add(trimmed);
+                    return;
+                }
+            }
+            out.push(normalizeGameHint(idx, h));
+        });
     }
 
     if (globalHintsObj && typeof globalHintsObj === 'object') {
-        Object.keys(globalHintsObj).forEach(key => out.push(normalizeGlobalHint(key, globalHintsObj[key])));
+        Object.keys(globalHintsObj).forEach(key => {
+            if (!referencedGlobalIds.has(key)) {
+                out.push(normalizeGlobalHint(key, globalHintsObj[key]));
+            }
+        });
     }
 
     const seen = new Set();

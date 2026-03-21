@@ -10,7 +10,7 @@ function grepFile(p, re) {
 
 function main() {
   const root = path.resolve(__dirname, '..');
-  const configPath = path.join(root, '..', 'config', 'example.json');
+  const configPath = path.join(root, 'config', 'example.json');
   const modular = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
   // 1. Ensure no lowercase playAudioFx: prefix anywhere in cues

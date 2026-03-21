@@ -156,7 +156,10 @@ class ModularConfigAdapter {
     const settings = modular.global.settings || {};
     // Build topics required by legacy tests: ui.base_topic, clock.base_topic, fx.<zone>.base_topic
     const topics = { ...(modular.global.mqtt?.topics || {}) };
-    const base = modular.global?.mqtt?.['game-topic'] || 'paradox/houdini';
+    const base = modular.global?.mqtt?.['game-topic'];
+    if (!base) {
+      throw new Error('Missing required config global.mqtt.game-topic');
+    }
     topics.ui = topics.ui || { base_topic: base };
     topics.clock = topics.clock || { base_topic: `${base}/clock` };
     topics.lights = topics.lights || { base_topic: `${base}/lights` };

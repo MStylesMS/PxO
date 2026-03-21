@@ -425,86 +425,48 @@ GAME_MODE=demo node src/game.js
 
 ## Hints
 
-Multi-type hint system:
+Current hint model (map-based IDs):
 
 ```clojure
-:hints [
-  ; Text only
-  {
-    :id 1
-    :name "First Hint"
-    :type "text"
-    :text "Look for the hidden key"
-  }
-  
-  ; Speech (audio + text)
-  {
-    :id 2
-    :name "Speech Hint"
-    :type "speech"
-    :text "Check under the desk"
-    :speech-file "media/audio/hints/hint-02.mp3"
-    :delay 5
-  }
-  
-  ; Video
-  {
-    :id 3
-    :name "Video Clue"
-    :type "video"
-    :text "Watch the screen carefully"
-    :video-file "media/video/hints/hint-03.mp4"
-    :video-zone "mirror"
-    :delay 10
-  }
-  
-  ; Background audio
-  {
-    :id 4
-    :name "Ambient Music"
-    :type "audio"
-    :audio-file "media/audio/hints/hint-music.mp3"
-    :volume 40
-    :loop true
-  }
-  
-  ; Action (execute sequence)
-  {
-    :id 5
-    :name "Light Flash"
-    :type "action"
-    :text "Watch the lights"
-    :sequence :hint-flash-sequence
-  }
-  
-  ; Combined (speech + video)
-  {
-    :id 6
-    :name "Combined Hint"
-    :type "speech"
-    :text "Listen and watch"
-    :speech-file "media/audio/hints/hint-06.mp3"
-    :video-file "media/video/hints/hint-06.mp4"
-    :video-zone "mirror"
-    :delay 3
-  }
-]
+:hints {
+  :hint-01 {:type "speech" :zone "tv" :file :hint-01-audio}
+  :hint-02 {:type "audioFx" :zone "tv" :file :hint-02-audio}
+  :hint-03 {:type "text" :sequence "hint-text-seq" :text "Follow the signal chain" :duration 15}
+  :hint-04 {:type "sequence" :sequence "hint-scene-seq" :parameters {:light "red" :speed "fast" :option 7}}
+}
+
+:command-sequences {
+  :hint-text-seq {:description "Send text hint to clock display"
+                  :sequence [{:zone "tv" :command "playAudioFX" :file :hint-bell}
+                             {:zone "clock" :command "hint" :text "{{text}}" :duration "{{duration}}"}]}
+  :hint-scene-seq {:description "Sequence hint using parameters"
+                   :sequence [{:zone "lights" :command "scene" :name "{{light}}"}]}
+}
 ```
 
 **Required Fields**:
-- `:id` — Unique hint ID
-- `:name` — Hint name (for logging)
-- `:type` — Hint type (`text`, `speech`, `audio`, `video`, `action`)
+- Hint ID is the map key (example `:hint-03`)
+- `:type` — Hint type (`text`, `speech`, `audio`, `audioFx`, `video`, `action`, `sequence`)
 
 **Type-Specific Fields**:
 
 | Type | Required | Optional |
 |------|----------|----------|
-| `text` | `:text` | |
-| `speech` | `:text`, `:speech-file` | `:delay`, `:volume` |
-| `audio` | `:audio-file` | `:volume`, `:loop` |
-| `video` | `:video-file`, `:video-zone` | `:text`, `:delay` |
+| `text` | `:sequence` (must be in `:command-sequences`) | `:text` (default UI/edit value), `:duration` |
+| `speech` | `:file` | `:zone` |
+| `audio` / `audioFx` | `:file` | `:zone` |
+| `video` | `:file` | `:zone` |
 | `action` | `:sequence` | `:text` |
+| `sequence` | `:sequence` (must be in `:command-sequences`) | `:parameters {}`, direct template fields |
+
+Notes:
+- `action` hints are reserved for a future feature. Current runtime behavior is warning-only (`hint_action_not_implemented`) and no action is executed.
+- Action hint syntax (future): `:my-action-hint {:type "action" :sequence "some-sequence" :text "Optional UI text"}`
+- Text and sequence hints resolve only from `:command-sequences` (no fallback to `:system-sequences`).
+- Sequence hints may provide template values either directly on the hint or under `:parameters {}`.
+- Reserved built-ins for template substitution are `text` and `duration`.
+- Unknown placeholders are warning-only at validation/runtime and resolve to empty strings during invocation.
+- UI list format is `emoji type zone: description` (zone omitted when not provided).
 
 ---
 
@@ -547,14 +509,9 @@ Use `{{variable}}` syntax for dynamic values:
   }
 }
 
-:hints [
-  {
-    :id 7
-    :type "speech"
-    :text "The code is {{puzzle-code}}"
-    :speech-file "media/hints/hint-{{hint-number}}.mp3"
-  }
-]
+:hints {
+  :dynamic-hint {:type "sequence" :sequence "hint-text-seq" :text "The code is {{puzzle-code}}" :duration 15}
+}
 ```
 
 Variables are expanded at runtime from context (hint parameters, sequence parameters, etc.).
@@ -611,9 +568,9 @@ Variables are expanded at runtime from context (hint parameters, sequence parame
   }
   
   ;; Hints
-  :hints [
-    {:id 1 :type "text" :text "Look for the key"}
-  ]
+  :hints {
+    :hint-01 {:type "text" :text "Look for the key"}
+  }
   
   ;; Settings
   :default-mode :demo
@@ -636,7 +593,7 @@ Common validation errors:
 - Invalid zone types
 - Invalid phase names
 - Timeline steps without `:at` field
-- Duplicate hint IDs
+- Duplicate hint names within same map scope
 - Invalid keyword references
 
 ---

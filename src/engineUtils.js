@@ -6,7 +6,8 @@ const getGameTopic = (cfg) => cfg?.global?.mqtt?.['game-topic'] || null;
 
 // Standard UI topics (preserves game.js behavior by defaulting when missing)
 const getUiTopics = (cfg) => {
-    const base = getGameTopic(cfg) || 'paradox/houdini';
+    const base = getGameTopic(cfg);
+    if (!base) throw new Error('Missing required config global.mqtt.game-topic');
     return {
         commands: `${base}/commands`,
         hint: `${base}/hints`,
@@ -92,6 +93,35 @@ const stopAllAcrossZones = (zonesRegistry) => {
 const VERIFY_BROWSER_TIMEOUT_MS = 20000;
 const VERIFY_MEDIA_TIMEOUT_MS = 15000;
 
+// Build normalized verifyMedia options from shorthand input.
+// Explicit fields win over inferred values from file extension.
+const buildVerifyMediaOptions = (options = {}) => {
+    const out = { ...options };
+
+    if (Object.prototype.hasOwnProperty.call(out, 'zone-volume')) {
+        out.zoneVolume = out['zone-volume'];
+        delete out['zone-volume'];
+    }
+
+    const hasExplicitImage = out.image !== undefined;
+    const hasExplicitVideo = out.video !== undefined;
+    const hasExplicitBackground = out.background !== undefined;
+    const hasExplicitMedia = hasExplicitImage || hasExplicitVideo || hasExplicitBackground;
+
+    if (!hasExplicitMedia && typeof out.file === 'string') {
+        const f = out.file.toLowerCase();
+        if (f.endsWith('.png') || f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.gif') || f.endsWith('.webp')) {
+            out.image = out.file;
+        } else if (f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.webm') || f.endsWith('.mov')) {
+            out.video = out.file;
+        } else if (f.endsWith('.mp3') || f.endsWith('.ogg') || f.endsWith('.wav') || f.endsWith('.m4a') || f.endsWith('.flac')) {
+            out.background = out.file;
+        }
+    }
+
+    return out;
+};
+
 module.exports = {
     getGameTopic,
     getUiTopics,
@@ -100,6 +130,7 @@ module.exports = {
     getWarningsTopic,
     publishExecuteHint,
     stopAllAcrossZones,
+    buildVerifyMediaOptions,
     VERIFY_BROWSER_TIMEOUT_MS,
     VERIFY_MEDIA_TIMEOUT_MS,
 };

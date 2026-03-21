@@ -271,7 +271,8 @@ async function main() {
       });
 
       const configToPublish = {
-        games: gamesForUI
+        games: gamesForUI,
+        hintTopic: uiTopics.hint
         // colorScenes removed - now hardcoded in UI
       };
 
@@ -371,8 +372,8 @@ async function main() {
             });
           });
         }
-      } else if (topic === 'paradox/houdini/hints') {
-        // New hints execution topic handler
+      } else if (topic === uiTopics.hint) {
+        // Hints execution topic handler
         log.debug('Received hint execution request:', payload);
         
         // Validate payload structure
@@ -430,7 +431,7 @@ async function main() {
 
   mqtt.subscribe(uiTopics.commands);
   mqtt.subscribe(uiTopics.events);
-  mqtt.subscribe('paradox/houdini/hints'); // Subscribe to new hints execution topic
+  mqtt.subscribe(uiTopics.hint); // Subscribe to hints execution topic
 
   // Initialize trigger subscriptions
   initializeTriggers();

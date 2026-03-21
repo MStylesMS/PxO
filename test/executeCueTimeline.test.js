@@ -5,8 +5,9 @@ function makeGSM(cue) {
     const mqtt = { publish: jest.fn() };
     const gsm = new GameStateMachine({ cfg: { global: { mqtt: { zones: {} }, cues: { test: cue } } }, mqtt });
     const mirror = { playVideo: jest.fn() };
-    const lights = { scene: jest.fn() };
+    const lights = { setScene: jest.fn() };
     gsm.zones.getZone = (zone) => (zone === 'mirror' ? mirror : zone === 'lights' ? lights : null);
+    gsm.zones.validateZone = (zone) => (zone === 'mirror' ? mirror : zone === 'lights' ? lights : null);
     return { gsm, mirror, mqtt, lights };
 }
 
@@ -14,7 +15,7 @@ describe('executeCue timeline semantics (countdown style)', () => {
     beforeEach(() => jest.useFakeTimers());
     afterEach(() => jest.useRealTimers());
 
-    it('fires entries in descending at order based on (duration - at) delay', () => {
+    it('fires entries in descending at order based on (duration - at) delay', async () => {
         const { gsm, mirror, mqtt, lights } = makeGSM({
             duration: 10,
             timeline: [
@@ -25,7 +26,7 @@ describe('executeCue timeline semantics (countdown style)', () => {
             ]
         });
 
-        gsm.fireCueByName('test');
+        await gsm.fireCueByName('test');
 
         // at=10 -> delay 0
         jest.runOnlyPendingTimers();
@@ -41,7 +42,7 @@ describe('executeCue timeline semantics (countdown style)', () => {
 
         // Advance remaining 3s (total 10000ms -> at=0 fires)
         jest.advanceTimersByTime(3000);
-        expect(lights.scene).toHaveBeenCalledWith('green');
+        expect(lights.setScene).toHaveBeenCalledWith('green');
     });
 
     it('logs and aborts on invalid timeline (duplicate / missing duration)', () => {

@@ -302,24 +302,34 @@ mosquitto_pub -h localhost -t 'paradox/game/commands' \
 ### Hint System
 
 ```clojure
-:hints [
-  {
-    :id 1
-    :name "First Hint"
-    :type "speech"
-    :text "Look for the key"
-    :speech-file "hints/hint-01.mp3"
-    :delay 5
-  }
-  {
-    :id 2
-    :name "Video Hint"
-    :type "video"
-    :video-file "hints/hint-02.mp4"
-    :video-zone "display"
-  }
-]
+:hints {
+  :hint-01 {:type "speech" :zone "tv" :file :hint-01-audio}
+  :hint-02 {:type "video" :zone "tv" :file :hint-02-video}
+  :hint-03 {:type "text" :sequence "hint-text-seq" :text "Follow the signal chain" :duration 15}
+  :hint-04 {:type "sequence" :sequence "hint-scene-seq" :parameters {:light "red" :speed "fast" :option 7}}
+}
+
+:command-sequences {
+  :hint-text-seq {:sequence [{:zone "tv" :command "playAudioFX" :file :hint-bell}
+                             {:zone "clock" :command "hint" :text "{{text}}" :duration "{{duration}}"}]}
+  :hint-scene-seq {:sequence [{:zone "lights" :command "scene" :name "{{light}}"}]}
+}
+
+;; Future action hint syntax (not yet executed at runtime)
+:hints {
+  :hint-action-sample {:type "action" :sequence "flash-lights-seq" :text "Optional UI text"}
+}
 ```
+
+Action hint status:
+- `type: "action"` is reserved for a future feature.
+- Current runtime behavior is warning-only (`hint_action_not_implemented`) and no action is executed.
+
+Text/sequence hint status:
+- `type: "text"` is user-editable in the UI and must define `:sequence` in `:command-sequences`.
+- `type: "sequence"` is user-triggerable but non-editable in the UI.
+- Sequence hints can pass values via `:parameters {}` plus direct fields.
+- Missing template placeholders are warning-only and substitute as empty strings at runtime.
 
 ## Troubleshooting
 

@@ -43,7 +43,7 @@
         :baseTopic "paradox/demo/audio"
       }
       :clock {
-        :type "houdini-clock"
+        :type "pfx-clock"
         :baseTopic "paradox/demo/clock"
       }
     }

@@ -528,41 +528,33 @@ class SequenceRunner {
 
 | Type | Description | Required Fields | Optional Fields |
 |------|-------------|-----------------|-----------------|
-| `text` | Display text only | `text` | |
-| `speech` | Play audio + display text | `text`, `speech-file` | `delay`, `volume` |
-| `audio` | Background music/sound | `audio-file` | `volume`, `loop` |
-| `video` | Show video | `video-file`, `video-zone` | `text`, `delay` |
-| `action` | Execute sequence | `sequence` | `text` |
+| `text` | User-editable text hint executed through a command sequence | `sequence` | `text`, `duration` |
+| `speech` | Play speech asset | `file` | `zone` |
+| `audio` / `audioFx` | Play sound effect | `file` | `zone` |
+| `video` | Show video | `file` | `zone` |
+| `action` | Future action-hint hook (currently warning/no-op) | `sequence` | `text` |
+| `sequence` | Execute command-sequence template | `sequence` | `parameters`, template fields |
 
 ### Hint Configuration
 
 ```clojure
-:hints [
-  {
-    :id 1
-    :name "First Hint"
-    :type "speech"
-    :text "Look for the hidden key"
-    :speech-file "media/audio/hints/hint-01.mp3"
-    :delay 5
-  }
-  {
-    :id 2
-    :name "Video Clue"
-    :type "video"
-    :text "Watch carefully"
-    :video-file "media/video/hints/hint-02.mp4"
-    :video-zone "mirror"
-    :delay 10
-  }
-  {
-    :id 3
-    :name "Light Flash"
-    :type "action"
-    :text "Lights will flash green"
-    :sequence :hint-flash-green
-  }
-]
+:hints {
+  :hint-01 {:type "speech" :zone "tv" :file :hint-01-audio}
+  :hint-02 {:type "video" :zone "tv" :file :hint-02-video}
+  :hint-03 {:type "text" :sequence "hint-text-seq" :text "Follow the signal chain" :duration 15}
+  :hint-04 {:type "sequence" :sequence "hint-scene-seq" :parameters {:light "red" :speed "fast" :option 7}}
+}
+
+:command-sequences {
+  :hint-text-seq {:sequence [{:zone "tv" :command "playAudioFX" :file :hint-bell}
+                             {:zone "clock" :command "hint" :text "{{text}}" :duration "{{duration}}"}]}
+  :hint-scene-seq {:sequence [{:zone "lights" :command "scene" :name "{{light}}"}]}
+}
+
+;; Future action hint syntax (not yet executed at runtime)
+:hints {
+  :hint-action-sample {:type "action" :sequence "flash-lights-seq" :text "Optional UI text"}
+}
 ```
 
 ### Hint Delivery
@@ -577,13 +569,19 @@ Hints are triggered via MQTT command:
 ```
 
 Execution flow:
-1. Look up hint by ID
+1. Look up hint by ID (map key)
 2. Publish text to UI (if present)
 3. Execute type-specific actions:
    - `speech`: Play audio file after delay
    - `video`: Show video on specified zone
-   - `action`: Execute named sequence
+   - `action`: Future feature; currently publishes warning `hint_action_not_implemented` and performs no action
+  - `text`: Resolve only from `global.command-sequences`, substitute `{{text}}`/`{{duration}}`, and allow operator text override
+  - `sequence`: Resolve only from `global.command-sequences`, substitute `{{field}}` values from direct fields and `parameters` map, then execute sequence
 4. Log hint delivery
+
+Placeholder policy:
+- Missing placeholders are warning-only and substituted with empty values at runtime.
+- Reserved built-ins are `text` and `duration` (not overridden by `parameters`).
 
 ---
 

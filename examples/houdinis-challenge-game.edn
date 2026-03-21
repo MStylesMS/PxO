@@ -34,7 +34,7 @@
                           :picture {:type "pfx-media" :base-topic "paradox/houdini/picture"}
                           :audio {:type "pfx-media" :base-topic "paradox/houdini/audio"}
                           :lights {:type "pfx-lights" :base-topic "paradox/houdini/lights"}
-                          :clock {:type "houdini-clock" :base-topic "paradox/houdini/clock"}}}
+                          :clock {:type "pfx-clock" :base-topic "paradox/houdini/clock"}}}
 
            ;; Media catalog removed after refactor (files referenced directly in cues)
 
@@ -109,9 +109,9 @@
                   :secret-door-hint {:zone "clock" :command "hint" :text "Secret door opened!" :description "Hint for secret door"}};; End of cues
 
            ;; Hint definitions - reusable across games
-           :hints {:humphrey-close {:type "text" :text "Humphrey is getting close!" :duration 15 :description "Clock hint about Humphrey approaching"}
-                   :look-everywhere {:type "text" :text "Look everywhere, high and low." :duration 15 :description "Demo hint for clock display"}
-                   
+           :hints {:humphrey-close {:type "sequence" :sequence "hint-text-seq" :text "Humphrey is getting close!" :duration 15 :description "Clock hint about Humphrey approaching"}
+                   :look-everywhere {:type "sequence" :sequence "hint-text-seq" :text "Look everywhere, high and low." :duration 15 :description "Demo hint for clock display"}
+
                    ;; Example hints of each type
                    :picture-horror-speech {:type "speech" :zone "picture" :file "Aztec_Vocals_Horror.mp3" :description "Long horror chord played as speech"}
                    :picture-cymbal-fx {:type "audioFx" :zone "picture" :file "Cymbal_Strange.mp3" :adjustVolume 5 :description "Cymbal on picture using audio fx"}
@@ -303,13 +303,11 @@
 
                                :idle-sequence {:description "Idle ready-state pulse" :repeat-seconds 120 ;; Optional idle sequence to run periodically when in ready state (future)
                                                :sequence []}
-                               
+
                                ;; Hint execution sequence - sends text hint to clock
                                :hint-text-seq {:description "Send text hint to clock display"
                                                :sequence [{:zone "mirror" :command "playAudioFX" :file "hint.mp3"}
-                                                          {:zone "clock" :command "hint" :text "{{hintText}}" :duration 25}]}
-                               
-                               };; End of command sequences
+                                                          {:zone "clock" :command "hint" :text "{{text}}" :duration "{{duration}}"}]}};; End of command sequences
            ;;
            };; End of global section
 

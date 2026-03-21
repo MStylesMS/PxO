@@ -21,7 +21,6 @@ class AdapterRegistry {
         // Register supported adapter types
         this.registerAdapterType('pfx-media', PfxAdapter);
         this.registerAdapterType('pfx-lights', LightsAdapter);
-        this.registerAdapterType('houdini-clock', ClockAdapter);
         this.registerAdapterType('pfx-clock', ClockAdapter);
         this.initializeZones(zonesConfig);
     }
@@ -222,7 +221,6 @@ class AdapterRegistry {
                 adapter = new AdapterClass(this.mqtt, topicsArg);
                 break;
 
-            case 'houdini-clock':
             case 'pfx-clock':
                 // ClockAdapter expects { clock: { baseTopic } } and can accept extra options
                 topicsArg = { clock: { baseTopic } };

@@ -1,0 +1,13 @@
+Scope Parking Lot
+
+Out of scope for current pass
+- Generalize remaining Agent22 hardcoded topics (commands, lights, state, warnings, checklist).
+- Replace Agent22 UI fallback target labels (Mirror/Audio) with backend-provided contract everywhere.
+- Remove remaining Houdini-specific defaults in older docs and tests.
+- Full first-time new-game documentation pass across CONFIG_EDN, MQTT_API, USER_GUIDE, SPEC.
+- Add integration test that verifies dynamic hintTopic from config is used by UI.
+- Final pass to make sure all Houdini and Agent22 specific zone, topics, etc. have been removed from PxO, PxC, and PFx
+
+Small focused follow-ups to consider
+- Publish additional uiTopics fields (commands/state/events/warnings/config) to allow full UI topic derivation.
+- Add a UI warning banner if fallback hint topic is being used for too long (config not received).
