@@ -45,6 +45,10 @@ class ClockAdapter {
           return this.setTime(options.time || options.mmss);
         case 'hint':
           return this.hint(options.text, options.duration);
+        case 'setDisplayColors':
+          return this.setDisplayColors(options);
+        case 'resetDisplayColors':
+          return this.resetDisplayColors();
         default:
           throw new Error(`Unknown command '${command}' for ClockAdapter`);
       }
@@ -61,7 +65,7 @@ class ClockAdapter {
    * @returns {string[]} Array of supported command names
    */
   getCapabilities() {
-    return ['start', 'stop', 'pause', 'resume', 'fade-in', 'fadeIn', 'fade-out', 'fadeOut', 'set-time', 'setTime', 'hint'];
+    return ['start', 'stop', 'pause', 'resume', 'fade-in', 'fadeIn', 'fade-out', 'fadeOut', 'set-time', 'setTime', 'hint', 'setDisplayColors', 'resetDisplayColors'];
   }
 
   // Helper to derive current mm:ss based on game state
@@ -143,6 +147,27 @@ class ClockAdapter {
     if (duration) payload.duration = duration;
     this._publish(this.commandTopic, payload);
     this._mirrorUI({ action: 'hint', text, duration });
+  }
+
+  /**
+   * Set display colors (backgroundColor, textColor, textAlpha, fadeTime)
+   * Corresponds to PxC MQTT command: {"command":"setDisplayColors",...}
+   */
+  setDisplayColors(options = {}) {
+    const payload = { command: 'setDisplayColors' };
+    if (options.backgroundColor !== undefined) payload.backgroundColor = options.backgroundColor;
+    if (options.textColor !== undefined) payload.textColor = options.textColor;
+    if (options.textAlpha !== undefined) payload.textAlpha = options.textAlpha;
+    if (options.fadeTime !== undefined) payload.fadeTime = options.fadeTime;
+    this._publish(this.commandTopic, payload);
+  }
+
+  /**
+   * Reset display colors to built-in defaults
+   * Corresponds to PxC MQTT command: {"command":"resetDisplayColors"}
+   */
+  resetDisplayColors() {
+    this._publish(this.commandTopic, { command: 'resetDisplayColors' });
   }
 }
 

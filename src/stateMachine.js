@@ -1086,6 +1086,11 @@ class GameStateMachine extends EventEmitter {
               // Handle fadeTime parameter for audio commands
               if (action.fadeTime !== undefined) options.fadeTime = action.fadeTime;
 
+              // Handle display color parameters for clock setDisplayColors command
+              if (action.backgroundColor !== undefined) options.backgroundColor = action.backgroundColor;
+              if (action.textColor !== undefined) options.textColor = action.textColor;
+              if (action.textAlpha !== undefined) options.textAlpha = action.textAlpha;
+
               // Handle volume parameters for media commands
               if (action.volumeAdjust !== undefined) options.volumeAdjust = action.volumeAdjust;
               if (action.adjustVolume !== undefined) options.adjustVolume = action.adjustVolume;
@@ -1101,7 +1106,7 @@ class GameStateMachine extends EventEmitter {
 
               // Execute command through adapter registry
               log.debug(`executeCueAction: calling zones.execute(zone='${zoneName}', command='${command}', options=${JSON.stringify(options)})`);
-              this.zones.execute(zoneName, command, options);
+              await this.zones.execute(zoneName, command, options);
             } catch (error) {
               log.warn(`Failed to execute command '${command}' on zone '${zoneName}' in cue ${cueKey}:`, error.message);
             }
@@ -1329,14 +1334,14 @@ class GameStateMachine extends EventEmitter {
     // Handle unified fire command (v2.3.0+)
     if (entry.fire) {
       // Don't await - schedules are truly fire-and-forget
-      this.fireByName(entry.fire);
+      this.fireByName(entry.fire).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
     }
 
     // Handle cue execution (fire-and-forget from schedule perspective) - backwards compatibility
     if (entry.fireCue || entry['fire-cue']) {
       const cueName = entry.fireCue || entry['fire-cue'];
       // Don't await - schedules are truly fire-and-forget
-      this.fireCueByName(cueName);
+      this.fireCueByName(cueName).catch(e => log.warn(`fireCueByName '${cueName}' failed: ${e.message}`));
     }
 
     // Handle sequence execution (fire-and-forget from schedule perspective) - backwards compatibility
@@ -1352,17 +1357,13 @@ class GameStateMachine extends EventEmitter {
 
     // Handle inline commands (immediate execution) - NEW
     if (entry.zone || entry.zones) {
-      try {
-        this.executeCueAction(entry, context);
-      } catch (e) {
-        log.warn(`Inline command failed at ${context}: ${e.message}`);
-      }
+      this.executeCueAction(entry, context).catch(e => log.warn(`Inline command failed at ${context}: ${e.message}`));
     }
 
     // DEPRECATED: Support legacy commands array with warning
     if (Array.isArray(entry.commands)) {
       log.warn(`DEPRECATED: Schedule entry at ${context} uses :commands array - migrate to inline syntax or sequences`);
-      try { entry.commands.forEach(a => this.executeCueAction(a, context)); } catch (_) { }
+      entry.commands.forEach(a => this.executeCueAction(a, context).catch(e => log.warn(`Legacy cmd at ${context}: ${e.message}`)));
     }
 
     // Handle hint firing (unchanged)
@@ -1829,7 +1830,7 @@ class GameStateMachine extends EventEmitter {
     // Handle unified fire command (v2.3.0+)
     if (entry.fire) {
       log.info(`Firing '${entry.fire}' at ${atLabel}s${contextSuffix}`);
-      this.fireByName(entry.fire);
+      this.fireByName(entry.fire).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
       primaryLogged = true;
       actionsTriggered = true;
     }
@@ -1838,7 +1839,7 @@ class GameStateMachine extends EventEmitter {
     const cueName = entry.fireCue || entry['fire-cue'];
     if (cueName) {
       log.info(`Firing cue '${cueName}' at ${atLabel}s${contextSuffix}`);
-      this.fireCueByName(cueName);
+      this.fireCueByName(cueName).catch(e => log.warn(`fireCueByName '${cueName}' failed: ${e.message}`));
       primaryLogged = true;
       actionsTriggered = true;
     }
@@ -1858,17 +1859,13 @@ class GameStateMachine extends EventEmitter {
 
     if (entry.zone || entry.zones) {
       actionsTriggered = true;
-      try {
-        this.executeCueAction(entry, `${phaseLabel}@${atLabel}`);
-      } catch (e) {
-        log.warn(`Inline command failed at ${phaseLabel}@${atLabel}: ${e.message}`);
-      }
+      this.executeCueAction(entry, `${phaseLabel}@${atLabel}`).catch(e => log.warn(`Inline command failed at ${phaseLabel}@${atLabel}: ${e.message}`));
     }
 
     if (Array.isArray(entry.commands)) {
       actionsTriggered = true;
       log.warn(`DEPRECATED: Schedule entry at ${phaseLabel}@${atLabel} uses :commands array - migrate to inline syntax or sequences`);
-      try { entry.commands.forEach(a => this.executeCueAction(a, `${phaseLabel}@${atLabel}`)); } catch (_) { }
+      try { entry.commands.forEach(a => this.executeCueAction(a, `${phaseLabel}@${atLabel}`).catch(e => log.warn(`Legacy cmd at ${phaseLabel}@${atLabel}: ${e.message}`))); } catch (_) { }
     }
 
     const hintId = entry.playHint || entry['play-hint'];
@@ -2610,10 +2607,15 @@ class GameStateMachine extends EventEmitter {
   adjustTime(deltaSeconds) {
     if (!['gameplay', 'paused'].includes(this.state)) return;
     const before = this.remaining;
-    this.remaining = Math.max(1, this.remaining + (deltaSeconds || 0));
+    this.remaining = Math.max(60, this.remaining + (deltaSeconds || 0));
     if (this.remaining !== before) {
-      // Adapter updates (e.g., clock) should be driven by sequences or external listeners
-      this.publishEvent('time_adjusted', { delta: deltaSeconds });
+      // Fire adjust-time-sequence for adapter side effects (clock sync, etc.)
+      // Same fire-and-forget pattern as pause-sequence / resume-sequence
+      (async () => {
+        const result = await this.sequenceRunner.runControlSequence('adjust-time-sequence', { gameMode: this.gameType });
+        this.publishEvent('adjust_time_sequence_complete', { ok: result.ok });
+      })();
+      this.publishEvent('time_adjusted', { delta: deltaSeconds, remaining: this.remaining });
       this.publishState();
     }
   }

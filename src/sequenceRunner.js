@@ -660,6 +660,12 @@ class SequenceRunner {
             }
 
             const { command } = step;
+
+            // :fire, :hint, :wait, and template parameter steps are valid without a 'command' field
+            if (step.fire || step.hint || step.wait !== undefined || step.fireCue || step['fire-cue'] || step.fireSeq || step['fire-seq']) {
+                return; // Valid directive step - no 'command' required
+            }
+
             if (!command || typeof command !== 'string') {
                 errors.push(`Sequence ${name}[${idx}]: missing or invalid 'command' field`);
                 return;
