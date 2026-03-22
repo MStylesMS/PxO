@@ -1215,7 +1215,7 @@ class GameStateMachine extends EventEmitter {
    * @param {string} seqName - Name of the sequence to fire
    * @returns {Promise} Promise that resolves when sequence completes
    */
-  async fireSequenceByName(seqName) {
+  async fireSequenceByName(seqName, sequenceContext = {}) {
     if (!seqName) return;
     // Try new-format resolver first (order / namespace agnostic)
     let resolved = null;
@@ -1231,7 +1231,7 @@ class GameStateMachine extends EventEmitter {
     if (!resolved) {
       // Delegate to sequenceRunner's own missing-sequence handling for consistent messaging
       log.warn(`fireSequenceByName: sequence '${seqName}' not resolved via resolvers – delegating to runSequence for detailed warning`);
-      try { await this.sequenceRunner.runSequence(seqName, { gameMode: this.gameType }); } catch (_) { }
+      try { await this.sequenceRunner.runSequence(seqName, { gameMode: this.gameType, ...(sequenceContext || {}) }); } catch (_) { }
       return;
     }
 
@@ -1239,7 +1239,7 @@ class GameStateMachine extends EventEmitter {
     if (Array.isArray(resolved)) {
       // Treat as simple step array (vector). Pass raw array to runner (Fix A) instead of wrapping.
       log.info(`Executing resolved vector sequence '${seqName}' (${resolved.length} steps)`);
-      await this.sequenceRunner.runSequenceDefNew(seqName, resolved, { gameMode: this.gameType });
+      await this.sequenceRunner.runSequenceDefNew(seqName, resolved, { gameMode: this.gameType, ...(sequenceContext || {}) });
       return;
     }
 
@@ -1252,7 +1252,7 @@ class GameStateMachine extends EventEmitter {
 
     if (resolved && Array.isArray(resolved.sequence)) {
       log.info(`Executing legacy style resolved sequence '${seqName}' (array format)`);
-      try { await this.sequenceRunner.runControlSequence(seqName, { gameMode: this.gameType }); } catch (e) { log.warn(`runControlSequence failed for ${seqName}: ${e.message}`); }
+      try { await this.sequenceRunner.runControlSequence(seqName, { gameMode: this.gameType, ...(sequenceContext || {}) }); } catch (e) { log.warn(`runControlSequence failed for ${seqName}: ${e.message}`); }
       return;
     }
 
@@ -1266,7 +1266,7 @@ class GameStateMachine extends EventEmitter {
    * @param {string} name - Name of the cue, sequence, or hint to fire
    * @returns {Promise} Promise that resolves immediately (cues) or when complete (sequences/hints)
    */
-  async fireByName(name) {
+  async fireByName(name, fireContext = {}) {
     if (!name) return;
 
     // Check if this is a hint first (DEPRECATED usage)
@@ -1307,7 +1307,7 @@ class GameStateMachine extends EventEmitter {
 
     if (resolved) {
       log.debug(`fireByName: '${name}' resolved as SEQUENCE (blocking)`);
-      await this.fireSequenceByName(name);
+      await this.fireSequenceByName(name, fireContext);
       return;
     }
 

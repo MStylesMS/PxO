@@ -258,9 +258,21 @@ class SequenceRunner {
             const name = resolvedStep.fire;
             log.info(`Firing: ${name}`);
 
+            // Pass through wrapper context (e.g. text/duration) when a sequence step
+            // uses {:fire <name> ...}. Discriminator and control keys are excluded.
+            const fireContext = {};
+            const excludedKeys = new Set([
+                'fire', 'fire-cue', 'fire-seq', 'hint', 'wait', 'zone', 'zones',
+                'command', 'at', 'step', '_comment', 'comment', 'description'
+            ]);
+            Object.entries(resolvedStep).forEach(([key, value]) => {
+                if (excludedKeys.has(key)) return;
+                if (value !== undefined) fireContext[key] = value;
+            });
+
             if (this.stateMachine && this.stateMachine.fireByName) {
                 try {
-                    await this.stateMachine.fireByName(name);
+                    await this.stateMachine.fireByName(name, fireContext);
                     log.debug(`Fire execution completed: ${name}`);
                 } catch (error) {
                     log.error(`Unexpected error firing '${name}': ${error.message}`);
