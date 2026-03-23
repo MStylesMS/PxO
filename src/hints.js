@@ -143,8 +143,10 @@ function normalizeGameHint(idx, h) {
 
 function getCombinedHints(cfg, gameHintsArray) {
     const out = [];
-    const globalHintsObj = (cfg.global && cfg.global.media && cfg.global.media.hints) || {};
+    // Canonical source of global hint definitions
+    const globalHintsObj = (cfg.global && cfg.global.hints) || {};
     const referencedGlobalIds = new Set();
+    const overriddenGlobalIds = new Set();
 
     if (Array.isArray(gameHintsArray)) {
         gameHintsArray.forEach((h, idx) => {
@@ -158,13 +160,23 @@ function getCombinedHints(cfg, gameHintsArray) {
                     return;
                 }
             }
-            out.push(normalizeGameHint(idx, h));
+
+            const normalized = normalizeGameHint(idx, h);
+
+            // Mode-local object hints with matching ids override global hints for this mode.
+            if (h && typeof h === 'object' && typeof normalized.id === 'string' && normalized.id.trim()) {
+                if (Object.prototype.hasOwnProperty.call(globalHintsObj, normalized.id)) {
+                    overriddenGlobalIds.add(normalized.id);
+                }
+            }
+
+            out.push(normalized);
         });
     }
 
     if (globalHintsObj && typeof globalHintsObj === 'object') {
         Object.keys(globalHintsObj).forEach(key => {
-            if (!referencedGlobalIds.has(key)) {
+            if (!referencedGlobalIds.has(key) && !overriddenGlobalIds.has(key)) {
                 out.push(normalizeGlobalHint(key, globalHintsObj[key]));
             }
         });

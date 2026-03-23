@@ -4,10 +4,8 @@ describe('getCombinedHints shorthand parsing', () => {
     test('parses playVideo and playSpeech shorthand and respects game-mode-first ordering', () => {
         const cfg = {
             global: {
-                media: {
-                    hints: {
-                        'g1': { type: 'speech', file: 'global_speech.wav', target: 'audio', description: 'Global speak' }
-                    }
+                hints: {
+                    'g1': { type: 'speech', file: 'global_speech.wav', target: 'audio', description: 'Global speak' }
                 }
             }
         };

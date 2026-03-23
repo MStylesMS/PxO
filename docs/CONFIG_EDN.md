@@ -444,6 +444,16 @@ Current hint model (map-based IDs):
 }
 ```
 
+Canonical hint source:
+- Global hint definitions are loaded from `global.hints`.
+
+Game-mode hint list behavior (`game-modes.<mode>.hints`):
+- Entries are processed in the order listed.
+- If an entry is a string matching a global hint id, it references that global hint.
+- If an entry is an object with `id` matching a global hint id, the mode-local object overrides that global hint for the current mode.
+- After mode entries, remaining global hints are appended.
+- The final list is deduplicated by normalized display/base text.
+
 **Required Fields**:
 - Hint ID is the map key (example `:hint-03`)
 - `:type` — Hint type (`text`, `speech`, `audio`, `audioFx`, `video`, `action`, `sequence`)

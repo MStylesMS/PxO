@@ -4,11 +4,9 @@ describe('getCombinedHints', () => {
     test('combines global structured hints and game-mode text hints, game-mode first, dedup by displayText', () => {
         const cfg = {
             global: {
-                media: {
-                    hints: {
-                        'g1': { type: 'speech', file: 's1.mp3', target: 'Kitchen', description: 'Speak now' },
-                        'g2': { type: 'video', file: 'v1.mp4', target: 'Mirror', description: 'Watch this' }
-                    }
+                hints: {
+                    'g1': { type: 'speech', file: 's1.mp3', target: 'Kitchen', description: 'Speak now' },
+                    'g2': { type: 'video', file: 'v1.mp4', target: 'Mirror', description: 'Watch this' }
                 }
             }
         };
@@ -34,11 +32,9 @@ describe('getCombinedHints', () => {
     test('treats game-mode string hint ids as references to global hints', () => {
         const cfg = {
             global: {
-                media: {
-                    hints: {
-                        'hint-01': { type: 'speech', file: 'h1.mp3', target: 'Audio', description: 'Hint one' },
-                        'hint-02': { type: 'text', text: 'Look under the desk', target: 'Mirror' }
-                    }
+                hints: {
+                    'hint-01': { type: 'speech', file: 'h1.mp3', target: 'Audio', description: 'Hint one' },
+                    'hint-02': { type: 'text', text: 'Look under the desk', target: 'Mirror' }
                 }
             }
         };
@@ -50,5 +46,29 @@ describe('getCombinedHints', () => {
         // Ensure ids are not duplicated when referenced from game-mode list
         expect(out.filter(h => h.id === 'hint-01').length).toBe(1);
         expect(out.filter(h => h.id === 'hint-02').length).toBe(1);
+    });
+
+    test('mode-local object hint with matching id overrides global hint for that mode list', () => {
+        const cfg = {
+            global: {
+                hints: {
+                    'hint-01': { type: 'text', text: 'Global hint text', description: 'Global hint' },
+                    'hint-02': { type: 'text', text: 'Second global hint', description: 'Second global hint' }
+                }
+            }
+        };
+
+        const gameHints = [
+            { id: 'hint-01', type: 'text', text: 'Mode override text', description: 'Mode override hint' }
+        ];
+
+        const out = getCombinedHints(cfg, gameHints);
+        const h1 = out.find(h => h.id === 'hint-01');
+
+        expect(h1).toBeDefined();
+        expect(h1.text).toBe('Mode override text');
+        expect(h1.description).toBe('Mode override hint');
+        expect(out.filter(h => h.id === 'hint-01').length).toBe(1);
+        expect(out.find(h => h.id === 'hint-02')).toBeDefined();
     });
 });

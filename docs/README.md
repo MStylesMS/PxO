@@ -309,6 +309,14 @@ mosquitto_pub -h localhost -t 'paradox/game/commands' \
   :hint-04 {:type "sequence" :sequence "hint-scene-seq" :parameters {:light "red" :speed "fast" :option 7}}
 }
 
+Hint resolution behavior:
+- Global definitions come from `global.hints`.
+- `game-modes.<mode>.hints` entries are evaluated first (in listed order).
+- String entries matching global hint ids reference those global definitions.
+- Object entries with an `id` matching a global hint id override that global hint for the active mode.
+- Any remaining global hints are appended after mode entries.
+- Final list is deduplicated by normalized hint text/display label.
+
 :command-sequences {
   :hint-text-seq {:sequence [{:zone "tv" :command "playAudioFX" :file :hint-bell}
                              {:zone "clock" :command "hint" :text "{{text}}" :duration "{{duration}}"}]}

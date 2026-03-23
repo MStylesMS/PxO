@@ -22,3 +22,4 @@ Expected hint request payloads
 Notes
 - Hint ids are unrestricted names now (examples: hint-foo, foo-hint, foo, abc123).
 - If a game-mode hint string is not found in global.hints, runtime treats it as ad-hoc text.
+- If a game-mode hint object has an id matching a global hint id, the mode-local object overrides that global hint for that mode.

@@ -144,14 +144,13 @@ class ModularConfigAdapter {
     // Media catalog removed in refactor. Provide empty map fallback.
     const videos = (modular.global.media && modular.global.media.videos) || {};
 
-    // Map hints into legacy location (cfg.global.media.hints) expected by state machine
+    // Global hints registry
     const hints = modular.global.hints || {};
-    // Build media root only if legacy consumers still expect it; otherwise minimal stub
+    // Build media root from global media settings (non-hint assets)
     const mediaRoot = modular.global.media ? { ...modular.global.media } : {};
     if (mediaRoot.audio && mediaRoot.audio['hint-fx']) {
       mediaRoot.hintFx = mediaRoot.audio['hint-fx'];
     }
-    mediaRoot.hints = hints;
 
     const settings = modular.global.settings || {};
     // Build topics required by legacy tests: ui.base_topic, clock.base_topic, fx.<zone>.base_topic
@@ -236,7 +235,7 @@ class ModularConfigAdapter {
     // Legacy alias removed (pruned) to encourage use of cfg.global.mqtt only
 
     log.debug('[Adapter] Transformed configuration:', JSON.stringify(legacy, null, 2));
-    log.debug('[Adapter] Fail video structure added:', legacy.global.media.fail);
+    log.debug('[Adapter] Fail video structure added:', legacy.global.media?.fail);
     return legacy;
   }
 }
