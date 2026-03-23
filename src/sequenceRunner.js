@@ -196,19 +196,15 @@ class SequenceRunner {
 
     // NEW: Execute timeline sequence
     async executeTimelineSequence(seqDef, context) {
-        const { timeline, duration } = seqDef;
-        if (typeof duration !== 'number') {
-            throw new Error('Timeline sequence must have numeric duration');
-        }
+        const { timeline } = seqDef;
 
-        // Sort timeline entries by timing (descending - from future to now)
+        // Timeline entries with :at times are self-governing
+        // Duration is optional – used only if specified for total timeout
         const sortedEntries = timeline
             .filter(entry => entry.at !== undefined)
             .sort((a, b) => b.at - a.at);
 
         // Execute timeline entries at their scheduled times
-        // Note: This is a simplified implementation
-        // Full implementation would use setTimeout for proper timing
         for (const entry of sortedEntries) {
             const { at, ...command } = entry;
             log.info(`Executing timeline entry at ${at}s`);

@@ -2375,6 +2375,7 @@ class GameStateMachine extends EventEmitter {
 
     this.changeState('paused', { reason: 'pause_requested' });
     this.stopUnifiedTimer();
+    this._runAdjustTimeSequence('pause');
     this.publishEvent('paused');
     this.publishState();
     return true;
@@ -2402,6 +2403,7 @@ class GameStateMachine extends EventEmitter {
 
     // Resume is adapter-first: sequences handle adapter commands; no direct adapter calls here
     this.startUnifiedTimer();
+    this._runAdjustTimeSequence('resume');
     this.publishEvent('resumed');
     this.publishState();
     return true;
@@ -2562,6 +2564,7 @@ class GameStateMachine extends EventEmitter {
     this.changeState('paused', { reason: 'direct_pause_method' });
 
     this.stopUnifiedTimer();
+    this._runAdjustTimeSequence('pause');
     this.publishEvent('paused');
     this.publishState();
   }
@@ -2573,6 +2576,7 @@ class GameStateMachine extends EventEmitter {
 
     // Adapter commands are handled via sequences/config; no direct clock calls
     this.startUnifiedTimer();
+    this._runAdjustTimeSequence('resume');
     this.publishEvent('resumed');
     this.publishState();
   }
@@ -2606,18 +2610,26 @@ class GameStateMachine extends EventEmitter {
 
   adjustTime(deltaSeconds) {
     if (!['gameplay', 'paused'].includes(this.state)) return;
+    const parsedDelta = Number(deltaSeconds);
+    const delta = Number.isFinite(parsedDelta) ? Math.trunc(parsedDelta) : 0;
+    if (delta === 0) return;
+
     const before = this.remaining;
-    this.remaining = Math.max(60, this.remaining + (deltaSeconds || 0));
+    this.remaining = Math.max(0, this.remaining + delta);
     if (this.remaining !== before) {
       // Fire adjust-time-sequence for adapter side effects (clock sync, etc.)
-      // Same fire-and-forget pattern as pause-sequence / resume-sequence
-      (async () => {
-        const result = await this.sequenceRunner.runControlSequence('adjust-time-sequence', { gameMode: this.gameType });
-        this.publishEvent('adjust_time_sequence_complete', { ok: result.ok });
-      })();
-      this.publishEvent('time_adjusted', { delta: deltaSeconds, remaining: this.remaining });
+      this._runAdjustTimeSequence('adjust_time');
+      this.publishEvent('time_adjusted', { delta, remaining: this.remaining });
       this.publishState();
     }
+  }
+
+  _runAdjustTimeSequence(reason = 'unspecified') {
+    // Keep clock synchronization behavior centralized for pause/resume/adjustTime flows.
+    (async () => {
+      const result = await this.sequenceRunner.runControlSequence('adjust-time-sequence', { gameMode: this.gameType });
+      this.publishEvent('adjust_time_sequence_complete', { ok: result.ok, reason });
+    })();
   }
 
   // Graceful halt: best-effort stop using adapters via zone registry
