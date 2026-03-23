@@ -613,6 +613,14 @@ Published to: `{baseTopic}/commands`
 | `deliverHint` | `hintId` | Deliver specific hint |
 | `shutdown` | none | Graceful engine shutdown |
 
+Control command sequence hooks (resolved from `global.system-sequences`):
+- `shutdown` → `software-shutdown-sequence` (fallback: imperative software shutdown)
+- `reboot` → `software-restart-sequence` (fallback: imperative software reboot/restart)
+- `halt` → `software-halt-sequence` (fallback: graceful halt)
+- `sleep` → `props-sleep-sequence`
+- `wake` → `props-wake-sequence`
+- `machineShutdown` → `machine-shutdown-sequence` (OS-level shutdown)
+
 ### Game State Publishing
 
 Published to: `{baseTopic}/state`

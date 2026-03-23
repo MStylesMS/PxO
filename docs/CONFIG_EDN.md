@@ -362,6 +362,32 @@ Map game phases to sequence arrays:
 
 ---
 
+## System/Control Sequence Naming (Canonical)
+
+PxO distinguishes software lifecycle, machine lifecycle, and prop lifecycle controls using explicit
+sequence names in `:system-sequences`:
+
+```clojure
+:system-sequences {
+  :software-halt-sequence {:timeline []}        ; halt PxO process flow (no OS shutdown)
+  :software-shutdown-sequence {:timeline []}    ; graceful PxO software shutdown
+  :software-restart-sequence {:timeline []}     ; graceful PxO software restart
+
+  :machine-shutdown-sequence {:timeline []}     ; OS/machine shutdown
+  :machine-reboot-sequence {:timeline []}       ; OS/machine reboot
+
+  :props-sleep-sequence {:timeline []}          ; put props/adapters into sleep/standby mode
+  :props-wake-sequence {:timeline []}           ; wake props/adapters from standby mode
+}
+```
+
+Guidelines:
+- Use `software-*` names for PxO process lifecycle hooks.
+- Use `machine-*` names for host OS power-state actions.
+- Use `props-*` names for room hardware/adapters lifecycle controls.
+
+---
+
 ## Modes
 
 Game mode variations with duration overrides:

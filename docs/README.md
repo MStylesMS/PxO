@@ -116,6 +116,16 @@ Cues (named shortcuts, fire-and-forget)
 Sequences (timeline-based execution with blocking semantics)
 ```
 
+### Lifecycle Control Naming
+
+PxO uses explicit names for lifecycle control sequences in `:system-sequences`:
+
+- `software-halt-sequence`, `software-shutdown-sequence`, `software-restart-sequence`
+- `machine-shutdown-sequence`, `machine-reboot-sequence`
+- `props-sleep-sequence`, `props-wake-sequence`
+
+This separates software process controls from OS power controls and prop/adapters sleep/wake controls.
+
 **Commands** target specific zones:
 ```clojure
 {:zone "display" :command "playVideo" :file "intro.mp4"}

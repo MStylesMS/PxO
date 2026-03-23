@@ -266,7 +266,7 @@
                        };; End of sequences
 
            :system-sequences {;; System-level operational sequences - user-defined with some having hardcoded final actions 
-                              :halt-sequence {:description "Graceful halt without process termination" ;; Execute before halting program
+                              :software-halt-sequence {:description "Graceful halt without process termination" ;; Execute before halting program
                                               :timeline []}
 
                               :machine-shutdown-sequence {:description "Graceful machine shutdown with warnings" ;; Execute before system shutdown
@@ -275,10 +275,10 @@
                               :machine-reboot-sequence {:description "System reboot with restart cycle" ;; Execute before system reboot
                                                         :timeline []}
 
-                              :wake-sequence {:description "Wake from sleep/standby mode" ;; Execute after waking from sleep mode
+                              :props-wake-sequence {:description "Wake from sleep/standby mode" ;; Execute after waking from sleep mode
                                               :timeline []}
 
-                              :sleep-sequence {:description "Enter sleep/standby mode" ;; Execute before entering sleep mode
+                              :props-sleep-sequence {:description "Enter sleep/standby mode" ;; Execute before entering sleep mode
                                                :timeline []}
 
                               :restart-adapters {}

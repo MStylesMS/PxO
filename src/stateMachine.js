@@ -2044,25 +2044,25 @@ class GameStateMachine extends EventEmitter {
       case 'resume':
         return this._resumeViaSequence();
       case 'shutdown': {
-        const result = await this.sequenceRunner.runControlSequence('shutdown-sequence', { gameMode: this.gameType });
+        const result = await this.sequenceRunner.runControlSequence('software-shutdown-sequence', { gameMode: this.gameType });
         if (!result.ok) {
-          log.warn('shutdown-sequence failed, falling back to imperative shutdown');
+          log.warn('software-shutdown-sequence failed, falling back to imperative shutdown');
           this._fallbackShutdown();
         }
         return result.ok;
       }
       case 'reboot': {
-        const result = await this.sequenceRunner.runControlSequence('reboot-sequence', { gameMode: this.gameType });
+        const result = await this.sequenceRunner.runControlSequence('software-restart-sequence', { gameMode: this.gameType });
         if (!result.ok) {
-          log.warn('reboot-sequence failed, falling back to imperative reboot');
+          log.warn('software-restart-sequence failed, falling back to imperative reboot');
           this._fallbackReboot();
         }
         return result.ok;
       }
       case 'halt': {
-        const result = await this.sequenceRunner.runControlSequence('halt-sequence', { gameMode: this.gameType });
+        const result = await this.sequenceRunner.runControlSequence('software-halt-sequence', { gameMode: this.gameType });
         if (!result.ok) {
-          log.warn('halt-sequence failed, falling back to graceful halt');
+          log.warn('software-halt-sequence failed, falling back to graceful halt');
           this.gracefulHalt();
         }
         return result.ok;
@@ -2075,10 +2075,21 @@ class GameStateMachine extends EventEmitter {
         }
         return result.ok;
       }
+      case 'machineReboot': {
+        const result = await this.sequenceRunner.runControlSequence('machine-reboot-sequence', { gameMode: this.gameType });
+        if (!result.ok) {
+          log.warn('machine-reboot-sequence failed, falling back to imperative machine reboot');
+          this._fallbackReboot();
+        }
+        return result.ok;
+      }
       case 'sleep':
-        return await this.sequenceRunner.runControlSequence('sleep-sequence', { gameMode: this.gameType });
+        return await this.sequenceRunner.runControlSequence('props-sleep-sequence', { gameMode: this.gameType });
       case 'wake':
-        return await this.sequenceRunner.runControlSequence('wake-sequence', { gameMode: this.gameType });
+        return await this.sequenceRunner.runControlSequence('props-wake-sequence', { gameMode: this.gameType });
+      case 'restartAdapters':
+      case 'restart-adapters':
+        return await this.sequenceRunner.runControlSequence('restart-adapters', { gameMode: this.gameType });
       case 'resetting':
         return this.resetting();
       case 'adjustTime':
