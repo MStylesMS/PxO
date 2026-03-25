@@ -5,6 +5,7 @@ const AdapterRegistry = require('./adapters/adapterRegistry');
 const SequenceRunner = require('./sequenceRunner');
 const Hints = require('./hints');
 const {
+
   getCommandsTopic,
   publishExecuteHint,
   stopAllAcrossZones,
@@ -31,6 +32,7 @@ class GameStateMachine extends EventEmitter {
     const gameTopic = cfg.global?.mqtt?.['game-topic'];
     this.zones = new AdapterRegistry(mqtt, zones, { provider, gameTopic, mirrorUI: true });
 
+
     log.info(`Initialized adapter registry with ${this.zones.getZoneNames().length} zones`);
     this.zones.getZoneNames().forEach(zoneName => {
       const adapter = this.zones.getZone(zoneName);
@@ -51,6 +53,7 @@ class GameStateMachine extends EventEmitter {
 
     // Sequence concurrency control
     this._runningSequence = null; // tracks currently executing control sequence
+    this._phaseTransitionToken = 0; // invalidates in-flight phase transitions when incremented
 
     this.resetPaused = false;
 
@@ -66,6 +69,62 @@ class GameStateMachine extends EventEmitter {
     this.currentPhase = null; // current phase name (string)
     this.currentPhaseConfig = null; // current phase definition object
     this.globalSequences = {}; // loaded from :global :sequences for reference resolution
+  }
+
+  _normalizePhaseType(phaseType) {
+    if (!phaseType) return null;
+    return String(phaseType).replace(/^:/, '').toLowerCase();
+  }
+
+  _isClosingPhaseType(phaseType) {
+    const normalized = this._normalizePhaseType(phaseType);
+    return normalized === 'solved' || normalized === 'failed';
+  }
+
+  _getPhaseType(phaseName) {
+    const phaseConfig = this.phases && this.phases[phaseName];
+    const configuredType = phaseConfig && (phaseConfig['phase-type'] || phaseConfig.phaseType);
+    if (configuredType) return this._normalizePhaseType(configuredType);
+    return this._normalizePhaseType(phaseName);
+  }
+
+  _isClosingPhase(phaseName) {
+    return this._isClosingPhaseType(this._getPhaseType(phaseName));
+  }
+
+  _resolveAdditionalPhasesForMode(gameConfig, gameType = 'unknown') {
+    const modeAllowlist = Array.isArray(gameConfig?.['additional-phases'])
+      ? gameConfig['additional-phases']
+      : (Array.isArray(gameConfig?.additionalPhases) ? gameConfig.additionalPhases : []);
+
+    if (modeAllowlist.length === 0) return {};
+
+    const globalRegistry = this.cfg?.global?.['additional-phases'];
+    if (!globalRegistry || typeof globalRegistry !== 'object') {
+      this.publishWarning('additional_phases_registry_missing', {
+        mode: gameType,
+        requested: modeAllowlist
+      });
+      return {};
+    }
+
+    const resolved = {};
+    modeAllowlist.forEach((phaseKeyRaw) => {
+      const phaseKey = String(phaseKeyRaw || '').replace(/^:/, '');
+      if (!phaseKey) return;
+
+      const phaseDef = globalRegistry[phaseKey];
+      if (!phaseDef || typeof phaseDef !== 'object') {
+        const msg = `Game mode '${gameType}' enables additional phase '${phaseKey}' but no definition exists under :global :additional-phases.`;
+        log.warn(`[PhaseEngine] ${msg}`);
+        this.publishWarning('additional_phase_missing', { mode: gameType, phase: phaseKey });
+        return;
+      }
+
+      resolved[phaseKey] = phaseDef;
+    });
+
+    return resolved;
   }
 
   resolveMediaReference(value, context = 'media') {
@@ -369,6 +428,7 @@ class GameStateMachine extends EventEmitter {
         id: hint.id,
         source,
         sequence: sequenceName,
+        message: `Hint sequence '${sequenceName}' failed: ${result?.error || 'unknown_error'}`,
         error: result?.error || 'unknown_error'
       });
       return false;
@@ -478,25 +538,8 @@ class GameStateMachine extends EventEmitter {
       return false;
     }
 
-    // Handle both nested phases structure and flattened phase structure
-    let phasesConfig = gameConfig.phases;
-    if (!phasesConfig) {
-      // Try flattened structure where phases are direct properties (EDN loader behavior)
-      const standardPhases = ['intro', 'gameplay', 'solved', 'failed', 'reset'];
-      const flattenedPhases = {};
-      let foundPhases = false;
-
-      for (const phaseName of standardPhases) {
-        if (gameConfig.hasOwnProperty(phaseName) && gameConfig[phaseName] !== undefined) {
-          flattenedPhases[phaseName] = gameConfig[phaseName];
-          foundPhases = true;
-        }
-      }
-
-      if (foundPhases) {
-        phasesConfig = flattenedPhases;
-      }
-    }
+    // Resolve phases from nested/flattened mode definitions and merge enabled global additional phases.
+    const phasesConfig = this._getPhasesForMode(gameType);
 
     if (!phasesConfig || typeof phasesConfig !== 'object') {
       log.error(`[PhaseEngine] No phases found for game mode '${gameType}'. Expected object with phase definitions.`);
@@ -622,7 +665,7 @@ class GameStateMachine extends EventEmitter {
       let phasesConfig = gameConfig.phases;
       if (!phasesConfig) {
         // Try flattened structure
-        const standardPhases = ['intro', 'gameplay', 'solved', 'failed', 'reset'];
+        const standardPhases = ['intro', 'gameplay', 'solved', 'failed', 'abort', 'reset'];
         const flattenedPhases = {};
         for (const phaseName of standardPhases) {
           if (gameConfig[phaseName]) {
@@ -660,7 +703,7 @@ class GameStateMachine extends EventEmitter {
       let phases = gameConfig.phases;
       if (!phases) {
         // Try flattened structure
-        const standardPhases = ['intro', 'gameplay', 'solved', 'failed', 'reset'];
+        const standardPhases = ['intro', 'gameplay', 'solved', 'failed', 'abort', 'reset'];
         const flattenedPhases = {};
         for (const phaseName of standardPhases) {
           if (gameConfig[phaseName]) {
@@ -677,6 +720,13 @@ class GameStateMachine extends EventEmitter {
       for (const expectedPhase of expectedPhases) {
         if (!phaseNames.includes(expectedPhase)) {
           allWarnings.push(`Game mode '${gameType}' missing recommended phase '${expectedPhase}'.`);
+        }
+      }
+
+      const requiredPhases = ['abort', 'reset'];
+      for (const requiredPhase of requiredPhases) {
+        if (!phaseNames.includes(requiredPhase)) {
+          allErrors.push(`Game mode '${gameType}' missing required phase '${requiredPhase}'.`);
         }
       }
     }
@@ -729,21 +779,7 @@ class GameStateMachine extends EventEmitter {
     // Validate sequence references in all game modes
     const gameModes = this.cfg.game || {};
     for (const [gameType, gameConfig] of Object.entries(gameModes)) {
-      // Handle both nested and flattened phase structures
-      let phasesConfig = gameConfig.phases;
-      if (!phasesConfig) {
-        // Try flattened structure
-        const standardPhases = ['intro', 'gameplay', 'solved', 'failed', 'reset'];
-        const flattenedPhases = {};
-        for (const phaseName of standardPhases) {
-          if (gameConfig[phaseName]) {
-            flattenedPhases[phaseName] = gameConfig[phaseName];
-          }
-        }
-        if (Object.keys(flattenedPhases).length > 0) {
-          phasesConfig = flattenedPhases;
-        }
-      }
+      const phasesConfig = this._getPhasesForMode(gameType);
 
       if (!phasesConfig) continue;
 
@@ -932,6 +968,8 @@ class GameStateMachine extends EventEmitter {
    * @param {string} phaseName The name of the phase to transition to (e.g., 'intro', 'gameplay').
    */
   async transitionToPhase(phaseName) {
+    const transitionToken = ++this._phaseTransitionToken;
+
     if (this.currentPhase === phaseName) {
       log.warn(`[PhaseEngine] Already in phase '${phaseName}'. Ignoring transition.`);
       return;
@@ -963,7 +1001,7 @@ class GameStateMachine extends EventEmitter {
     const duration = this.calculatePhaseDuration(phaseConfig);
     if (phaseName === 'gameplay') {
       this.remaining = duration;
-    } else if (['solved', 'failed'].includes(phaseName)) {
+    } else if (this._isClosingPhase(phaseName)) {
       this.resetRemaining = duration;
     } else {
       this.remaining = duration;
@@ -981,16 +1019,28 @@ class GameStateMachine extends EventEmitter {
 
     // Start unified timer for phases that have visible countdowns or scheduled events
     // - intro/gameplay: use `remaining`
-    // - solved/failed: use `resetRemaining`
-    if (['intro', 'gameplay', 'solved', 'failed'].includes(phaseName)) {
+    // - solved/failed/additional closing phases: use `resetRemaining`
+    if (phaseName === 'intro' || phaseName === 'gameplay' || this._isClosingPhase(phaseName)) {
       this.startUnifiedTimer();
     }
 
     // Execute the new phase's logic
     await this.executePhase(phaseName, phaseConfig);
 
+    // Transition was superseded/cancelled while phase logic was executing.
+    if (transitionToken !== this._phaseTransitionToken || this.state !== phaseName) {
+      return;
+    }
+
     // Post-execution logic (e.g., auto-transition)
     if (phaseName === 'intro') {
+      const bridgeResult = await this.sequenceRunner.runControlSequence('intro-to-gameplay-sequence', { gameMode: this.gameType });
+      if (!bridgeResult.ok && bridgeResult.error !== 'sequence_not_found') {
+        this.publishWarning('intro_to_gameplay_sequence_failed', {
+          message: `intro-to-gameplay-sequence failed: ${bridgeResult.error || 'unknown_error'}`,
+          error: bridgeResult.error || 'unknown_error'
+        });
+      }
       this.transitionToPhase('gameplay');
     } else if (phaseName === 'reset') {
       // If we ever enter an explicit 'reset' phase, complete to ready afterwards
@@ -1004,7 +1054,7 @@ class GameStateMachine extends EventEmitter {
   _triggerEnd(outcome) {
     const out = (outcome || '').toLowerCase();
     const targetPhase = out === 'win' ? 'solved' : 'failed';
-    if (['solved', 'failed'].includes(this.state)) {
+    if (this._isClosingPhase(this.state)) {
       log.warn(`[PhaseEngine] End already triggered (current state: ${this.state}); ignoring duplicate '${out}'.`);
       return;
     }
@@ -1017,7 +1067,8 @@ class GameStateMachine extends EventEmitter {
 
   // Dispatcher for individual cue actions with zone-based routing
   async executeCueAction(action, cueKey) {
-    const { zone, zones, play, command, scene, volume } = action;
+    const { zone, zones, play, scene, volume } = action;
+    const command = action.command || action.type;
 
     // Determine target zones: single zone or array of zones
     const targetZones = zones ? (Array.isArray(zones) ? zones : [zones]) : (zone ? [zone] : []);
@@ -1047,6 +1098,22 @@ class GameStateMachine extends EventEmitter {
           log.warn(`Play action in cue ${cueKey} missing required 'zone' or 'zones' field`);
         }
       } else if (command) {
+        if (command === 'mqtt' || command === 'publish') {
+          try {
+            const topic = action.topic;
+            const payload = (action.payload !== undefined) ? action.payload : action.message;
+            if (topic && payload !== undefined) {
+              const body = (typeof payload === 'string') ? payload : JSON.stringify(payload);
+              this.mqtt.publish(topic, body);
+            } else {
+              log.warn(`Raw MQTT cue '${cueKey}' missing topic or payload/message`);
+            }
+          } catch (error) {
+            log.warn(`Failed raw MQTT publish in cue ${cueKey}:`, error.message);
+          }
+          return;
+        }
+
         // Route commands to appropriate zone adapter(s)
         log.debug(`executeCueAction: command='${command}', targetZones=[${targetZones.join(', ')}], cueKey='${cueKey}'`);
         if (targetZones.length > 0) {
@@ -1654,8 +1721,24 @@ class GameStateMachine extends EventEmitter {
 
     log.info(`Default game mode set to: ${this.currentGameMode}`);
 
-    // Execute reset sequence on initialization
-    this._runResetSequence();
+    // Execute startup hook before the initial reset to allow install-wide startup behavior.
+    (async () => {
+      const startupResult = await this.sequenceRunner.runControlSequence('startup-sequence', { gameMode: this.currentGameMode });
+      if (!startupResult.ok && startupResult.error !== 'sequence_not_found') {
+        this.publishWarning('startup_sequence_failed', {
+          message: `startup-sequence failed: ${startupResult.error || 'unknown_error'}`,
+          error: startupResult.error || 'unknown_error'
+        });
+      }
+
+      await this._runResetSequence();
+    })().catch((e) => {
+      this.publishWarning('startup_bootstrap_failed', {
+        message: `Startup bootstrap failed: ${e.message}`,
+        error: e.message
+      });
+    });
+
     this.startHeartbeat();
   }
 
@@ -1685,6 +1768,10 @@ class GameStateMachine extends EventEmitter {
         // timeLeft already set to game time remaining
         break;
       default:
+        if (this._isClosingPhase(this.state)) {
+          timeLeft = secondsToMMSS(this.resetRemaining);
+          break;
+        }
         // Other states show 00:00
         timeLeft = '00:00';
         break;
@@ -1695,6 +1782,23 @@ class GameStateMachine extends EventEmitter {
       timeLeft: timeLeft,
       gameType: this.gameType || '',
       currentGameMode: this.currentGameMode || '',
+      phaseType: this._getPhaseType(this.state),
+      isClosingPhase: this._isClosingPhase(this.state),
+      operatorControl: this._isClosingPhase(this.state)
+        ? {
+          label: 'Reset',
+          command: 'reset',
+          style: 'warning',
+          confirm: false,
+          confirmText: ''
+        }
+        : {
+          label: 'Abort',
+          command: 'abort',
+          style: 'danger',
+          confirm: true,
+          confirmText: 'Are you sure?'
+        },
     };
     this.mqtt.publish(`${gameTopic}/state`, statePayload);
   }
@@ -1952,6 +2056,32 @@ class GameStateMachine extends EventEmitter {
     if (phaseConfig && phaseConfig.sequence) {
       try {
         if (typeof phaseConfig.sequence === 'string') {
+          const resolved = this.sequenceRunner.resolveSequence(phaseConfig.sequence, this.gameType);
+
+          // Allow reusable named schedules to be referenced by phase :sequence.
+          if (resolved && Array.isArray(resolved.schedule)) {
+            let scheduleDuration = typeof resolved.duration === 'number' ? resolved.duration : undefined;
+            if (scheduleDuration === undefined && typeof resolved.seconds === 'number') {
+              scheduleDuration = resolved.seconds;
+            }
+            if (scheduleDuration === undefined) {
+              scheduleDuration = typeof phaseConfig.duration === 'number'
+                ? phaseConfig.duration
+                : (typeof phaseConfig.seconds === 'number' ? phaseConfig.seconds : undefined);
+            }
+
+            if (typeof scheduleDuration === 'number' && scheduleDuration > 0) {
+              await this.executeSchedule(resolved.schedule, scheduleDuration, phaseKey);
+              return;
+            }
+          }
+
+          // Also allow timeline-style named sequences for phase execution.
+          if (resolved && Array.isArray(resolved.timeline) && typeof resolved.duration === 'number') {
+            this.scheduleSequenceTimeline(resolved, `${this.gameType || 'game'}:${phaseKey}`);
+            return;
+          }
+
           await this.sequenceRunner.runControlSequence(phaseConfig.sequence, { gameMode: this.gameType });
         } else if (Array.isArray(phaseConfig.sequence) || typeof phaseConfig.sequence === 'object') {
           const seqDef = Array.isArray(phaseConfig.sequence) ? { sequence: phaseConfig.sequence } : phaseConfig.sequence;
@@ -2003,6 +2133,15 @@ class GameStateMachine extends EventEmitter {
       case 'reset': {
         return await this._runResetSequence();
       }
+      case 'resetGame': {
+        return await this._runResetSequence();
+      }
+      case 'abort': {
+        return await this._runAbortSequence({ source: 'command', force: true });
+      }
+      case 'abortGame': {
+        return await this._runAbortSequence({ source: 'command', force: true });
+      }
       case 'debugLog': {
         // Developer helper: print a debug/info line via commands topic
         try {
@@ -2027,6 +2166,7 @@ class GameStateMachine extends EventEmitter {
         return await this._startViaSequences(this.currentGameMode || (Object.keys(this.cfg.game || {})[0]));
       }
       case 'solve':
+      case 'solveGame':
       case 'win': {
         this._triggerEnd('win');
         return true;
@@ -2035,9 +2175,31 @@ class GameStateMachine extends EventEmitter {
         this._triggerEnd('fail');
         return true;
       }
+      case 'failGame': {
+        this._triggerEnd('fail');
+        return true;
+      }
       case 'startMode': { // generic explicit start with provided mode
         const mode = cmd && (cmd.mode || cmd.value || cmd.gameType);
         return await this._startViaSequences(mode);
+      }
+      case 'triggerPhase':
+      case 'phase': {
+        const requestedPhase = cmd && (cmd.phase || cmd.name || cmd.value);
+        const phaseName = String(requestedPhase || '').trim();
+        if (!phaseName) {
+          this.publishWarning('trigger_phase_missing_name', { payload: cmd });
+          return false;
+        }
+        if (!this.phases || !this.phases[phaseName]) {
+          this.publishWarning('trigger_phase_unknown', {
+            phase: phaseName,
+            available: Object.keys(this.phases || {})
+          });
+          return false;
+        }
+        await this.transitionToPhase(phaseName);
+        return true;
       }
       case 'pause':
         return this._pauseViaSequence();
@@ -2128,10 +2290,20 @@ class GameStateMachine extends EventEmitter {
         this.publishEvent('state_requested');
         return true;
       case 'stopAll':
-        // Convenience command to stop all media across all configured zones outside setup context
-        this.stopAllMediaAcrossZones();
-        this.publishEvent('all_stopped');
-        return true;
+        {
+          const result = await this.sequenceRunner.runControlSequence('stopAll-sequence', { gameMode: this.gameType });
+          if (!result.ok && result.error !== 'sequence_not_found') {
+            this.publishWarning('stopall_sequence_failed', {
+              message: `stopAll-sequence failed: ${result.error || 'unknown_error'}`,
+              error: result.error || 'unknown_error'
+            });
+          }
+
+          // Always hard-stop media as fallback/safety behavior.
+          this.stopAllMediaAcrossZones();
+          this.publishEvent('all_stopped');
+          return true;
+        }
       case 'listModes': {
         const modes = Object.keys(this.cfg.game || {});
         this.publishEvent('modes_list', { modes });
@@ -2139,7 +2311,11 @@ class GameStateMachine extends EventEmitter {
       }
       case 'setGameMode': {
         const newMode = cmd && (cmd.mode || cmd.value || cmd.gameMode);
-        return this.setGameMode(newMode);
+        return await this.setGameMode(newMode);
+      }
+      case 'emergencyStop':
+      case 'emergency-stop': {
+        return await this.emergencyStop({ source: 'command' });
       }
       default:
         log.warn('Unknown command', cmd);
@@ -2193,7 +2369,7 @@ class GameStateMachine extends EventEmitter {
     this.transitionToPhase('gameplay');
   }
 
-  setGameMode(newMode) {
+  async setGameMode(newMode) {
     if (!newMode) {
       this.publishEvent('warn', { msg: 'setGameMode: No mode specified' });
       return false;
@@ -2238,6 +2414,20 @@ class GameStateMachine extends EventEmitter {
     this.currentGameMode = newMode;
     this.gameType = newMode;
 
+    const modeChangedResult = await this.sequenceRunner.runControlSequence('game-mode-changed-sequence', {
+      gameMode: this.gameType,
+      oldMode,
+      newMode
+    });
+    if (!modeChangedResult.ok && modeChangedResult.error !== 'sequence_not_found') {
+      this.publishWarning('game_mode_changed_sequence_failed', {
+        message: `game-mode-changed-sequence failed: ${modeChangedResult.error || 'unknown_error'}`,
+        oldMode,
+        newMode,
+        error: modeChangedResult.error || 'unknown_error'
+      });
+    }
+
     // Trigger full reset to apply new mode
     this.reset();
 
@@ -2250,20 +2440,25 @@ class GameStateMachine extends EventEmitter {
     const gameConfig = this.cfg.game?.[gameMode];
     if (!gameConfig || typeof gameConfig !== 'object') return null;
 
+    const normalized = {};
+
     if (gameConfig.phases && typeof gameConfig.phases === 'object') {
-      return gameConfig.phases;
+      Object.entries(gameConfig.phases).forEach(([phaseName, phaseDef]) => {
+        if (phaseDef !== undefined) normalized[phaseName] = phaseDef;
+      });
     }
 
-    const standardPhases = ['intro', 'gameplay', 'solved', 'failed', 'reset'];
-    const flattened = {};
-    let found = false;
+    const standardPhases = ['intro', 'gameplay', 'solved', 'failed', 'abort', 'reset'];
     for (const phaseName of standardPhases) {
       if (Object.prototype.hasOwnProperty.call(gameConfig, phaseName) && gameConfig[phaseName] !== undefined) {
-        flattened[phaseName] = gameConfig[phaseName];
-        found = true;
+        normalized[phaseName] = gameConfig[phaseName];
       }
     }
-    return found ? flattened : null;
+
+    const additionalPhases = this._resolveAdditionalPhasesForMode(gameConfig, gameMode);
+    Object.assign(normalized, additionalPhases);
+
+    return Object.keys(normalized).length > 0 ? normalized : null;
   }
 
   _resolveResetDefinition(gameMode) {
@@ -2319,6 +2514,15 @@ class GameStateMachine extends EventEmitter {
     this.changeState('resetting', { reason: 'reset_sequence_initiated', gameMode });
     this.publishEvent('resetting');
 
+    const globalResetResult = await this.sequenceRunner.runControlSequence('reset-sequence', { gameMode: gameMode || this.gameType });
+    if (!globalResetResult.ok && globalResetResult.error !== 'sequence_not_found') {
+      this.publishWarning('reset_sequence_global_failed', {
+        message: `reset-sequence failed: ${globalResetResult.error || 'unknown_error'}`,
+        mode: gameMode,
+        error: globalResetResult.error || 'unknown_error'
+      });
+    }
+
     if (!hasExecutableReset) {
       log.info(`[PhaseEngine] No reset sequence defined for mode '${gameMode || 'unknown'}'; skipping.`);
       this.changeState('ready', { reason: 'reset_sequence_skipped', gameMode });
@@ -2365,6 +2569,35 @@ class GameStateMachine extends EventEmitter {
     }
   }
 
+  _getPrimaryClockZoneName() {
+    if (!this.zones) return null;
+
+    // Prefer explicit "clock" zone name when present.
+    if (this.zones.getZone('clock')) {
+      return 'clock';
+    }
+
+    const clockZones = this.zones.getZonesByType('pfx-clock');
+    if (Array.isArray(clockZones) && clockZones.length > 0) {
+      return clockZones[0].zoneName;
+    }
+
+    return null;
+  }
+
+  async _forwardGameClockControl(commandName) {
+    const zoneName = this._getPrimaryClockZoneName();
+    if (!zoneName) return false;
+
+    try {
+      await this.zones.execute(zoneName, commandName, {});
+      return true;
+    } catch (error) {
+      log.warn(`Failed to forward '${commandName}' to clock zone '${zoneName}': ${error.message}`);
+      return false;
+    }
+  }
+
   _pauseViaSequence() {
     if (this.state !== 'gameplay') return false;
 
@@ -2380,6 +2613,7 @@ class GameStateMachine extends EventEmitter {
 
     // Run pause-sequence if present (fire and then pause timers)
     (async () => {
+      await this._forwardGameClockControl('pause');
       const result = await this.sequenceRunner.runControlSequence('pause-sequence', { gameMode: this.gameType });
       this.publishEvent('pause_sequence_complete', { ok: result.ok, est: result.durationEstimate });
     })();
@@ -2406,6 +2640,7 @@ class GameStateMachine extends EventEmitter {
     }
 
     (async () => {
+      await this._forwardGameClockControl('resume');
       const result = await this.sequenceRunner.runControlSequence('resume-sequence', { gameMode: this.gameType });
       this.publishEvent('resume_sequence_complete', { ok: result.ok, est: result.durationEstimate });
     })();
@@ -2487,8 +2722,8 @@ class GameStateMachine extends EventEmitter {
             this.sequenceRunner.runControlSequence('idle');
           }
         }
-      } else if (['solved', 'failed'].includes(this.state) && !this.resetPaused) {
-        // Closing phases (solved/failed): countdown resetRemaining and fire any phase-scoped schedules
+      } else if (this._isClosingPhase(this.state) && !this.resetPaused) {
+        // Closing phases (solved/failed/additional): countdown resetRemaining and fire any phase-scoped schedules
         this.resetRemaining = Math.max(0, this.resetRemaining - 1);
 
         // Fire any registered phase schedule entries that match remaining time
@@ -2506,12 +2741,24 @@ class GameStateMachine extends EventEmitter {
 
         if (this.resetRemaining === 0) {
           this.stopUnifiedTimer();
-          // Auto-advance to explicit reset phase if defined; otherwise fallback to reset sequence
-          if (this.phases && this.phases['reset']) {
-            this.transitionToPhase('reset');
-          } else {
-            this._runResetSequence();
-          }
+
+          (async () => {
+            const closingResult = await this.sequenceRunner.runControlSequence('closing-complete-sequence', { gameMode: this.gameType, phase: this.state });
+            if (!closingResult.ok && closingResult.error !== 'sequence_not_found') {
+              this.publishWarning('closing_complete_sequence_failed', {
+                message: `closing-complete-sequence failed: ${closingResult.error || 'unknown_error'}`,
+                phase: this.state,
+                error: closingResult.error || 'unknown_error'
+              });
+            }
+
+            // Auto-advance to explicit reset phase if defined; otherwise fallback to reset sequence
+            if (this.phases && this.phases['reset']) {
+              this.transitionToPhase('reset');
+            } else {
+              this._runResetSequence();
+            }
+          })();
         }
       }
       // per-second state publication handled by heartbeat
@@ -2603,6 +2850,84 @@ class GameStateMachine extends EventEmitter {
 
     // Execute reset sequence (replaces legacy setup sequence)
     this._runResetSequence();
+  }
+
+  async _runAbortSequence({ source = 'command', force = false } = {}) {
+    if (!force && !['intro', 'gameplay', 'paused', 'solved', 'failed'].includes(this.state)) {
+      return false;
+    }
+
+    this._phaseTransitionToken++;
+    this.stopUnifiedTimer();
+    this.clearAllPhaseSchedules();
+
+    if (this.phases && this.phases.abort) {
+      await this.transitionToPhase('abort');
+      return true;
+    }
+
+    this.publishWarning('abort_phase_missing', {
+      message: 'Abort command received but no abort phase is defined; falling back to reset sequence',
+      source
+    });
+    return await this._runResetSequence();
+  }
+
+  async runErrorSequence(reason = 'unknown_error', details = {}) {
+    const result = await this.sequenceRunner.runControlSequence('error-sequence', {
+      gameMode: this.gameType,
+      reason,
+      ...details
+    });
+
+    if (!result.ok && result.error !== 'sequence_not_found') {
+      this.publishWarning('error_sequence_failed', {
+        message: `error-sequence failed: ${result.error || 'unknown_error'}`,
+        reason,
+        error: result.error || 'unknown_error'
+      });
+    }
+
+    return result.ok;
+  }
+
+  async emergencyStop({ source = 'command' } = {}) {
+    // Preempt in-flight transitions and scheduled phase actions.
+    this._phaseTransitionToken++;
+    this.stopUnifiedTimer();
+    this.clearAllPhaseSchedules();
+
+    // Immediate hard cleanup first.
+    this.stopAllMediaAcrossZones();
+
+    const emergencyResult = await this.sequenceRunner.runControlSequence('emergency-stop-sequence', {
+      gameMode: this.gameType,
+      source,
+      state: this.state
+    });
+
+    if (!emergencyResult.ok && emergencyResult.error !== 'sequence_not_found') {
+      this.publishWarning('emergency_stop_sequence_failed', {
+        message: `emergency-stop-sequence failed: ${emergencyResult.error || 'unknown_error'}`,
+        error: emergencyResult.error || 'unknown_error'
+      });
+    }
+
+    const resetOk = await this._runResetSequence();
+    if (!resetOk) {
+      this.stopUnifiedTimer();
+      this.clearAllPhaseSchedules();
+      this.stopAllMediaAcrossZones();
+      this.changeState('ready', { reason: 'emergency_stop_fallback_ready' });
+      this.publishState();
+    }
+
+    this.publishEvent('emergency_stop_complete', {
+      source,
+      emergencySequenceOk: emergencyResult.ok,
+      resetOk
+    });
+    return true;
   }
 
 

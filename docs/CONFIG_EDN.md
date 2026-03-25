@@ -64,6 +64,55 @@ nil
 
 ## Configuration Structure
 
+## Closing Phase Model (Abort/Reset + Additional Phases)
+
+Current PxO configs should treat closing behavior as a two-step model:
+
+- `:abort` phase: immediate operator action to stop gameplay/media safely.
+- `:reset` phase: follow-up path back to `ready`.
+
+Every game mode should define both `:abort` and `:reset` in its phase map.
+
+You can also define reusable optional closing-family phases globally and opt in per mode.
+
+```clojure
+:global {
+  :additional-phases {
+    :operator-hold {:description "Operator hold before reset"
+                    :phase-type :failed
+                    :duration 45
+                    :sequence [{:fire :stop-clock}
+                               {:zone "clock" :command "hint" :text "Please wait" :duration 45}]}
+
+    :debrief {:description "Solved-family debrief"
+              :phase-type :solved
+              :duration 30
+              :sequence [{:zone "clock" :command "hint" :text "Debrief" :duration 25}]}
+  }
+}
+
+:game-modes {
+  :demo {
+    :short-label "Demo"
+    :game-label "Agent 22 - Demo"
+    :additional-phases [:operator-hold]
+    :phases {
+      :intro {:duration 60 :sequence "demo-intro"}
+      :gameplay {:duration 120 :sequence "demo-gameplay"}
+      :solved {:duration 30 :sequence "demo-solved"}
+      :failed {:duration 30 :sequence "demo-failed"}
+      :abort {:sequence "demo-abort"}
+      :reset {:sequence "demo-reset"}
+    }
+  }
+}
+```
+
+Notes:
+- `:phase-type` controls whether a phase is treated as solved-family or failed-family closing logic.
+- `:additional-phases` in each mode is an allowlist of keys from `:global :additional-phases`.
+- Additional phases are optional and can be entered via operator command (`triggerPhase`).
+
 ### Top-Level Keys
 
 ```clojure
@@ -369,6 +418,11 @@ sequence names in `:system-sequences`:
 
 ```clojure
 :system-sequences {
+  :startup-sequence {:timeline []}             ; runs once during startup before initial reset
+  :error-sequence {:timeline []}               ; runs on operational command/MQTT errors
+  :mqtt-disconnected-sequence {:timeline []}   ; runs when broker disconnect is detected
+  :mqtt-reconnected-sequence {:timeline []}    ; runs after broker reconnect is confirmed
+
   :software-halt-sequence {:timeline []}        ; halt PxO process flow (no OS shutdown)
   :software-shutdown-sequence {:timeline []}    ; graceful PxO software shutdown
   :software-restart-sequence {:timeline []}     ; graceful PxO software restart
@@ -381,10 +435,24 @@ sequence names in `:system-sequences`:
 }
 ```
 
+Global command-sequence lifecycle hooks:
+
+```clojure
+:command-sequences {
+  :reset-sequence {:sequence []}               ; runs at start of reset pipeline
+  :game-mode-changed-sequence {:sequence []}   ; runs when setGameMode succeeds (before reset)
+  :stopAll-sequence {:sequence []}             ; runs when stopAll command is received
+  :intro-to-gameplay-sequence {:sequence []}   ; runs after intro completes, before gameplay starts
+  :closing-complete-sequence {:sequence []}    ; runs when closing countdown reaches zero, before reset handoff
+  :emergency-stop-sequence {:sequence []}      ; runs during emergencyStop preemptive cleanup
+}
+```
+
 Guidelines:
 - Use `software-*` names for PxO process lifecycle hooks.
 - Use `machine-*` names for host OS power-state actions.
 - Use `props-*` names for room hardware/adapters lifecycle controls.
+- Keep lifecycle hook names stable to preserve command routing and customer config compatibility.
 
 ---
 

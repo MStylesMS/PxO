@@ -9,6 +9,8 @@ class MqttClient extends EventEmitter {
     this.options = { reconnectPeriod: 2000, ...options };
     this.client = null;
     this.subscriptions = new Set();
+    this._hasConnected = false;
+    this._sawDisconnect = false;
     
     // Increase max listeners to prevent warnings
     this.setMaxListeners(0); // 0 = unlimited
@@ -31,12 +33,26 @@ class MqttClient extends EventEmitter {
           if (err) log.warn('Resubscribe error for', topic, err.message);
         });
       }
+      const isReconnect = this._hasConnected && this._sawDisconnect;
+      this._hasConnected = true;
+      this._sawDisconnect = false;
+
       this.emit('connected');
+      if (isReconnect) {
+        this.emit('reconnected');
+      }
     });
 
     this.client.on('reconnect', () => log.debug('MQTT reconnecting...'));
-    this.client.on('close', () => log.warn('MQTT connection closed'));
-    this.client.on('error', (err) => log.error('MQTT error:', err.message));
+    this.client.on('close', () => {
+      log.warn('MQTT connection closed');
+      this._sawDisconnect = true;
+      this.emit('disconnected');
+    });
+    this.client.on('error', (err) => {
+      log.error('MQTT error:', err.message);
+      this.emit('mqtt-error', err);
+    });
 
     this.client.on('message', (topic, payload) => {
       const str = payload ? payload.toString() : '';

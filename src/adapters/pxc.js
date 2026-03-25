@@ -1,6 +1,6 @@
 const log = require('../logger');
 
-class ClockAdapter {
+class PxcAdapter {
   constructor(mqtt, topics, opts = {}) {
     this.mqtt = mqtt;
     this.commandTopic = `${topics.clock.baseTopic}/commands`;
@@ -50,11 +50,11 @@ class ClockAdapter {
         case 'resetDisplayColors':
           return this.resetDisplayColors();
         default:
-          throw new Error(`Unknown command '${command}' for ClockAdapter`);
+          throw new Error(`Unknown command '${command}' for PxcAdapter`);
       }
     } catch (error) {
       if (logger) {
-        logger.error(`ClockAdapter command '${command}' failed:`, error.message);
+        logger.error(`PxcAdapter command '${command}' failed:`, error.message);
       }
       throw error;
     }
@@ -171,4 +171,4 @@ class ClockAdapter {
   }
 }
 
-module.exports = ClockAdapter;
+module.exports = PxcAdapter;

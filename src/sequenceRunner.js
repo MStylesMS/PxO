@@ -74,7 +74,12 @@ class SequenceRunner {
     // Map legacy sequence names to new semantic names
     mapLegacySequenceName(name) {
         const legacyMappings = {
-            'start-sequence': 'gameplay-start-sequence'
+            'start-sequence': 'gameplay-start-sequence',
+            'halt-sequence': 'software-halt-sequence',
+            'shutdown-sequence': 'software-shutdown-sequence',
+            'reboot-sequence': 'software-restart-sequence',
+            'sleep-sequence': 'props-sleep-sequence',
+            'wake-sequence': 'props-wake-sequence'
             // Removed solve-sequence and fail-sequence mappings - no longer supported
         };
         return legacyMappings[name] || name;
@@ -335,7 +340,21 @@ class SequenceRunner {
             return;
         }
 
-        const command = resolvedStep.command;
+        const command = resolvedStep.command || resolvedStep.type;
+
+        if (command === 'publish' || command === 'mqtt') {
+            const topic = resolvedStep.topic;
+            const payload = (resolvedStep.payload !== undefined) ? resolvedStep.payload : resolvedStep.message;
+            if (!topic) {
+                throw new Error(`Step ${index} mqtt/publish missing required topic`);
+            }
+            if (payload === undefined) {
+                throw new Error(`Step ${index} mqtt/publish missing required payload/message`);
+            }
+            const body = (typeof payload === 'string') ? payload : JSON.stringify(payload);
+            this.mqtt.publish(topic, body);
+            return;
+        }
 
         if (command === 'verifyBrowser') {
             const url = resolvedStep.url;
@@ -389,12 +408,18 @@ class SequenceRunner {
 
         // Handle direct zone commands
         if (resolvedStep.zone || resolvedStep.zones) {
+            if (!command) {
+                log.warn(`Zone step ${index} missing command/type:`, resolvedStep);
+                return;
+            }
             const zones = resolvedStep.zones || [resolvedStep.zone];
             const { zone, zones: zonesField, ...options } = resolvedStep;
+            delete options.command;
+            delete options.type;
 
             for (const zoneName of zones) {
                 try {
-                    await this.zones.execute(zoneName, resolvedStep.command, options);
+                    await this.zones.execute(zoneName, command, options);
                 } catch (error) {
                     log.warn(`Zone command failed on ${zoneName}: ${error.message}`);
                 }
@@ -655,7 +680,7 @@ class SequenceRunner {
                 return;
             }
 
-            const { command } = step;
+            const command = step.command || step.type;
 
             // :fire, :hint, :wait, and template parameter steps are valid without a 'command' field
             if (step.fire || step.hint || step.wait !== undefined || step.fireCue || step['fire-cue'] || step.fireSeq || step['fire-seq']) {
@@ -663,7 +688,7 @@ class SequenceRunner {
             }
 
             if (!command || typeof command !== 'string') {
-                errors.push(`Sequence ${name}[${idx}]: missing or invalid 'command' field`);
+                errors.push(`Sequence ${name}[${idx}]: missing or invalid 'command' (or 'type') field`);
                 return;
             }
 
@@ -869,7 +894,7 @@ class SequenceRunner {
     }
 
     async executeStep(step, ctx) {
-        const action = step.command;
+        const action = step.command || step.type;
         switch (action) {
             // Use zone-based actions or sequences only
             case 'log':
@@ -1023,23 +1048,24 @@ class SequenceRunner {
                 return;
             }
             default:
-                // Check for zone commands: if step has 'zone' and 'command', route through adapter registry
-                if (step.zone && step.command) {
+                // Check for zone commands: if step has 'zone' and command/type, route through adapter registry
+                if (step.zone && action) {
                     try {
-                        // Extract options from step, excluding zone and command
-                        const { zone, command, ...options } = step;
-                        return this.zones.execute(zone, command, options);
+                        // Extract options from step, excluding zone and command/type
+                        const { zone, command, type, ...options } = step;
+                        const effectiveCommand = command || type;
+                        return this.zones.execute(zone, effectiveCommand, options);
                     } catch (error) {
-                        throw new Error(`Zone command '${step.command}' on '${step.zone}' failed: ${error.message}`);
+                        throw new Error(`Zone command '${action}' on '${step.zone}' failed: ${error.message}`);
                     }
                 }
 
                 // Generic multi-zone dispatch: if step defines zone(s) with an adapter command name that isn't explicitly handled above
                 const genericZones = this.extractZones(step);
-                if (genericZones.length > 0 && step.command) {
-                    const { zone, zones, targets, command, ...options } = step; // exclude legacy keys
+                if (genericZones.length > 0 && action) {
+                    const { zone, zones, targets, command, type, ...options } = step; // exclude legacy keys
                     for (const z of genericZones) {
-                        try { await this.zones.execute(z, command, options); } catch (error) { throw new Error(`Zone command '${command}' on '${z}' failed: ${error.message}`); }
+                        try { await this.zones.execute(z, action, options); } catch (error) { throw new Error(`Zone command '${action}' on '${z}' failed: ${error.message}`); }
                     }
                     return;
                 }

@@ -13,7 +13,19 @@ const minimist = require('minimist');
 
 async function main() {
   // Parse command line arguments
-  const argv = minimist(process.argv.slice(2));
+  const argv = minimist(process.argv.slice(2), {
+    alias: {
+      c: 'check'
+    },
+    boolean: ['check']
+  });
+
+  if (argv.check) {
+    const { validateEdnFile } = require('../tools/validate-edn');
+    const checkPath = argv.edn || path.join(__dirname, '..', 'config', 'game.edn');
+    const ok = validateEdnFile(checkPath);
+    process.exit(ok ? 0 : 1);
+  }
   
   // Check for --config option for INI file (infrastructure config)
   const iniConfigPath = argv.config || null;
@@ -260,19 +272,39 @@ async function main() {
       Object.entries(gameModes).forEach(([gameId, gameConfig]) => {
         const gameHints = gameConfig.hints || [];
         const combined = sm.getCombinedHints(gameHints);
+        const additionalPhases = Array.isArray(gameConfig['additional-phases'])
+          ? gameConfig['additional-phases']
+          : (Array.isArray(gameConfig.additionalPhases) ? gameConfig.additionalPhases : []);
 
         gamesForUI[gameId] = {
           shortLabel: gameConfig.shortLabel,
           gameLabel: gameConfig.gameLabel,
           description: gameConfig.description,
           hints: gameHints,
-          combinedHints: combined
+          combinedHints: combined,
+          additionalPhases
         };
       });
 
       const configToPublish = {
         games: gamesForUI,
-        hintTopic: uiTopics.hint
+        hintTopic: uiTopics.hint,
+        operatorControlDefaults: {
+          nonClosing: {
+            label: 'Abort',
+            command: 'abort',
+            style: 'danger',
+            confirm: true,
+            confirmText: 'Are you sure?'
+          },
+          closing: {
+            label: 'Reset',
+            command: 'reset',
+            style: 'warning',
+            confirm: false,
+            confirmText: ''
+          }
+        }
         // colorScenes removed - now hardcoded in UI
       };
 
@@ -370,6 +402,10 @@ async function main() {
               command: payload.command,
               error: error.message
             });
+            sm.runErrorSequence('command_execution_failed', {
+              command: payload.command,
+              error: error.message
+            }).catch(() => { /* best effort */ });
           });
         }
       } else if (topic === uiTopics.hint) {
@@ -443,6 +479,37 @@ async function main() {
     publishHintsRegistry();
     publishUiConfig();
     initializeTriggers(); // Re-subscribe to triggers after reconnect
+  });
+
+  mqtt.on('disconnected', () => {
+    sm.publishWarning('mqtt_disconnected', {
+      message: 'MQTT broker disconnected',
+      broker: cfg.global?.mqtt?.broker
+    });
+    sm.sequenceRunner.runControlSequence('mqtt-disconnected-sequence', {
+      gameMode: sm.gameType,
+      broker: cfg.global?.mqtt?.broker
+    }).catch(() => { /* best effort */ });
+  });
+
+  mqtt.on('reconnected', () => {
+    sm.publishEvent('mqtt_reconnected', {
+      broker: cfg.global?.mqtt?.broker
+    });
+    sm.sequenceRunner.runControlSequence('mqtt-reconnected-sequence', {
+      gameMode: sm.gameType,
+      broker: cfg.global?.mqtt?.broker
+    }).catch(() => { /* best effort */ });
+  });
+
+  mqtt.on('mqtt-error', (err) => {
+    sm.publishWarning('mqtt_error', {
+      message: `MQTT error: ${err && err.message ? err.message : 'unknown error'}`,
+      error: err && err.message ? err.message : 'unknown_error'
+    });
+    sm.runErrorSequence('mqtt_error', {
+      error: err && err.message ? err.message : 'unknown_error'
+    }).catch(() => { /* best effort */ });
   });
 
   process.on('SIGINT', () => {

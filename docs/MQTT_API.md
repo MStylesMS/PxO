@@ -106,6 +106,39 @@ Health and heartbeat information:
 
 Publish to: `{baseTopic}/commands`
 
+PxO accepts both modern short commands and legacy `*Game` aliases for compatibility.
+
+Preferred commands:
+- `start`
+- `pause`
+- `resume`
+- `solve`
+- `fail`
+- `abort`
+- `reset`
+- `triggerPhase`
+- `executeHint`
+- `emergencyStop`
+- `machineShutdown`
+- `machineReboot`
+- `restartAdapters`
+- `halt`
+- `shutdown`
+- `reboot`
+- `sleep`
+- `wake`
+
+Legacy aliases (still accepted):
+- `startGame`
+- `pauseGame`
+- `resumeGame`
+- `solveGame`
+- `failGame`
+- `abortGame`
+- `resetGame`
+- `emergency-stop`
+- `restart-adapters`
+
 ### Start Game
 
 ```json
@@ -168,6 +201,30 @@ mosquitto_pub -h localhost -t 'paradox/game/commands' \
 
 **Response**: Game transitions to `ready` state, all timers reset.
 
+### Abort Game (Immediate)
+
+```json
+{
+  "command": "abort"
+}
+```
+
+**Parameters**: None
+
+**Response**: Runs the current mode `abort` phase immediately (stop media/timers/safe state), then operator can proceed through reset flow.
+
+### Emergency Stop (Any Active State)
+
+```json
+{
+  "command": "emergencyStop"
+}
+```
+
+**Parameters**: None
+
+**Response**: Immediately preempts active phase flow, clears timers/schedules, performs hard cleanup, runs `emergency-stop-sequence`, and forces reset cleanup back to a safe ready state.
+
 ### Solve Game
 
 ```json
@@ -179,6 +236,20 @@ mosquitto_pub -h localhost -t 'paradox/game/commands' \
 **Parameters**: None
 
 **Response**: Game transitions to `solved` state (operator override).
+
+### Trigger Named Phase
+
+```json
+{
+  "command": "triggerPhase",
+  "phase": "operator-hold"
+}
+```
+
+**Parameters**:
+- `phase` (required): phase key defined in the active mode's phase map (including allowed global additional phases).
+
+**Response**: Transitions directly to the requested phase when valid.
 
 ### Deliver Hint
 
@@ -194,6 +265,9 @@ mosquitto_pub -h localhost -t 'paradox/game/commands' \
 
 **Response**: Executes hint (text/speech/video/action), publishes event.
 
+Note: The preferred runtime hint command is `executeHint` with one of `id`, `hintId`, or `hint`.
+`deliverHint` remains for compatibility documentation.
+
 ### Shutdown
 
 ```json
@@ -205,6 +279,90 @@ mosquitto_pub -h localhost -t 'paradox/game/commands' \
 **Parameters**: None
 
 **Response**: Graceful shutdown, publishes final status.
+
+### Reboot (Software Restart)
+
+```json
+{
+  "command": "reboot"
+}
+```
+
+**Parameters**: None
+
+**Response**: Executes software restart sequence (or fallback reboot behavior if sequence fails).
+
+### Halt (Software Halt)
+
+```json
+{
+  "command": "halt"
+}
+```
+
+**Parameters**: None
+
+**Response**: Executes graceful software halt sequence.
+
+### Sleep Props
+
+```json
+{
+  "command": "sleep"
+}
+```
+
+**Parameters**: None
+
+**Response**: Executes `props-sleep-sequence`.
+
+### Wake Props
+
+```json
+{
+  "command": "wake"
+}
+```
+
+**Parameters**: None
+
+**Response**: Executes `props-wake-sequence`.
+
+### Controller OS Shutdown
+
+```json
+{
+  "command": "machineShutdown"
+}
+```
+
+**Parameters**: None
+
+**Response**: Executes `machine-shutdown-sequence`.
+
+### Controller OS Reboot
+
+```json
+{
+  "command": "machineReboot"
+}
+```
+
+**Parameters**: None
+
+**Response**: Executes `machine-reboot-sequence`.
+
+### Restart Adapters
+
+```json
+{
+  "command": "restartAdapters"
+}
+```
+
+**Parameters**: None
+
+**Response**: Executes `restart-adapters` sequence.
 
 ---
 
@@ -218,6 +376,8 @@ Published to: `{baseTopic}/state`
 {
   "timestamp": "2025-10-24T10:30:00.000Z",
   "state": "gameplay",
+  "phaseType": "gameplay",
+  "isClosingPhase": false,
   "mode": "60min",
   "timeRemaining": 3245,
   "hintsDelivered": 2,
@@ -228,6 +388,8 @@ Published to: `{baseTopic}/state`
 **Fields**:
 - `timestamp`: ISO 8601 timestamp
 - `state`: Current state (`ready`, `intro`, `gameplay`, `paused`, `solved`, `failed`, `sleeping`)
+- `phaseType`: normalized phase family (`intro`, `gameplay`, `solved`, `failed`, etc.)
+- `isClosingPhase`: `true` for solved/failed-family closing phases (including additional phases with matching `phase-type`)
 - `mode`: Active game mode
 - `timeRemaining`: Seconds remaining (if in timed phase)
 - `hintsDelivered`: Number of hints delivered
@@ -630,12 +792,29 @@ client.on('message', (topic, message) => {
 | Command | Parameters | Description |
 |---------|------------|-------------|
 | `startGame` | `mode` (optional) | Start game |
+| `start` | `mode` (optional) | Start game |
 | `pauseGame` | none | Pause game |
+| `pause` | none | Pause game |
 | `resumeGame` | none | Resume game |
+| `resume` | none | Resume game |
 | `resetGame` | none | Reset to ready |
+| `reset` | none | Reset to ready |
 | `solveGame` | none | Mark solved |
+| `solve` | none | Mark solved |
+| `fail` / `failGame` | none | Mark failed |
+| `abort` / `abortGame` | none | Immediate abort phase |
+| `triggerPhase` | `phase` | Transition to named phase |
+| `executeHint` | `id` or `hintId` or `hint` | Execute hint by id |
 | `deliverHint` | `hintId` | Deliver hint |
+| `emergencyStop` / `emergency-stop` | none | Preemptive full cleanup + reset |
 | `shutdown` | none | Shutdown |
+| `reboot` | none | Restart PxO software |
+| `halt` | none | Halt PxO software |
+| `sleep` | none | Sleep props/adapters |
+| `wake` | none | Wake props/adapters |
+| `machineShutdown` | none | Shutdown controller OS |
+| `machineReboot` | none | Reboot controller OS |
+| `restartAdapters` | none | Restart adapters |
 
 ### PFX Lights Commands
 

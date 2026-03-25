@@ -1,6 +1,6 @@
 const PfxAdapter = require('./pfx');
 const LightsAdapter = require('./lights');
-const ClockAdapter = require('./clock');
+const PxcAdapter = require('./pxc');
 const log = require('../logger');
 
 /**
@@ -21,7 +21,7 @@ class AdapterRegistry {
         // Register supported adapter types
         this.registerAdapterType('pfx-media', PfxAdapter);
         this.registerAdapterType('pfx-lights', LightsAdapter);
-        this.registerAdapterType('pfx-clock', ClockAdapter);
+        this.registerAdapterType('pfx-clock', PxcAdapter);
         this.initializeZones(zonesConfig);
     }
 
@@ -222,7 +222,7 @@ class AdapterRegistry {
                 break;
 
             case 'pfx-clock':
-                // ClockAdapter expects { clock: { baseTopic } } and can accept extra options
+                // PxcAdapter expects { clock: { baseTopic } } and can accept extra options
                 topicsArg = { clock: { baseTopic } };
                 adapter = new AdapterClass(this.mqtt, topicsArg, {
                     provider: this.options.provider,

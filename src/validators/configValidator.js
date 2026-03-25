@@ -69,6 +69,10 @@ class ConfigValidator {
             this.validateSequences(global.sequences, 'global');
         }
 
+        if (global['additional-phases']) {
+            this.validateAdditionalPhaseRegistry(global['additional-phases'], 'global.additional-phases');
+        }
+
         // Check for prohibited sections
         this.validateProhibitedSections(global, 'global');
 
@@ -199,7 +203,8 @@ class ConfigValidator {
             }
 
             const templateKeys = this.extractTemplateKeys(sequenceDef);
-            const reserved = new Set(['id', 'type', 'sequence', 'description', 'parameters']);
+            // Allow UI metadata fields that are useful but not required as template placeholders.
+            const reserved = new Set(['id', 'type', 'sequence', 'description', 'parameters', 'zone']);
             const providedKeys = Object.keys(hintDef).filter(k => !reserved.has(k));
             const providedParamKeys = (type === 'sequence' && parameters && typeof parameters === 'object')
                 ? Object.keys(parameters)
@@ -279,6 +284,47 @@ class ConfigValidator {
             Object.entries(mode.phases).forEach(([phaseKey, phase]) => {
                 this.validatePhase(phase, `${modeKey}.${phaseKey}`);
             });
+        }
+
+        const modePhases = mode.phases && typeof mode.phases === 'object' ? mode.phases : {};
+        if (!modePhases.abort && !mode.abort) {
+            this.addError(
+                `Game mode '${modeKey}' must define an :abort phase (immediate operator reset path)`,
+                `game-mode.${modeKey}.phases.abort`
+            );
+        }
+        if (!modePhases.reset && !mode.reset) {
+            this.addError(
+                `Game mode '${modeKey}' must define a :reset phase`,
+                `game-mode.${modeKey}.phases.reset`
+            );
+        }
+
+        const modeAdditional = mode['additional-phases'] || mode.additionalPhases;
+        if (modeAdditional !== undefined) {
+            if (!Array.isArray(modeAdditional)) {
+                this.addError(
+                    `Game mode '${modeKey}' additional-phases must be a vector/array of phase keys`,
+                    `game-mode.${modeKey}.additional-phases`
+                );
+            } else {
+                const registry = globalConfig['additional-phases'] || {};
+                modeAdditional.forEach((phaseKey, idx) => {
+                    if (typeof phaseKey !== 'string') {
+                        this.addError(
+                            `Game mode '${modeKey}' additional-phases[${idx}] must be a string key`,
+                            `game-mode.${modeKey}.additional-phases[${idx}]`
+                        );
+                        return;
+                    }
+                    if (!registry[phaseKey]) {
+                        this.addError(
+                            `Game mode '${modeKey}' references additional phase '${phaseKey}' but it is not defined under global.additional-phases`,
+                            `game-mode.${modeKey}.additional-phases[${idx}]`
+                        );
+                    }
+                });
+            }
         }
 
         // Check for name conflicts within this mode
@@ -555,6 +601,44 @@ class ConfigValidator {
                 this.addError(`Phase ${phaseContext} sequence reference must be a string`);
             }
         }
+    }
+
+    validateAdditionalPhaseRegistry(additionalPhases, context) {
+        if (!additionalPhases || typeof additionalPhases !== 'object' || Array.isArray(additionalPhases)) {
+            this.addError(`Additional phase registry at ${context} must be a map/object`, context);
+            return;
+        }
+
+        Object.entries(additionalPhases).forEach(([phaseName, phaseDef]) => {
+            const phaseContext = `${context}.${phaseName}`;
+            if (!phaseDef || typeof phaseDef !== 'object' || Array.isArray(phaseDef)) {
+                this.addError(`Additional phase '${phaseName}' must be an object`, phaseContext);
+                return;
+            }
+
+            const phaseType = phaseDef['phase-type'] || phaseDef.phaseType;
+            if (!phaseType || typeof phaseType !== 'string') {
+                this.addError(`Additional phase '${phaseName}' must define string :phase-type`, phaseContext);
+                return;
+            }
+
+            const normalized = String(phaseType).replace(/^:/, '').toLowerCase();
+            if (!['solved', 'failed'].includes(normalized)) {
+                this.addError(
+                    `Additional phase '${phaseName}' has invalid phase-type '${phaseType}'. Supported values: :solved, :failed`,
+                    phaseContext
+                );
+            }
+
+            if (phaseDef.sequence === undefined && phaseDef.schedule === undefined) {
+                this.addError(
+                    `Additional phase '${phaseName}' must define either :sequence or :schedule`,
+                    phaseContext
+                );
+            }
+
+            this.validatePhase(phaseDef, phaseContext);
+        });
     }
 
     /**

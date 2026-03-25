@@ -98,7 +98,20 @@ class ModularConfigAdapter {
         const gameplay = g.gameplay || g.game || phases.gameplay;
         const solved = g.solved || g.win || phases.solved;
         const failed = g.failed || g.fail || phases.failed;
+        const abort = g.abort || phases.abort;
         const reset = g.reset || phases.reset;
+        const additionalPhases = Array.isArray(g['additional-phases'])
+          ? g['additional-phases'].slice()
+          : (Array.isArray(g.additionalPhases) ? g.additionalPhases.slice() : []);
+
+        const normalizedPhases = {
+          intro: normalizePhase(intro),
+          gameplay: normalizePhase(gameplay),
+          solved: normalizePhase(solved),
+          failed: normalizePhase(failed),
+          abort: normalizePhase(abort),
+          reset: normalizePhase(reset)
+        };
 
         out[mode] = {
           // UI properties for the control interface
@@ -125,11 +138,15 @@ class ModularConfigAdapter {
           // Preserve per-mode sequence overrides for resolver to find (e.g., start-sequence)
           sequences: g.sequences || undefined,
           // Pass through phase objects for state machine to execute sequences and schedules
-          intro: normalizePhase(intro),
-          gameplay: normalizePhase(gameplay),
-          solved: normalizePhase(solved),
-          failed: normalizePhase(failed),
-          reset: normalizePhase(reset)
+          intro: normalizedPhases.intro,
+          gameplay: normalizedPhases.gameplay,
+          solved: normalizedPhases.solved,
+          failed: normalizedPhases.failed,
+          abort: normalizedPhases.abort,
+          reset: normalizedPhases.reset,
+          phases: Object.fromEntries(Object.entries(normalizedPhases).filter(([, value]) => value !== undefined)),
+          additionalPhases,
+          'additional-phases': additionalPhases
         };
       });
       return out;
@@ -200,6 +217,8 @@ class ModularConfigAdapter {
         // are now promoted to top-level keys :system-sequences and :command-sequences.
         // Preserve both locations for backward compatibility.
         'system-sequences': modular.global['system-sequences'] || modular.global.sequences || {},
+        // Optional registry of reusable mode opt-in closing phases.
+        'additional-phases': modular.global['additional-phases'] || {},
         // Expose command-sequences for newer EDN layout and fall back to legacy nested game-actions
         'command-sequences': modular.global['command-sequences'] || (modular.global.sequences && modular.global.sequences['game-actions']) || {},
         // Also expose sequences directly for backward compatibility with code expecting cfg.global.sequences

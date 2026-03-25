@@ -612,6 +612,13 @@ Published to: `{baseTopic}/commands`
 | `solveGame` | none | Mark game as solved (operator override) |
 | `deliverHint` | `hintId` | Deliver specific hint |
 | `shutdown` | none | Graceful engine shutdown |
+| `reboot` | none | Graceful PxO software restart |
+| `halt` | none | Graceful PxO software halt |
+| `sleep` | none | Put props/adapters into sleep mode |
+| `wake` | none | Wake props/adapters |
+| `machineShutdown` | none | Shutdown host OS/controller |
+| `machineReboot` | none | Reboot host OS/controller |
+| `restartAdapters` | none | Restart prop/media adapters |
 
 Control command sequence hooks (resolved from `global.system-sequences`):
 - `shutdown` → `software-shutdown-sequence` (fallback: imperative software shutdown)
@@ -620,6 +627,8 @@ Control command sequence hooks (resolved from `global.system-sequences`):
 - `sleep` → `props-sleep-sequence`
 - `wake` → `props-wake-sequence`
 - `machineShutdown` → `machine-shutdown-sequence` (OS-level shutdown)
+- `machineReboot` → `machine-reboot-sequence` (OS-level reboot)
+- `restartAdapters`/`restart-adapters` → `restart-adapters`
 
 ### Game State Publishing
 

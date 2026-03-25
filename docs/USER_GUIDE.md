@@ -509,6 +509,42 @@ mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
   -m '{"command":"resetGame"}'
 ```
 
+**Emergency/Lifecycle Controls**:
+
+```bash
+# Halt PxO software
+mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+  -m '{"command":"halt"}'
+
+# Restart PxO software
+mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+  -m '{"command":"reboot"}'
+
+# Shutdown PxO software
+mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+  -m '{"command":"shutdown"}'
+
+# Put props/adapters to sleep
+mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+  -m '{"command":"sleep"}'
+
+# Wake props/adapters
+mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+  -m '{"command":"wake"}'
+
+# Reboot controller OS
+mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+  -m '{"command":"machineReboot"}'
+
+# Shutdown controller OS
+mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+  -m '{"command":"machineShutdown"}'
+
+# Restart adapters
+mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+  -m '{"command":"restartAdapters"}'
+```
+
 ---
 
 ## Advanced Topics

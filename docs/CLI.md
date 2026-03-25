@@ -25,13 +25,15 @@ Specifies the path to the EDN game configuration file.
 **Purpose**: Game logic, sequences, cues, commands, hints, modes
 
 **Example**:
+
 ```bash
 node src/game.js --edn /path/to/game.edn
 ```
 
 **Default**: `../config/game.edn` (relative to PxO directory)
 
-**When to use**: 
+**When to use**:
+
 - Specifying a custom game configuration
 - Running different game scenarios
 - Testing new game content
@@ -45,16 +47,19 @@ Specifies the path to the INI system configuration file.
 **Purpose**: MQTT broker, logging, system settings
 
 **Example**:
+
 ```bash
 node src/game.js --config /etc/paradox/pxo.ini
 ```
 
 **Default**: Searches in order:
+
 1. `./pxo.ini`
 2. `./config/pxo.ini`
 3. `/etc/paradox/pxo.ini`
 
 **When to use**:
+
 - Custom MQTT broker settings
 - Different logging configuration
 - Production vs development environments
@@ -68,11 +73,13 @@ node src/game.js --config /etc/paradox/pxo.ini
 Specifies the game mode to run.
 
 **Example**:
+
 ```bash
 node src/game.js --mode demo
 ```
 
 **Common modes**:
+
 - `60min` — Full 60-minute game
 - `30min` — Shorter 30-minute game
 - `demo` — Quick demo (5-10 minutes)
@@ -80,6 +87,7 @@ node src/game.js --mode demo
 **Default**: Defined by `:default-mode` in EDN config
 
 **When to use**:
+
 - Testing different game durations
 - Running demos for visitors
 - Override default mode at runtime
@@ -93,6 +101,7 @@ node src/game.js --mode demo
 Forces JSON configuration format instead of EDN.
 
 **Example**:
+
 ```bash
 node src/game.js --json
 ```
@@ -100,6 +109,7 @@ node src/game.js --json
 **Default**: EDN format
 
 **When to use**:
+
 - Legacy configurations
 - Systems that can't parse EDN
 
@@ -108,6 +118,25 @@ node src/game.js --json
 ---
 
 ### Other Options
+
+#### `--check`, `-c`
+
+Validate EDN configuration and exit without starting the game runtime.
+
+**Examples**:
+
+```bash
+# Check default config (config/game.edn)
+node src/game.js --check
+
+# Check a specific EDN file
+node src/game.js -c --edn /path/to/game.edn
+```
+
+**Exit code**:
+
+- `0` = pass (no errors)
+- `1` = fail (one or more errors)
 
 #### `--help`
 
@@ -132,7 +161,7 @@ node src/game.js --version
 Environment variables can override configuration settings:
 
 | Variable | Description | Example |
-|----------|-------------|---------|
+| -------- | ----------- | ------- |
 | `MQTT_BROKER` | MQTT broker address | `MQTT_BROKER=192.168.1.100` |
 | `MQTT_PORT` | MQTT broker port | `MQTT_PORT=1883` |
 | `LOG_LEVEL` | Logging level | `LOG_LEVEL=debug` |
@@ -141,6 +170,7 @@ Environment variables can override configuration settings:
 | `CONFIG_FORMAT` | Config format (json/edn) | `CONFIG_FORMAT=edn` |
 
 **Example**:
+
 ```bash
 MQTT_BROKER=192.168.1.50 LOG_LEVEL=debug node src/game.js --mode demo
 ```
@@ -157,6 +187,7 @@ node src/game.js
 ```
 
 **Loads**:
+
 - EDN: `../config/game.edn`
 - INI: `./config/pxo.ini` or `/etc/paradox/pxo.ini`
 - Mode: Defined in EDN config (`:default-mode`)
@@ -213,6 +244,7 @@ Settings are resolved in this order (highest priority first):
 5. **Built-in defaults** — Hardcoded fallbacks
 
 **Example**:
+
 ```bash
 # INI file says: log_level = info
 # But environment overrides:
@@ -269,6 +301,7 @@ MQTT_PORT=1884 node src/game.js --edn /opt/paradox/rooms/game2/game.edn &
 **Problem**: EDN config is missing `:global` or `:game-modes`
 
 **Solution**: Use modular config format:
+
 ```clojure
 {
   :global {
@@ -287,6 +320,7 @@ MQTT_PORT=1884 node src/game.js --edn /opt/paradox/rooms/game2/game.edn &
 **Problem**: Running from wrong directory
 
 **Solution**: Run from PxO root or use absolute paths:
+
 ```bash
 cd /opt/paradox/pxo
 node src/game.js
@@ -297,6 +331,7 @@ node src/game.js
 **Problem**: MQTT broker not running or wrong address
 
 **Solution**: Check broker and override if needed:
+
 ```bash
 # Check if Mosquitto is running
 systemctl status mosquitto

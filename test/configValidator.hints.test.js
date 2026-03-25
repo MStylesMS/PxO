@@ -25,6 +25,12 @@ describe('ConfigValidator hint directives', () => {
                             schedule: [
                                 { at: 30, 'play-hint': 'hint-01' }
                             ]
+                        },
+                        abort: {
+                            sequence: 'demo-abort'
+                        },
+                        reset: {
+                            sequence: 'demo-reset'
                         }
                     }
                 }
@@ -61,7 +67,11 @@ describe('ConfigValidator hint directives', () => {
             'game-modes': {
                 demo: {
                     'short-label': 'Demo',
-                    'game-label': 'Demo Mode'
+                    'game-label': 'Demo Mode',
+                    phases: {
+                        abort: { sequence: 'demo-abort' },
+                        reset: { sequence: 'demo-reset' }
+                    }
                 }
             }
         };
@@ -91,7 +101,11 @@ describe('ConfigValidator hint directives', () => {
             'game-modes': {
                 demo: {
                     'short-label': 'Demo',
-                    'game-label': 'Demo Mode'
+                    'game-label': 'Demo Mode',
+                    phases: {
+                        abort: { sequence: 'demo-abort' },
+                        reset: { sequence: 'demo-reset' }
+                    }
                 }
             }
         };
@@ -125,7 +139,11 @@ describe('ConfigValidator hint directives', () => {
             'game-modes': {
                 demo: {
                     'short-label': 'Demo',
-                    'game-label': 'Demo Mode'
+                    'game-label': 'Demo Mode',
+                    phases: {
+                        abort: { sequence: 'demo-abort' },
+                        reset: { sequence: 'demo-reset' }
+                    }
                 }
             }
         };
@@ -157,7 +175,11 @@ describe('ConfigValidator hint directives', () => {
             'game-modes': {
                 demo: {
                     'short-label': 'Demo',
-                    'game-label': 'Demo Mode'
+                    'game-label': 'Demo Mode',
+                    phases: {
+                        abort: { sequence: 'demo-abort' },
+                        reset: { sequence: 'demo-reset' }
+                    }
                 }
             }
         };
@@ -195,7 +217,11 @@ describe('ConfigValidator hint directives', () => {
             'game-modes': {
                 demo: {
                     'short-label': 'Demo',
-                    'game-label': 'Demo Mode'
+                    'game-label': 'Demo Mode',
+                    phases: {
+                        abort: { sequence: 'demo-abort' },
+                        reset: { sequence: 'demo-reset' }
+                    }
                 }
             }
         };

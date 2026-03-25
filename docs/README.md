@@ -100,7 +100,7 @@ node src/game.js --config example-game.edn --mode demo
 
 ### State Machine
 
-```
+```text
 ready → intro → gameplay → paused/solved/failed → sleeping/resetting
 ```
 
@@ -108,7 +108,7 @@ Each state has explicit entry/exit handlers and allowed transitions.
 
 ### Three-Tier Configuration Model
 
-```
+```text
 Commands (atomic operations)
     ↓
 Cues (named shortcuts, fire-and-forget)
@@ -127,11 +127,13 @@ PxO uses explicit names for lifecycle control sequences in `:system-sequences`:
 This separates software process controls from OS power controls and prop/adapters sleep/wake controls.
 
 **Commands** target specific zones:
+
 ```clojure
 {:zone "display" :command "playVideo" :file "intro.mp4"}
 ```
 
 **Cues** are named shortcuts:
+
 ```clojure
 :cues {
   :lights-red {:zone "lights" :command "scene" :name "red"}
@@ -139,6 +141,7 @@ This separates software process controls from OS power controls and prop/adapter
 ```
 
 **Sequences** provide timeline-based execution:
+
 ```clojure
 :sequences {
   :intro {
@@ -158,14 +161,15 @@ For browser-backed overlays (clock/UI), use `enableBrowser` for fire-and-forget 
 Each zone is an independent adapter that communicates via MQTT:
 
 | Zone Type | Purpose | Example Topics |
-|-----------|---------|----------------|
+| ----------- | --------- | ---------------- |
 | `pfx-lights` | Lighting control | `paradox/game/lights/commands` |
 | `pfx-media` | Video/audio playback | `paradox/game/display/commands` |
 | `houdini-clock` | Countdown timer UI | `paradox/game/clock/commands` |
 | `system` | System commands | `paradox/game/system/commands` |
 
 **MQTT Communication Pattern**:
-```
+
+```text
 {baseTopic}/commands    # Incoming commands
 {baseTopic}/state       # Zone state updates
 {baseTopic}/status      # Health monitoring
@@ -203,6 +207,12 @@ npm run test:e2e         # End-to-end smoke tests
 
 # Validate config file
 npm run validate -- /path/to/game.edn
+
+# Validate EDN config and exit (no runtime start)
+node src/game.js --check --edn /path/to/game.edn
+
+# Direct validator script (same validation engine)
+npm run validate:edn -- /path/to/game.edn
 ```
 
 ### Adding a New Zone Adapter
@@ -318,8 +328,10 @@ mosquitto_pub -h localhost -t 'paradox/game/commands' \
   :hint-03 {:type "text" :sequence "hint-text-seq" :text "Follow the signal chain" :duration 15}
   :hint-04 {:type "sequence" :sequence "hint-scene-seq" :parameters {:light "red" :speed "fast" :option 7}}
 }
+```
 
 Hint resolution behavior:
+
 - Global definitions come from `global.hints`.
 - `game-modes.<mode>.hints` entries are evaluated first (in listed order).
 - String entries matching global hint ids reference those global definitions.
@@ -327,6 +339,7 @@ Hint resolution behavior:
 - Any remaining global hints are appended after mode entries.
 - Final list is deduplicated by normalized hint text/display label.
 
+```clojure
 :command-sequences {
   :hint-text-seq {:sequence [{:zone "tv" :command "playAudioFX" :file :hint-bell}
                              {:zone "clock" :command "hint" :text "{{text}}" :duration "{{duration}}"}]}
@@ -340,10 +353,12 @@ Hint resolution behavior:
 ```
 
 Action hint status:
+
 - `type: "action"` is reserved for a future feature.
 - Current runtime behavior is warning-only (`hint_action_not_implemented`) and no action is executed.
 
 Text/sequence hint status:
+
 - `type: "text"` is user-editable in the UI and must define `:sequence` in `:command-sequences`.
 - `type: "sequence"` is user-triggerable but non-editable in the UI.
 - Sequence hints can pass values via `:parameters {}` plus direct fields.

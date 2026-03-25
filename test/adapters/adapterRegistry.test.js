@@ -1,7 +1,7 @@
 const AdapterRegistry = require('../../src/adapters/adapterRegistry');
 const PfxAdapter = require('../../src/adapters/pfx');
 const LightsAdapter = require('../../src/adapters/lights');
-const ClockAdapter = require('../../src/adapters/clock');
+const PxcAdapter = require('../../src/adapters/pxc');
 
 describe('AdapterRegistry', () => {
     let mockMqtt;
@@ -66,7 +66,7 @@ describe('AdapterRegistry', () => {
             registry = new AdapterRegistry(mockMqtt, zonesConfig);
 
             const adapter = registry.getZone('clock');
-            expect(adapter).toBeInstanceOf(ClockAdapter);
+            expect(adapter).toBeInstanceOf(PxcAdapter);
             expect(adapter.zoneName).toBe('clock');
             expect(adapter.zoneType).toBe('pfx-clock');
         });
