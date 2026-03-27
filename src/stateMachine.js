@@ -796,14 +796,21 @@ class GameStateMachine extends EventEmitter {
           }
         }
 
-        // Check :fire-seq references in phase schedules
-        if (phaseConfig?.schedule) {
-          const fireSeqRefs = extractFireSeqRefs(phaseConfig.schedule);
-          fireSeqRefs.forEach(seqName => {
-            if (this.globalSequences[seqName]) {
-              referencedGlobalSequences.add(seqName);
-            }
-          });
+        // Check named phase schedule references
+        if (phaseConfig?.schedule && typeof phaseConfig.schedule === 'string') {
+          const scheduleName = phaseConfig.schedule;
+          const resolvedSchedule = this.sequenceRunner.resolveSequence(scheduleName, gameType);
+          if (!resolvedSchedule) {
+            errors.push(`Game mode '${gameType}' phase '${phaseName}' references missing schedule '${scheduleName}'.`);
+          } else {
+            if (this.globalSequences[scheduleName]) referencedGlobalSequences.add(scheduleName);
+            const fireSeqRefs = extractFireSeqRefs(resolvedSchedule.schedule || []);
+            fireSeqRefs.forEach(seqName => {
+              if (this.globalSequences[seqName]) {
+                referencedGlobalSequences.add(seqName);
+              }
+            });
+          }
         }
       }
     }
@@ -877,12 +884,12 @@ class GameStateMachine extends EventEmitter {
   }
 
   /**
-   * Validates the structure of a single phase configuration.
-   * A phase must have exactly one of :sequence or :schedule.
-   * @param {object} phaseConfig The configuration object for the phase.
-   * @param {string} phaseName The name of the phase for error reporting.
-   * @param {string} gameType The game mode for error reporting.
-   * @returns {{errors: string[], warnings: string[]}} Validation results.
+   * Validates strict phase structure.
+   * Rules:
+   * - Exactly one of :sequence or :schedule must be defined.
+   * - :sequence must be a string name and phase must define numeric :duration/:seconds.
+   * - :schedule must be a string name that resolves to a schedule definition with its own duration.
+   * - When :schedule is used, phase-level :duration/:seconds is invalid.
    */
   validatePhaseStructure(phaseConfig, phaseName = 'unknown', gameType = 'unknown') {
     const errors = [];
@@ -898,69 +905,114 @@ class GameStateMachine extends EventEmitter {
 
     if (!hasSequence && !hasSchedule) {
       warnings.push(`Phase '${phaseName}' has neither :sequence nor :schedule. It will do nothing.`);
+      return { errors, warnings };
     }
 
-    // Rule 2: Validate sequence reference if it's a string (named reference)
-    if (hasSequence && typeof phaseConfig.sequence === 'string') {
+    if (hasSequence && hasSchedule) {
+      errors.push(`Phase '${phaseName}' defines both :sequence and :schedule. Exactly one is allowed.`);
+      return { errors, warnings };
+    }
+
+    const phaseDurationRaw = phaseConfig.seconds !== undefined ? phaseConfig.seconds : phaseConfig.duration;
+    const phaseDurationNum = Number(phaseDurationRaw);
+    const hasPhaseDuration = phaseDurationRaw !== undefined && Number.isFinite(phaseDurationNum) && phaseDurationNum >= 0;
+
+    if (hasSequence) {
+      if (typeof phaseConfig.sequence !== 'string') {
+        errors.push(`Phase '${phaseName}' must set :sequence to a string sequence name.`);
+        return { errors, warnings };
+      }
+
       const sequenceName = phaseConfig.sequence;
       const resolved = this.sequenceRunner?.resolveSequence(sequenceName, gameType);
       if (!resolved) {
         errors.push(`Phase '${phaseName}' references missing sequence '${sequenceName}'. Check global sequences or sequence name.`);
+      } else if (Array.isArray(resolved.schedule)) {
+        errors.push(`Phase '${phaseName}' sequence '${sequenceName}' resolves to a schedule. Use :schedule "${sequenceName}" instead.`);
       }
+
+      if (!hasPhaseDuration) {
+        errors.push(`Phase '${phaseName}' uses :sequence and must define numeric :duration (or :seconds).`);
+      }
+
+      return { errors, warnings };
     }
 
-    // Rule 3: Validate sequence array if it's inline
-    if (hasSequence && Array.isArray(phaseConfig.sequence)) {
-      if (phaseConfig.sequence.length === 0) {
-        warnings.push(`Phase '${phaseName}' has empty sequence array.`);
-      } else {
-        // Basic validation of sequence steps
-        for (let i = 0; i < phaseConfig.sequence.length; i++) {
-          const step = phaseConfig.sequence[i];
-          if (!step || typeof step !== 'object') {
-            errors.push(`Phase '${phaseName}' sequence step ${i + 1} must be an object.`);
-            continue;
-          }
-          const hasCommand = typeof step.command === 'string';
-          const hasAction = typeof step.action === 'string';
-          const hasFire = step.fire !== undefined;
-          const hasFireCue = step['fire-cue'] !== undefined;
-          const hasFireSeq = step['fire-seq'] !== undefined;
-          const hasWait = step.wait !== undefined || step.command === 'wait';
-
-          if (!hasCommand && !hasAction && !hasFire && !hasFireCue && !hasFireSeq && !hasWait) {
-            errors.push(`Phase '${phaseName}' sequence step ${i + 1} missing 'command', 'action', 'fire', 'fire-cue', or 'fire-seq' field.`);
-          }
-        }
-      }
+    // hasSchedule
+    if (typeof phaseConfig.schedule !== 'string') {
+      errors.push(`Phase '${phaseName}' must set :schedule to a string schedule name.`);
+      return { errors, warnings };
     }
 
-    // Rule 4: Validate schedule array if present
-    if (hasSchedule) {
-      if (!Array.isArray(phaseConfig.schedule)) {
-        errors.push(`Phase '${phaseName}' schedule must be an array if present.`);
-      } else if (phaseConfig.schedule.length === 0) {
-        warnings.push(`Phase '${phaseName}' has empty schedule array.`);
-      } else {
-        for (let i = 0; i < phaseConfig.schedule.length; i++) {
-          const scheduleItem = phaseConfig.schedule[i];
-          if (!scheduleItem || typeof scheduleItem !== 'object') {
-            errors.push(`Phase '${phaseName}' schedule item ${i + 1} must be an object.`);
-            continue;
-          }
-          if (typeof scheduleItem.at !== 'number' || scheduleItem.at < 0) {
-            errors.push(`Phase '${phaseName}' schedule item ${i + 1} must have valid 'at' time (non-negative number).`);
-          }
-        }
-      }
+    if (phaseConfig.duration !== undefined || phaseConfig.seconds !== undefined) {
+      errors.push(`Phase '${phaseName}' uses :schedule and must not define :duration/:seconds. Duration is inherited from the schedule definition.`);
+    }
 
-      const hasDuration = typeof phaseConfig.duration === 'number' || typeof phaseConfig.seconds === 'number';
-      if (!hasDuration) {
-        warnings.push(`Phase '${phaseName}' defines a schedule but no numeric duration. Schedule entries may not execute.`);
-      }
+    const scheduleName = phaseConfig.schedule;
+    const resolvedSchedule = this.sequenceRunner?.resolveSequence(scheduleName, gameType);
+    if (!resolvedSchedule) {
+      errors.push(`Phase '${phaseName}' references missing schedule '${scheduleName}'.`);
+      return { errors, warnings };
+    }
+
+    if (!Array.isArray(resolvedSchedule.schedule)) {
+      errors.push(`Phase '${phaseName}' schedule '${scheduleName}' must resolve to a definition containing :schedule [].`);
+      return { errors, warnings };
+    }
+
+    const scheduleDurationRaw = resolvedSchedule.seconds !== undefined ? resolvedSchedule.seconds : resolvedSchedule.duration;
+    const scheduleDuration = Number(scheduleDurationRaw);
+    if (!(Number.isFinite(scheduleDuration) && scheduleDuration >= 0)) {
+      errors.push(`Phase '${phaseName}' schedule '${scheduleName}' must define numeric :duration (or :seconds).`);
     }
 
     return { errors, warnings };
+  }
+
+  resolvePhaseScheduleDefinition(phaseConfig, phaseName = 'unknown') {
+    if (!phaseConfig || typeof phaseConfig.schedule !== 'string') {
+      return { ok: false, error: 'invalid_schedule_reference' };
+    }
+
+    const scheduleName = phaseConfig.schedule;
+    let resolved;
+    try {
+      resolved = this.sequenceRunner.resolveSequence(scheduleName, this.gameType);
+    } catch (_) {
+      resolved = undefined;
+    }
+
+    if (!resolved) {
+      return { ok: false, error: 'schedule_not_found', scheduleName };
+    }
+
+    if (!Array.isArray(resolved.schedule)) {
+      return { ok: false, error: 'schedule_definition_invalid', scheduleName };
+    }
+
+    const raw = resolved.seconds !== undefined ? resolved.seconds : resolved.duration;
+    const duration = Number(raw);
+    if (!(Number.isFinite(duration) && duration >= 0)) {
+      return { ok: false, error: 'schedule_duration_invalid', scheduleName };
+    }
+
+    if (phaseConfig.duration !== undefined || phaseConfig.seconds !== undefined) {
+      const message = `Phase '${phaseName}' uses schedule '${scheduleName}' and also defines :duration/:seconds; phase duration is invalid in schedule mode.`;
+      log.error(message);
+      this.publishWarning('phase_schedule_duration_conflict', {
+        phase: phaseName,
+        schedule: scheduleName,
+        message
+      });
+      return { ok: false, error: 'phase_duration_with_schedule', scheduleName };
+    }
+
+    return {
+      ok: true,
+      scheduleName,
+      schedule: resolved.schedule,
+      duration: Math.round(duration)
+    };
   }
 
   /**
@@ -998,7 +1050,7 @@ class GameStateMachine extends EventEmitter {
     this.currentPhase = phaseName;
     this.currentPhaseConfig = phaseConfig;
 
-    const duration = this.calculatePhaseDuration(phaseConfig);
+    const duration = this.calculatePhaseDuration(phaseConfig, phaseName);
     if (phaseName === 'gameplay') {
       this.remaining = duration;
     } else if (this._isClosingPhase(phaseName)) {
@@ -2025,97 +2077,70 @@ class GameStateMachine extends EventEmitter {
     return;
   }
 
-  // Calculate phase duration from explicit duration or sequence estimate
-  calculatePhaseDuration(phaseConfig) {
+  // Calculate phase duration based on strict mode rules.
+  calculatePhaseDuration(phaseConfig, phaseName = 'unknown') {
     if (!phaseConfig) return 0;
-    // Handle transformed config structure where duration is stored as 'seconds'
-    if (phaseConfig.seconds !== undefined) {
-      const n = Number(phaseConfig.seconds);
-      if (Number.isFinite(n) && n > 0) return Math.round(n);
+
+    if (phaseConfig.schedule !== undefined) {
+      const resolved = this.resolvePhaseScheduleDefinition(phaseConfig, phaseName);
+      if (resolved.ok) return resolved.duration;
+      return 0;
     }
-    // Fallback to original structure for backward compatibility
-    if (phaseConfig.duration !== undefined) {
-      const n = Number(phaseConfig.duration);
-      if (Number.isFinite(n) && n > 0) return Math.round(n);
+
+    if (phaseConfig.sequence !== undefined) {
+      const raw = phaseConfig.seconds !== undefined ? phaseConfig.seconds : phaseConfig.duration;
+      const n = Number(raw);
+      if (Number.isFinite(n) && n >= 0) return Math.round(n);
+      return 0;
     }
-    if (phaseConfig.sequence) {
-      // If sequence is a name, resolve it first
-      const seqRef = phaseConfig.sequence;
-      let seqDef;
-      try {
-        seqDef = this.sequenceRunner.resolveSequence(seqRef, this.gameType);
-      } catch (_) { seqDef = undefined; }
-      if (seqDef) return this.sequenceRunner.estimateDuration(seqDef);
-    }
+
     return 0;
   }
 
-  // Execute a phase: run sequence first (if present), then schedule, otherwise wait for duration
+  // Execute a phase in strict mode.
   async executePhase(phaseKey, phaseConfig) {
-    // Run sequence first if present
-    if (phaseConfig && phaseConfig.sequence) {
+    if (!phaseConfig) return;
+
+    // Sequence mode
+    if (phaseConfig.sequence !== undefined) {
       try {
-        if (typeof phaseConfig.sequence === 'string') {
-          const resolved = this.sequenceRunner.resolveSequence(phaseConfig.sequence, this.gameType);
-
-          // Allow reusable named schedules to be referenced by phase :sequence.
-          if (resolved && Array.isArray(resolved.schedule)) {
-            let scheduleDuration = typeof resolved.duration === 'number' ? resolved.duration : undefined;
-            if (scheduleDuration === undefined && typeof resolved.seconds === 'number') {
-              scheduleDuration = resolved.seconds;
-            }
-            if (scheduleDuration === undefined) {
-              scheduleDuration = typeof phaseConfig.duration === 'number'
-                ? phaseConfig.duration
-                : (typeof phaseConfig.seconds === 'number' ? phaseConfig.seconds : undefined);
-            }
-
-            if (typeof scheduleDuration === 'number' && scheduleDuration > 0) {
-              await this.executeSchedule(resolved.schedule, scheduleDuration, phaseKey);
-              return;
-            }
-          }
-
-          // Also allow timeline-style named sequences for phase execution.
-          if (resolved && Array.isArray(resolved.timeline) && typeof resolved.duration === 'number') {
-            this.scheduleSequenceTimeline(resolved, `${this.gameType || 'game'}:${phaseKey}`);
-            return;
-          }
-
-          await this.sequenceRunner.runControlSequence(phaseConfig.sequence, { gameMode: this.gameType });
-        } else if (Array.isArray(phaseConfig.sequence) || typeof phaseConfig.sequence === 'object') {
-          const seqDef = Array.isArray(phaseConfig.sequence) ? { sequence: phaseConfig.sequence } : phaseConfig.sequence;
-          await this.sequenceRunner.runInlineSequence(`${this.gameType}:${phaseKey}`, seqDef, { gameMode: this.gameType });
+        if (typeof phaseConfig.sequence !== 'string') {
+          const message = `Phase '${phaseKey}' must use :sequence "name" syntax in strict mode.`;
+          log.error(message);
+          this.publishWarning('phase_sequence_invalid_type', { phase: phaseKey, message });
+          return;
         }
+        await this.sequenceRunner.runControlSequence(phaseConfig.sequence, { gameMode: this.gameType });
       } catch (e) {
         log.warn(`executePhase: sequence execution failed for ${phaseKey}: ${e.message}`);
       }
-    }
 
-    // Then register schedule with unified timer if present (non-blocking)
-    if (phaseConfig && phaseConfig.schedule) {
-      let scheduleDuration = typeof phaseConfig.duration === 'number' ? phaseConfig.duration : undefined;
-      if (scheduleDuration === undefined && typeof phaseConfig.seconds === 'number') {
-        scheduleDuration = phaseConfig.seconds;
-      }
-      if (scheduleDuration === undefined) {
-        scheduleDuration = this.calculatePhaseDuration(phaseConfig);
-      }
-
-      if (typeof scheduleDuration === 'number' && scheduleDuration > 0) {
-        await this.executeSchedule(phaseConfig.schedule, scheduleDuration, phaseKey);
-        return;
-      }
-    }
-
-    // If no schedule but has duration - wait (blocking) for the phase to complete
-    if (phaseConfig) {
-      const waitDuration = typeof phaseConfig.duration === 'number'
-        ? phaseConfig.duration
-        : (typeof phaseConfig.seconds === 'number' ? phaseConfig.seconds : undefined);
-      if (typeof waitDuration === 'number' && waitDuration > 0) {
+      // Sequence phase duration comes from phase-level :duration/:seconds
+      const waitDurationRaw = phaseConfig.seconds !== undefined ? phaseConfig.seconds : phaseConfig.duration;
+      const waitDuration = Number(waitDurationRaw);
+      if (Number.isFinite(waitDuration) && waitDuration > 0) {
         await this.wait(waitDuration * 1000);
       }
+      return;
+    }
+
+    // Schedule mode
+    if (phaseConfig.schedule !== undefined) {
+      const resolved = this.resolvePhaseScheduleDefinition(phaseConfig, phaseKey);
+      if (!resolved.ok) {
+        const message = `Phase '${phaseKey}' has invalid schedule configuration (${resolved.error}).`;
+        log.error(message);
+        this.publishWarning('phase_schedule_invalid', {
+          phase: phaseKey,
+          schedule: resolved.scheduleName,
+          error: resolved.error,
+          message
+        });
+        return;
+      }
+
+      await this.executeSchedule(resolved.schedule, resolved.duration, phaseKey);
+      return;
     }
   }
 

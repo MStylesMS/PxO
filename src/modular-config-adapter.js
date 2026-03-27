@@ -85,7 +85,7 @@ class ModularConfigAdapter {
             }
           }
 
-          if (Array.isArray(p.schedule)) {
+          if (p.schedule !== undefined && (typeof p.schedule === 'string' || Array.isArray(p.schedule))) {
             phase.schedule = p.schedule;
           }
 

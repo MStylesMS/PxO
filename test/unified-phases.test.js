@@ -33,37 +33,54 @@ describe('Unified Sequence and Schedule System', () => {
         assert(res.ok === true, 'sequence did not complete successfully');
     });
 
-    test('stateMachine.executePhase runs named sequence then schedule', async () => {
+    test('stateMachine.executePhase runs named sequence and waits using phase duration', async () => {
         const sm = new StateMachine({ cfg, mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { }, pause: () => { }, resume: () => { }, setTime: () => { } }, lights: { scene: () => { } }, media: {} });
-        // Monkeypatch sequenceRunner
         let ranNamed = false;
         sm.sequenceRunner.runControlSequence = async (name, ctx) => { ranNamed = name; };
-        let ranSchedule = false;
-        sm.executeSchedule = async (schedule, duration) => { ranSchedule = true; };
-
-        await sm.executePhase('phase-1', { sequence: 'global-test-seq', schedule: [{ at: 0 }], duration: 1 });
-        assert(ranNamed === 'global-test-seq');
-        assert(ranSchedule === true);
-    });
-
-    test('stateMachine.executePhase runs inline sequence then waits when only duration present', async () => {
-        const sm = new StateMachine({ cfg, mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { }, pause: () => { }, resume: () => { }, setTime: () => { }, hint: () => { } }, lights: { scene: () => { } }, media: {} });
-        let ranInline = false;
-        sm.sequenceRunner.runInlineSequence = async (name, seqDef, ctx) => { ranInline = name; };
-        let waited = false;
+        let waited = 0;
         sm.wait = async (ms) => { waited = ms; };
 
-        // ensure a predictable gameType for sequence name formatting
-        sm.gameType = 'test';
-        await sm.executePhase('phase-2', { sequence: [{ command: 'noop', duration: 0.1 }], duration: 1 });
-        assert(ranInline && ranInline.indexOf(':phase-2') !== -1, `expected inline run name to contain ':phase-2', got ${ranInline}`);
-        // Also verify calculatePhaseDuration returns an estimate for the inline sequence
-        const d = sm.calculatePhaseDuration({ sequence: [{ command: 'noop', duration: 0.5 }] });
-        assert(typeof d === 'number');
+        await sm.executePhase('phase-1', { sequence: 'global-test-seq', duration: 1 });
+        assert(ranNamed === 'global-test-seq');
+        assert(waited === 1000);
+    });
 
-        // Now call executePhase with only duration
-        await sm.executePhase('phase-3', { duration: 0.2 });
-        // our overridden wait records ms
-        assert(waited === 200);
+    test('stateMachine.executePhase runs named schedule by reference and uses schedule duration', async () => {
+        const sm = new StateMachine({ cfg, mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { }, pause: () => { }, resume: () => { }, setTime: () => { }, hint: () => { } }, lights: { scene: () => { } }, media: {} });
+        sm.gameType = 'test';
+        sm.sequenceRunner.resolveSequence = () => ({ duration: 3, schedule: [{ at: 3, fire: 'x' }] });
+        let executedSchedule = null;
+        sm.executeSchedule = async (schedule, duration) => { executedSchedule = { schedule, duration }; };
+
+        await sm.executePhase('phase-2', { schedule: 'test-schedule' });
+        assert(!!executedSchedule, 'expected schedule to execute');
+        assert(executedSchedule.duration === 3, 'expected schedule duration to come from schedule definition');
+        assert(Array.isArray(executedSchedule.schedule), 'expected schedule array');
+    });
+
+    test('calculatePhaseDuration enforces strict source of duration', () => {
+        const sm = new StateMachine({ cfg, mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { }, pause: () => { }, resume: () => { }, setTime: () => { } }, lights: { scene: () => { } }, media: {} });
+        sm.gameType = 'test';
+        sm.sequenceRunner.resolveSequence = (name) => {
+            if (name === 'sched-ok') return { duration: 42, schedule: [{ at: 42, fire: 'x' }] };
+            return undefined;
+        };
+
+        const seqDuration = sm.calculatePhaseDuration({ sequence: 'intro-seq', duration: 15 }, 'intro');
+        assert(seqDuration === 15, 'expected sequence phase duration from phase definition');
+
+        const schedDuration = sm.calculatePhaseDuration({ schedule: 'sched-ok' }, 'gameplay');
+        assert(schedDuration === 42, 'expected schedule phase duration from schedule definition');
+    });
+
+    test('validatePhaseStructure flags forbidden sequence/schedule combinations and missing duration', () => {
+        const sm = new StateMachine({ cfg, mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { }, pause: () => { }, resume: () => { }, setTime: () => { } }, lights: { scene: () => { } }, media: {} });
+        sm.sequenceRunner.resolveSequence = () => ({ sequence: [{ fire: 'x' }] });
+
+        const both = sm.validatePhaseStructure({ sequence: 'a', schedule: 'b', duration: 1 }, 'p1', 'gm');
+        assert(both.errors.length > 0, 'expected error when both sequence and schedule are set');
+
+        const missingDuration = sm.validatePhaseStructure({ sequence: 'a' }, 'p2', 'gm');
+        assert(missingDuration.errors.length > 0, 'expected error when sequence phase is missing duration');
     });
 });

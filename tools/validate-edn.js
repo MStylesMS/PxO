@@ -26,6 +26,24 @@ function parseMessageContext(entry) {
     return { message: String(entry), context: '' };
   }
 
+  // Legacy/common shape: "<message> in <context-path>"
+  const inlineContext = entry.match(/^(.*?)(?:\s+in\s+)([a-z0-9._\[\]+*!?.<>\/-]+)$/i);
+  if (inlineContext) {
+    return {
+      message: inlineContext[1].trim(),
+      context: inlineContext[2].trim()
+    };
+  }
+
+  // Inline mid-sentence shape: "<subject> in <context> <predicate>"
+  const inlineMidSentence = entry.match(/^(.*?)(?:\s+in\s+)([a-z0-9._\[\]+*!?.<>\/-]+)(\s+must\b.*)$/i);
+  if (inlineMidSentence) {
+    return {
+      message: `${inlineMidSentence[1].trim()} ${inlineMidSentence[3].trim()}`,
+      context: inlineMidSentence[2].trim()
+    };
+  }
+
   if (!entry.endsWith(')')) {
     return { message: entry, context: '' };
   }
@@ -152,11 +170,77 @@ function scoreCandidateLine(lineNo, parts, index) {
   return score;
 }
 
+function findIndexedContextLine(lines, context) {
+  const rawContext = String(context || '');
+  const idxMatch = rawContext.match(/\.([a-z0-9_+*!?.<>\/-]+)\[(\d+)\]$/i);
+  if (!idxMatch) return null;
+
+  const collection = idxMatch[1].toLowerCase();
+  const targetIndex = Number.parseInt(idxMatch[2], 10);
+  if (!Number.isFinite(targetIndex) || targetIndex < 0) return null;
+
+  const beforeIndexed = rawContext.slice(0, rawContext.lastIndexOf(`.${idxMatch[1]}[`));
+  const pathParts = beforeIndexed.split('.').map(normalizeToken).filter(Boolean);
+  const anchorToken = (pathParts[pathParts.length - 1] || '').toLowerCase();
+
+  const cleanedLines = lines.map((line) => stripComments(line).toLowerCase());
+
+  let anchorLine = 0;
+  if (anchorToken) {
+    const escapedAnchor = anchorToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const definitionRegex = new RegExp(`(^|\\s):${escapedAnchor}\\s*\\{`);
+
+    // Prefer map-key definitions such as ":agent-solved { ... }"
+    for (let i = 0; i < cleanedLines.length; i += 1) {
+      const line = cleanedLines[i];
+      if (definitionRegex.test(line)) {
+        anchorLine = i + 1;
+        break;
+      }
+    }
+
+    // Fallback: any occurrence of token as keyword/string
+    if (!anchorLine) {
+      for (let i = 0; i < cleanedLines.length; i += 1) {
+        const line = cleanedLines[i];
+        if (line.includes(`:${anchorToken}`) || line.includes(`"${anchorToken}"`)) {
+          anchorLine = i + 1;
+          break;
+        }
+      }
+    }
+  }
+  if (!anchorLine) anchorLine = 1;
+
+  const endLine = Math.min(lines.length, anchorLine + 500);
+  let entryRegex = /\{\s*:/;
+  if (collection === 'schedule') {
+    entryRegex = /\{\s*:at\b/;
+  } else if (collection === 'timeline' || collection === 'sequence') {
+    entryRegex = /\{\s*:/;
+  }
+
+  const entryLines = [];
+  for (let lineNo = anchorLine; lineNo <= endLine; lineNo += 1) {
+    if (entryRegex.test(cleanedLines[lineNo - 1])) {
+      entryLines.push(lineNo);
+      if (entryLines.length > targetIndex) {
+        return entryLines[targetIndex];
+      }
+    }
+  }
+
+  return null;
+}
+
 function findLineForContext(lines, context, fallbackMessage, lineHint = null) {
   if (Number.isFinite(lineHint) && lineHint > 0) return lineHint;
 
   const msgLine = extractLineFromErrorText(fallbackMessage);
   if (msgLine) return msgLine;
+
+  const indexedLine = findIndexedContextLine(lines, context);
+  if (Number.isFinite(indexedLine) && indexedLine > 0) return indexedLine;
 
   const index = buildSearchIndex(lines);
 
@@ -477,6 +561,47 @@ function validateZoneFormat(legacyConfig, issues) {
   });
 }
 
+function validateStrayTopLevelStepFields(modularConfig, issues) {
+  if (!modularConfig || typeof modularConfig !== 'object') return;
+
+  const suspiciousStepKeys = new Set([
+    'at', 'fire', 'hint', 'wait', 'zone', 'zones', 'command', 'commands',
+    'play-hint', 'playHint', 'fire-cue', 'fire-seq', 'end',
+    'topic', 'payload', 'message', 'url', 'visible', 'timeout', 'file', 'image'
+  ]);
+
+  const checkRegistry = (registry, contextRoot) => {
+    if (!registry || typeof registry !== 'object' || Array.isArray(registry)) return;
+
+    Object.entries(registry).forEach(([seqName, seqDef]) => {
+      if (!seqDef || typeof seqDef !== 'object' || Array.isArray(seqDef)) return;
+
+      const hasTimelineContainer =
+        Array.isArray(seqDef.schedule)
+        || Array.isArray(seqDef.sequence)
+        || Array.isArray(seqDef.timeline);
+
+      if (!hasTimelineContainer) return;
+
+      Object.keys(seqDef).forEach((k) => {
+        if (!suspiciousStepKeys.has(k)) return;
+
+        addIssue(
+          issues,
+          'error',
+          `Sequence '${seqName}' has top-level '${k}' field that looks like a stray step entry. This often means a step map was placed outside the :schedule/:sequence vector.`,
+          `${contextRoot}.${seqName}.${k}`
+        );
+      });
+    });
+  };
+
+  const global = modularConfig.global || {};
+  checkRegistry(global.sequences, 'global.sequences');
+  checkRegistry(global['command-sequences'], 'global.command-sequences');
+  checkRegistry(global['system-sequences'], 'global.system-sequences');
+}
+
 function printSummary({ filePath, stats, errors, warnings }) {
   const pass = errors.length === 0;
 
@@ -581,6 +706,8 @@ function validateEdnFile(filePathInput) {
   }
 
   if (modularConfig) {
+    validateStrayTopLevelStepFields(modularConfig, issues);
+
     try {
       legacyConfig = ModularConfigAdapter.transform(modularConfig);
     } catch (error) {

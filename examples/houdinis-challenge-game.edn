@@ -249,6 +249,99 @@
                                                     ;; End of failed schedule
                                                     ]}
 
+                       :hc-60-gameplay-schedule {:description "60-minute gameplay timed events"
+                                                 :duration 3600
+                                                 :schedule [{:at 3600 :fire :start-clock}
+                                                            {:at 3600 :fire :start-music}
+                                                            ;; Game hints and timed events
+                                                            {:at 3300 :fire :hint-mm-first}
+                                                            {:at 2700 :fire :hint-mm-45}
+                                                            {:at 2220 :fire :hint-humphery-peek1}
+                                                            {:at 1800 :fire :hint-mm-30}
+                                                            {:at 1380 :fire :hint-humphery-peek2}
+                                                            {:at 900 :fire :hint-mm-15}
+                                                            {:at 300 :fire :hint-mm-5}]}
+
+                       :hc-60-solved-schedule {:description "60-minute solved closing schedule"
+                                               :duration 180
+                                               :schedule [{:at 180 :fire :lights-blue :description "Celebrate with green lights"}
+                                                          {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
+                                                          {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
+                                                          {:at 175 :fire :win-video :description "Play victory video 3 seconds after win starts"}
+                                                          {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
+                                                          {:at 30 :fire :lights-bright-white :description "Bright lights for reset"}]}
+
+                       :hc-60-failed-schedule {:description "60-minute failed closing schedule"
+                                               :duration 180
+                                               :schedule [{:at 180 :fire :lights-red :description "Quick failure celebration"}
+                                                          {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
+                                                          {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
+                                                          {:at 179 :fire :deep-braam :description "Dramatic failure sound 1 second after fail starts"}
+                                                          {:at 175 :fire :fail-video :description "Play failure video with 3 second fade"}
+                                                          {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
+                                                          {:at 0 :fire :lights-bright-white :description "Bright lights for reset"}]}
+
+                       :hc-30-gameplay-schedule {:description "30-minute gameplay timed events"
+                                                 :duration 1800
+                                                 :schedule [{:at 1800 :fire :start-clock}
+                                                            {:at 1800 :fire :start-music}
+                                                            ;; Game hints and timed events
+                                                            {:at 1500 :fire :hint-mm-first}
+                                                            {:at 1200 :fire :hint-humphery-peek2}
+                                                            {:at 900 :fire :hint-mm-15}
+                                                            {:at 300 :fire :hint-mm-5}]}
+
+                       :hc-30-solved-schedule {:description "30-minute solved closing schedule"
+                                               :duration 180
+                                               :schedule [{:at 180 :fire :lights-blue :description "Celebrate with green lights"}
+                                                          {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
+                                                          {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
+                                                          {:at 175 :fire :win-video :description "Play victory video 3 seconds after win starts"}
+                                                          {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
+                                                          {:at 30 :fire :lights-bright-white :description "Bright lights for reset"}]}
+
+                       :hc-30-failed-schedule {:description "30-minute failed closing schedule"
+                                               :duration 180
+                                               :schedule [{:at 180 :fire :lights-red :description "Quick failure celebration"}
+                                                          {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
+                                                          {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
+                                                          {:at 179 :fire :deep-braam :description "Dramatic failure sound 1 second after fail starts"}
+                                                          {:at 175 :fire :fail-video :description "Play failure video with 3 second fade"}
+                                                          {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
+                                                          {:at 0 :fire :lights-bright-white :description "Bright lights for reset"}]}
+
+                       :hc-demo-intro-sequence {:description "Demo intro sequence"
+                                                :sequence [{:fire :lights-soft-white :description "Make sure lights are set to soft white"}
+                                                           {:fire :intro-video-short :description "Play short intro video using global cue"}]}
+
+                       :hc-demo-gameplay-schedule {:description "Demo gameplay timed events"
+                                                   :duration 90
+                                                   :schedule [{:at 90 :fire :start-clock}
+                                                              {:at 89 :fire :start-music}
+                                                              {:at 80 :fire :show-clock-seq}
+                                                              {:at 60 :fire :lights-green}
+                                                              {:at 60 :hint :look-everywhere}
+                                                              {:at 50 :fire :picture-cymbal-fx}
+                                                              {:at 45 :fire :lights-soft-white}
+                                                              {:at 30 :fire :hide-clock-seq}]}
+
+                       :hc-demo-solved-schedule {:description "Demo solved closing schedule"
+                                                 :duration 60
+                                                 :schedule [{:at 60 :fire :lights-blue}
+                                                            {:at 60 :fire :fade-out-music}
+                                                            {:at 60 :fire :hide-clock-seq}
+                                                            {:at 55 :fire :win-video}
+                                                            {:at 30 :fire :lights-bright-white}]}
+
+                       :hc-demo-failed-schedule {:description "Demo failed closing schedule"
+                                                 :duration 60
+                                                 :schedule [{:at 60 :fire :lights-red}
+                                                            {:at 60 :fire :fade-out-music}
+                                                            {:at 60 :fire :hide-clock-seq}
+                                                            {:at 59 :fire :deep-braam}
+                                                            {:at 55 :fire :fail-video}
+                                                            {:at 30 :fire :lights-bright-white}]}
+
                        :standard-reset {:description "Enhanced demo reset with media and browser verification"
                                         :sequence [{:fire :stop-all-audio}
                                                    {:fire :set-mirror-black}
@@ -324,40 +417,15 @@
                                         :sequence "standard-intro"}
 
                                 :gameplay {:description "Main game phase with timed events"
-                                           :duration 3600
-                                           :schedule [{:at 3600 :fire :start-clock}
-                                                      {:at 3600 :fire :start-music}
-                                                      ;; Game hints and timed events
-                                                      {:at 3300 :fire :hint-mm-first} ;; Houdini's first appearance and reveal clock
-                                                      {:at 2700 :fire :hint-mm-45}
-                                                      {:at 2220 :fire :hint-humphery-peek1} ;; Humphery peek 1 at 36 minutes left
-                                                      {:at 1800 :fire :hint-mm-30}
-                                                      {:at 1380 :fire :hint-humphery-peek2} ;; Humphery peek 2 at 23 minutes left
-                                                      {:at  900 :fire :hint-mm-15}
-                                                      {:at  300 :fire :hint-mm-5}]};; End of gameplay schedule
+                                           :schedule "hc-60-gameplay-schedule"} ;; End of gameplay schedule
 
                                 :solved {:description "Victory celebration phase"
-                                         :duration 180
-                                         :schedule [{:at 180 :fire :lights-blue :description "Celebrate with green lights"}
-                                                    ;;{:at 180 :fire :fade-out-all-media :description "Fade out all media over 3 seconds"}
-                                                    {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
-                                                    {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
-                                                    {:at 175 :fire :win-video :description "Play victory video 3 seconds after win starts"}
-                                                    {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
-                                                    {:at 30  :fire :lights-bright-white :description "Bright lights for reset"}]};; End of solved schedule
+                                         :schedule "hc-60-solved-schedule"} ;; End of solved schedule
 
                                 :failed {:description "Failure handling phase"
-                                         :duration 180
-                                         :schedule [{:at 180 :fire :lights-red :description "Quick failure celebration"}
-                                                    ;;{:at 180 :fire :fade-out-all-media :description "Fade out all media over 3 seconds"}
-                                                    {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
-                                                    {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
-                                                    {:at 179 :fire :deep-braam :description "Dramatic failure sound 1 second after fail starts"}
-                                                    {:at 175 :fire :fail-video :description "Play failure video with 3 second fade"}
-                                                    {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
-                                                    {:at 0 :fire :lights-bright-white :description "Bright lights for reset"}]};; End of failed schedule
+                                         :schedule "hc-60-failed-schedule"} ;; End of failed schedule
 
-                                :reset {:description "Cleanup and return to ready" :sequence "standard-reset"}};; End of phases 
+                                :reset {:description "Cleanup and return to ready" :duration 0 :sequence "standard-reset"}} ;; End of phases
                        };; End of hc-60 game mode
 
                ;; === 30-MINUTE CONDENSED EXPERIENCE ===
@@ -370,37 +438,15 @@
                                         :sequence "standard-intro"}
 
                                 :gameplay {:description "Main game phase with timed events"
-                                           :duration 1800
-                                           :schedule [{:at 1800 :fire :start-clock}
-                                                      {:at 1800 :fire :start-music}
-                                                      ;; Game hints and timed events
-                                                      {:at 1500 :fire :hint-mm-first} ;; Houdini's first appearance and reveal clock
-                                                      {:at 1200 :fire :hint-humphery-peek2} ;; Humphery peek 2 at 20 minutes left
-                                                      {:at  900 :fire :hint-mm-15}
-                                                      {:at  300 :fire :hint-mm-5}]};; End of gameplay schedule
+                                           :schedule "hc-30-gameplay-schedule"} ;; End of gameplay schedule
 
                                 :solved {:description "Victory celebration phase"
-                                         :duration 180
-                                         :schedule [{:at 180 :fire :lights-blue :description "Celebrate with green lights"}
-                                                    ;;{:at 180 :fire :fade-out-all-media :description "Fade out all media over 3 seconds"}
-                                                    {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
-                                                    {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
-                                                    {:at 175 :fire :win-video :description "Play victory video 3 seconds after win starts"}
-                                                    {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
-                                                    {:at 30  :fire :lights-bright-white :description "Bright lights for reset"}]};; End of solved schedule
+                                         :schedule "hc-30-solved-schedule"} ;; End of solved schedule
 
                                 :failed {:description "Failure handling phase"
-                                         :duration 180
-                                         :schedule [{:at 180 :fire :lights-red :description "Quick failure celebration"}
-                                                    ;;{:at 180 :fire :fade-out-all-media :description "Fade out all media over 3 seconds"}
-                                                    {:at 180 :fire :fade-out-music :description "Fade out music over 3 seconds"}
-                                                    {:at 180 :fire :hide-clock-seq :description "Hide clock immediately"}
-                                                    {:at 179 :fire :deep-braam :description "Dramatic failure sound 1 second after fail starts"}
-                                                    {:at 175 :fire :fail-video :description "Play failure video with 3 second fade"}
-                                                    {:at 150 :fire :lights-soft-white :description "Return to normal lighting"}
-                                                    {:at 0 :fire :lights-bright-white :description "Bright lights for reset"}]};; End of failed schedule
+                                         :schedule "hc-30-failed-schedule"} ;; End of failed schedule
 
-                                :reset {:description "Cleanup and return to ready" :sequence "standard-reset"}};; End of phases
+                                :reset {:description "Cleanup and return to ready" :duration 0 :sequence "standard-reset"}} ;; End of phases
                        };; End of hc-30 game-mode
 
                ;; === 90-SECOND DEMONSTRATION ===
@@ -411,38 +457,18 @@
 
                          :phases {:intro {:description "Short demo intro video"
                                           :duration 32
-                                          :sequence [{:fire :lights-soft-white :description "Make sure lights are set to soft white"}
-                                                     {:fire :intro-video-short :description "Play short intro video using global cue"}]} ;; End of intro phase
+                                          :sequence "hc-demo-intro-sequence"} ;; End of intro phase
 
                                   :gameplay {:description "Main game phase with timed events"
-                                             :duration 90
-                                             :schedule [{:at 90 :fire :start-clock}
-                                                        {:at 89 :fire :start-music}
-                                                        {:at 80 :fire :show-clock-seq}
-                                                        {:at 60 :fire :lights-green}
-                                                        {:at 60 :hint :look-everywhere}
-                                                        {:at 50 :fire :picture-cymbal-fx}
-                                                        {:at 45 :fire :lights-soft-white}
-                                                        {:at 30 :fire :hide-clock-seq}]} ;; End of gameplay schedule
+                                             :schedule "hc-demo-gameplay-schedule"} ;; End of gameplay schedule
 
                                   :solved {:description "Victory celebration phase"
-                                           :duration 60
-                                           :schedule [{:at 60 :fire :lights-blue}
-                                                      {:at 60 :fire :fade-out-music}
-                                                      {:at 60 :fire :hide-clock-seq}
-                                                      {:at 55 :fire :win-video}
-                                                      {:at 30 :fire :lights-bright-white}]} ;; End of solved schedule
+                                           :schedule "hc-demo-solved-schedule"} ;; End of solved schedule
 
                                   :failed {:description "Failure handling phase"
-                                           :duration 60
-                                           :schedule [{:at 60 :fire :lights-red}
-                                                      {:at 60 :fire :fade-out-music}
-                                                      {:at 60 :fire :hide-clock-seq}
-                                                      {:at 59 :fire :deep-braam}
-                                                      {:at 55 :fire :fail-video}
-                                                      {:at 30 :fire :lights-bright-white}]} ;; End of failed schedule
+                                           :schedule "hc-demo-failed-schedule"} ;; End of failed schedule
 
-                                  :reset {:description "Cleanup and return to ready" :sequence "demo-reset"}};; End of phases
+                                  :reset {:description "Cleanup and return to ready" :duration 0 :sequence "demo-reset"}} ;; End of phases
 
                          ;; Per-mode sequence overrides - demonstrate Priority 3 feature
                          :sequences {:demo-reset {:description "Enhanced demo reset with media and browser verification"

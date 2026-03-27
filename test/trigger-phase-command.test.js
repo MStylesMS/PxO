@@ -7,11 +7,14 @@ describe('triggerPhase command routing', () => {
             global: {
                 mqtt: { 'game-topic': 'paradox/test' },
                 settings: {},
+                sequences: {
+                    'noop-sequence': { sequence: [] }
+                },
                 'additional-phases': {
                     'operator-hold': {
                         'phase-type': 'failed',
                         duration: 0,
-                        sequence: []
+                        sequence: 'noop-sequence'
                     }
                 }
             },
@@ -21,12 +24,12 @@ describe('triggerPhase command routing', () => {
                     'game-label': 'Demo',
                     'additional-phases': ['operator-hold'],
                     phases: {
-                        intro: { duration: 10, sequence: [] },
-                        gameplay: { duration: 60, sequence: [] },
-                        solved: { duration: 10, sequence: [] },
-                        failed: { duration: 10, sequence: [] },
-                        abort: { sequence: [] },
-                        reset: { sequence: [] }
+                        intro: { duration: 10, sequence: 'noop-sequence' },
+                        gameplay: { duration: 60, sequence: 'noop-sequence' },
+                        solved: { duration: 10, sequence: 'noop-sequence' },
+                        failed: { duration: 10, sequence: 'noop-sequence' },
+                        abort: { duration: 0, sequence: 'noop-sequence' },
+                        reset: { duration: 0, sequence: 'noop-sequence' }
                     }
                 }
             }

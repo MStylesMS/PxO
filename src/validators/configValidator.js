@@ -645,8 +645,14 @@ class ConfigValidator {
      * Validate schedule entries
      */
     validateSchedule(schedule, context) {
+        // Support both inline schedules (arrays) and schedule references (strings)
+        if (typeof schedule === 'string') {
+            // Schedule reference - will be resolved at runtime
+            return;
+        }
+
         if (!Array.isArray(schedule)) {
-            this.addError(`Schedule in ${context} must be an array`);
+            this.addError(`Schedule in ${context} must be an array or a string reference`);
             return;
         }
 

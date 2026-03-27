@@ -66,6 +66,47 @@ nil
 
 ## Closing Phase Model (Abort/Reset + Additional Phases)
 
+## Strict Phase Syntax Rules
+
+PxO now enforces strict phase syntax:
+
+- Sequence phase:
+  - Must use `:sequence "name-of-sequence"`
+  - Must define phase-level `:duration` (or `:seconds`)
+- Schedule phase:
+  - Must use `:schedule "name-of-schedule"`
+  - Duration is inherited from the named schedule definition (`:duration` or `:seconds` inside that schedule definition)
+  - Phase-level `:duration`/`:seconds` is invalid and causes validation errors
+- A phase cannot define both `:sequence` and `:schedule`
+
+Valid examples:
+
+```clojure
+:phases {
+  :intro {:duration 60 :sequence "demo-intro"}
+  :gameplay {:schedule "demo-gameplay-schedule"}
+}
+
+:sequences {
+  :demo-gameplay-schedule {:duration 120
+                           :schedule [{:at 120 :fire :start-clock}
+                                      {:at 30 :fire :hint-mm-5}]}
+}
+```
+
+Invalid examples:
+
+```clojure
+;; Invalid: schedule phase cannot set phase duration
+:gameplay {:duration 120 :schedule "demo-gameplay-schedule"}
+
+;; Invalid: sequence phase missing duration
+:intro {:sequence "demo-intro"}
+
+;; Invalid: both defined
+:gameplay {:duration 120 :sequence "demo-intro" :schedule "demo-gameplay-schedule"}
+```
+
 Current PxO configs should treat closing behavior as a two-step model:
 
 - `:abort` phase: immediate operator action to stop gameplay/media safely.

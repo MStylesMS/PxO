@@ -547,6 +547,39 @@ mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
 
 ---
 
+## Phase Definition Rules
+
+PxO enforces strict phase definition rules:
+
+- Sequence phase:
+  - Use `:sequence "name-of-sequence"`
+  - Provide phase-level `:duration` (or `:seconds`)
+- Schedule phase:
+  - Use `:schedule "name-of-schedule"`
+  - Do not provide phase-level `:duration`/`:seconds`
+  - Schedule duration is inherited from the named schedule definition
+- A phase may define only one of `:sequence` or `:schedule`
+
+Example:
+
+```clojure
+:phases {
+  :intro {:duration 45 :sequence "standard-intro"}
+  :gameplay {:schedule "standard-gameplay-schedule"}
+  :solved {:schedule "standard-solved-schedule"}
+  :failed {:schedule "standard-failed-schedule"}
+  :reset {:duration 0 :sequence "standard-reset"}
+}
+
+:sequences {
+  :standard-gameplay-schedule {:duration 1800
+                               :schedule [{:at 1800 :fire :start-clock}
+                                          {:at 300 :fire :hint-mm-5}]}
+}
+```
+
+---
+
 ## Advanced Topics
 
 ### Multi-Sequence Phases
