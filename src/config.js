@@ -43,7 +43,7 @@ function loadEdnConfig(configPath = null) {
     process.exit(1);
   }
   
-  log.info(`Attempting to load EDN config file: ${ednFile}`);
+  log.debug(`Attempting to load EDN config file: ${ednFile}`);
   try {
     const cfg = ModularConfigAdapter.loadConfig('edn', ednFile);
     validateConfig(cfg);

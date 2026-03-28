@@ -29,13 +29,22 @@ function normalizeBrokerUrl(broker, port) {
 
 /**
  * Load INI configuration file
- * @param {string} configPath - Path to INI file (default: game.ini in app directory)
+ * @param {string} configPath - Path to INI file (optional)
  * @returns {Object} Parsed configuration
  */
 function loadIniConfig(configPath) {
-    // Default to game.ini in application directory if not specified
+    // Search documented defaults first, then fall back to the legacy game.ini path.
     if (!configPath) {
-        configPath = path.join(__dirname, '..', 'game.ini');
+        const candidates = [
+            path.resolve(process.cwd(), 'pxo.ini'),
+            path.resolve(process.cwd(), 'config', 'pxo.ini'),
+            '/etc/paradox/pxo.ini',
+            path.resolve(process.cwd(), 'game.ini'),
+            path.resolve(process.cwd(), 'config', 'game.ini'),
+            '/opt/paradox/config/game.ini',
+            path.join(__dirname, '..', 'game.ini')
+        ];
+        configPath = candidates.find(candidate => fs.existsSync(candidate)) || candidates[candidates.length - 1];
     }
 
     // Return defaults if file doesn't exist

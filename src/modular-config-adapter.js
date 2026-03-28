@@ -21,7 +21,7 @@ class ModularConfigAdapter {
     if (format === 'edn') {
       // Load EDN configuration
       const ednPath = configPath || './config/houdini.edn';
-      log.info(`Loading EDN configuration from: ${ednPath}`);
+      log.debug(`Loading EDN configuration from: ${ednPath}`);
       modular = EdnConfigLoader.load(ednPath);
       // Phase 1: template expansion (EDN only)
       try {

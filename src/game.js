@@ -179,7 +179,7 @@ async function main() {
   }
 
   async function handleTrigger(topic, payload, rule) {
-    log.info(`Evaluating trigger rule: ${rule.name}`);
+    log.debug(`Evaluating trigger rule: ${rule.name}`);
 
     // Check if trigger condition matches
     const condition = rule.trigger.condition;
@@ -210,7 +210,7 @@ async function main() {
   }
 
   async function executeAction(action, triggerName) {
-    log.info(`Executing action type: ${action.type} for trigger: ${triggerName}`);
+    log.debug(`Executing action type: ${action.type} for trigger: ${triggerName}`);
 
     switch (action.type) {
       case 'mqtt':

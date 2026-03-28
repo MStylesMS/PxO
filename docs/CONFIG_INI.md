@@ -25,9 +25,14 @@ Default INI locations (searched in order):
 /etc/paradox/pxo.ini
 ```
 
+Legacy fallback:
+```
+apps/PxO/game.ini
+```
+
 Override with CLI flag:
 ```bash
-node src/game.js --ini /path/to/custom.ini
+node src/game.js --config /path/to/custom.ini
 ```
 
 ---

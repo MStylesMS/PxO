@@ -57,6 +57,7 @@ node src/game.js --config /etc/paradox/pxo.ini
 1. `./pxo.ini`
 2. `./config/pxo.ini`
 3. `/etc/paradox/pxo.ini`
+4. Legacy fallback: `./game.ini`, `./config/game.ini`, `/opt/paradox/config/game.ini`
 
 **When to use**:
 

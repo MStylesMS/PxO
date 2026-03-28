@@ -245,7 +245,7 @@ class AdapterRegistry {
         this.adapters.set(zoneName, adapter);
         this.eventTopics.set(zoneName, `${baseTopic}/events`);
 
-        log.info(`Initialized ${type} adapter for zone '${zoneName}' on topic '${baseTopic}'`);
+        log.debug(`Initialized ${type} adapter for zone '${zoneName}' on topic '${baseTopic}'`);
     }
 
     /**

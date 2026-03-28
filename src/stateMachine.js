@@ -394,7 +394,8 @@ class GameStateMachine extends EventEmitter {
 
     const templateKeys = this.extractTemplateKeys(seqDef);
     const providedKeys = Object.keys(context);
-    const unusedKeys = providedKeys.filter(k => !templateKeys.has(k));
+    const allowedUnusedKeys = new Set(['zone']);
+    const unusedKeys = providedKeys.filter(k => !templateKeys.has(k) && !allowedUnusedKeys.has(k));
     if (unusedKeys.length > 0) {
       this.publishWarning('hint_sequence_unused_fields', {
         id: hint.id,
@@ -1585,15 +1586,12 @@ class GameStateMachine extends EventEmitter {
 
     sortedTimeline.forEach(entry => {
       const delayMs = (duration - entry.at) * 1000;
+      log.info(`Executing timeline action for cue ${cueKey} at ${entry.at}s remaining`);
+      const execute = () => (entry.actions || []).forEach(a => this.executeCueAction(a, cueKey));
       if (delayMs <= 0) {
-        // Execute immediately for entries at the start
-        log.info(`Executing timeline action for cue ${cueKey} at ${entry.at}s remaining`);
-        (entry.actions || []).forEach(a => this.executeCueAction(a, cueKey));
+        execute();
       } else {
-        setTimeout(() => {
-          log.info(`Executing timeline action for cue ${cueKey} at ${entry.at}s remaining`);
-          (entry.actions || []).forEach(a => this.executeCueAction(a, cueKey));
-        }, delayMs);
+        setTimeout(execute, delayMs);
       }
     });
   }
@@ -1616,16 +1614,12 @@ class GameStateMachine extends EventEmitter {
 
     sortedTimeline.forEach(entry => {
       const delayMs = duration ? (duration - entry.at) * 1000 : entry.at * 1000;
-
+      log.info(`Executing sequence timeline action for ${seqKey} at ${entry.at}s`);
+      const execute = () => this.executeSequenceCommands(entry.commands || [], seqKey);
       if (delayMs <= 0) {
-        // Execute immediately
-        log.info(`Executing sequence timeline action for ${seqKey} at ${entry.at}s`);
-        this.executeSequenceCommands(entry.commands || [], seqKey);
+        execute();
       } else {
-        setTimeout(() => {
-          log.info(`Executing sequence timeline action for ${seqKey} at ${entry.at}s`);
-          this.executeSequenceCommands(entry.commands || [], seqKey);
-        }, delayMs);
+        setTimeout(execute, delayMs);
       }
     });
   }
