@@ -8,6 +8,8 @@
 
 **Mirrors:** [GitHub (primary)](https://github.com/MStylesMS/PxO) | [GitLab](https://gitlab.gnurdle.com/paradox/pxo)
 
+**AI Documentation**: [AI-INSTRUCTIONS.md](AI-INSTRUCTIONS.md) (quick context) | [AI-DETAILED-OVERVIEW.md](AI-DETAILED-OVERVIEW.md) (comprehensive guide)
+
 ## Overview
 
 Paradox Orchestrator (PxO) is a flexible, MQTT-based game engine designed for escape rooms and interactive entertainment. It provides a zone-based architecture that coordinates multiple devices (lights, displays, audio, timers) through a unified configuration system.
