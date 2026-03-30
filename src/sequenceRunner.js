@@ -597,6 +597,8 @@ class SequenceRunner {
         const gameTopic = this.cfg?.global?.mqtt?.['game-topic'];
         if (!gameTopic || !this.mqtt) return;
         try {
+            const extraDetails = (extra && Object.keys(extra).length) ? ` ${JSON.stringify(extra)}` : '';
+            log.warn(`[warnings] ${warning}: ${message}${extraDetails}`);
             this.mqtt.publish(`${gameTopic}/warnings`, { warning, message, timestamp: Date.now(), ...extra });
         } catch (_) { /* ignore */ }
     }

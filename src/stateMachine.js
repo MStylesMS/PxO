@@ -1858,6 +1858,8 @@ class GameStateMachine extends EventEmitter {
   publishWarning(warning, data = {}) {
     const gameTopic = this.cfg.global?.mqtt?.['game-topic'];
     if (!gameTopic) return; // guard misconfig
+    const details = (data && Object.keys(data).length) ? ` ${JSON.stringify(data)}` : '';
+    log.warn(`[warnings] ${warning}${details}`);
     this.mqtt.publish(`${gameTopic}/warnings`, { warning, t: Date.now(), data });
   }
 
