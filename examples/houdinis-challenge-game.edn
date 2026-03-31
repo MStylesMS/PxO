@@ -91,8 +91,8 @@
                   :sync-clock {:zone "clock" :command "setTime" :description "Sync external clock to current gameplay time without starting"}
                   :fade-in-clock {:zone "clock" :command "fadeIn" :description "Fade in the clock"}
                   :fade-out-clock {:zone "clock" :command "fadeOut" :description "Fade out the clock"}
-                  :show-clock {:zone "clock" :command "fadeIn" :fadeTime 0 :description "Show clock immeadately"}
-                  :hide-clock {:zone "clock" :command "fadeOut" :fadeTime 0 :description "Show clock immeadately"}
+                  :show-clock {:zone "clock" :command "show" :description "Show clock immediately"}
+                  :hide-clock {:zone "clock" :command "hide" :description "Hide clock immediately"}
                   :show-browser {:zone "mirror" :command "showBrowser" :description "Show clock browser immeadately"}
                   :hide-browser {:zone "mirror" :command "hideBrowser" :description "Hide clock browser immeadately"}
 

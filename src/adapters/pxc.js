@@ -34,12 +34,16 @@ class PxcAdapter {
           return this.pause();
         case 'resume':
           return this.resume(options.time);
+        case 'show':
+          return this.show();
+        case 'hide':
+          return this.hide();
         case 'fade-in':
         case 'fadeIn':
-          return this.fadeIn(options.duration);
+          return this.fadeIn(options);
         case 'fade-out':
         case 'fadeOut':
-          return this.fadeOut(options.duration);
+          return this.fadeOut(options);
         case 'set-time':
         case 'setTime':
           return this.setTime(options.time || options.mmss);
@@ -65,7 +69,7 @@ class PxcAdapter {
    * @returns {string[]} Array of supported command names
    */
   getCapabilities() {
-    return ['start', 'stop', 'pause', 'resume', 'fade-in', 'fadeIn', 'fade-out', 'fadeOut', 'set-time', 'setTime', 'hint', 'setDisplayColors', 'resetDisplayColors'];
+    return ['start', 'stop', 'pause', 'resume', 'show', 'hide', 'fadeIn', 'fadeOut', 'setTime', 'hint', 'setDisplayColors', 'resetDisplayColors'];
   }
 
   // Helper to derive current mm:ss based on game state
@@ -90,35 +94,48 @@ class PxcAdapter {
     try { this.mqtt.publish(topic, payload); } catch (_) { /* ignore */ }
   }
 
-  _mirrorUI(payload) {
-    if (!this.mirrorUI || !this.gameTopic) return;
-    try { this.mqtt.publish(`${this.gameTopic}/clock`, payload); } catch (_) { /* ignore */ }
-  }
-
   setTime(mmss) {
     const time = mmss || this._deriveCurrentMMSS();
     const payload = time ? { command: 'setTime', time } : { command: 'setTime' };
     this._publish(this.commandTopic, payload);
-    this._mirrorUI({ action: 'setTime', time });
+  }
+
+  _resolveFadeDuration(durationOrOptions) {
+    if (typeof durationOrOptions === 'number') return durationOrOptions;
+
+    if (durationOrOptions && typeof durationOrOptions === 'object') {
+      if (durationOrOptions.duration !== undefined) return durationOrOptions.duration;
+      if (durationOrOptions.fadeTime !== undefined) return durationOrOptions.fadeTime;
+    }
+
+    if (this.defaultFadeMs) return this.defaultFadeMs / 1000;
+    return undefined;
   }
 
   command(cmd, mmss, extra = {}) {
     const payload = { command: cmd, ...extra };
     if (mmss) payload.time = mmss;
     this._publish(this.commandTopic, payload);
-    // Mirror only fade and start/resume/setTime as UI actions
-    if (cmd === 'fadeIn' || cmd === 'fadeOut') this._mirrorUI({ action: cmd, ...extra });
-    if (cmd === 'start' || cmd === 'resume' || cmd === 'setTime') this._mirrorUI({ action: cmd, time: payload.time });
   }
 
-  fadeIn(duration) {
-    const dur = duration ?? (this.defaultFadeMs ? this.defaultFadeMs / 1000 : undefined);
-    this.command('fadeIn', null, dur ? { duration: dur } : {});
+  show() {
+    this.command('show');
   }
-  fadeOut(duration) {
-    const dur = duration ?? (this.defaultFadeMs ? this.defaultFadeMs / 1000 : undefined);
-    this.command('fadeOut', null, dur ? { duration: dur } : {});
+
+  hide() {
+    this.command('hide');
   }
+
+  fadeIn(durationOrOptions) {
+    const dur = this._resolveFadeDuration(durationOrOptions);
+    this.command('fadeIn', null, dur !== undefined ? { duration: dur } : {});
+  }
+
+  fadeOut(durationOrOptions) {
+    const dur = this._resolveFadeDuration(durationOrOptions);
+    this.command('fadeOut', null, dur !== undefined ? { duration: dur } : {});
+  }
+
   pause() {
     this.command('pause');
   }
@@ -128,7 +145,6 @@ class PxcAdapter {
     const payload = { command: 'resume' };
     if (t) payload.time = t;
     this._publish(this.commandTopic, payload);
-    this._mirrorUI({ action: 'resume', time: t });
   }
   start(time) {
     // time may be mm:ss string; if omitted, derive from engine
@@ -136,17 +152,14 @@ class PxcAdapter {
     const payload = { command: 'start' };
     if (t) payload.time = t;
     this._publish(this.commandTopic, payload);
-    this._mirrorUI({ action: 'start', time: t });
   }
   stop() {
     this.command('stop');
-    this._mirrorUI({ action: 'stop' });
   }
   hint(text, duration) {
     const payload = { hint: text };
     if (duration) payload.duration = duration;
     this._publish(this.commandTopic, payload);
-    this._mirrorUI({ action: 'hint', text, duration });
   }
 
   /**

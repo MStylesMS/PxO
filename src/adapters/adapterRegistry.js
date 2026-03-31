@@ -135,12 +135,16 @@ class AdapterRegistry {
                 return adapter.pause ? adapter.pause() : Promise.resolve();
             case 'resume':
                 return adapter.resume ? adapter.resume(options.time) : Promise.resolve();
+            case 'show':
+                return adapter.show ? adapter.show() : Promise.resolve();
+            case 'hide':
+                return adapter.hide ? adapter.hide() : Promise.resolve();
             case 'fade-in':
             case 'fadeIn':
-                return adapter.fadeIn ? adapter.fadeIn(options.duration) : Promise.resolve();
+                return adapter.fadeIn ? adapter.fadeIn(options.duration ?? options.fadeTime) : Promise.resolve();
             case 'fade-out':
             case 'fadeOut':
-                return adapter.fadeOut ? adapter.fadeOut(options.duration) : Promise.resolve();
+                return adapter.fadeOut ? adapter.fadeOut(options.duration ?? options.fadeTime) : Promise.resolve();
             case 'set-time':
             case 'setTime':
                 return adapter.setTime ? adapter.setTime(options.time || options.mmss) : Promise.resolve();

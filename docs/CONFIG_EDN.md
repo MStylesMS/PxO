@@ -343,6 +343,8 @@ Use `enableBrowser` in cues when you want fire-and-forget browser startup:
 
 `verifyBrowser` is not a direct zone MQTT command. It is handled by PxO sequence execution and should be used inside sequence steps (see below), not as a raw command sent to a media zone.
 
+For clock zones, use `:command "show"` and `:command "hide"` for immediate visibility changes. Use `:command "fadeIn"` or `:command "fadeOut"` with `:fadeTime` in seconds for timed fades in EDN. The adapter also accepts legacy fade-time fields and forwards them to PxC's runtime fade duration handling.
+
 ---
 
 ## Sequences
