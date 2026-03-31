@@ -44,6 +44,50 @@ describe('ConfigValidator hint directives', () => {
         expect(result.errors).toEqual([]);
     });
 
+    test('warns when a hint is triggered via :fire in a sequence or schedule', () => {
+        const config = {
+            global: {
+                hints: {
+                    'hint-01': { type: 'text', sequence: 'hint-text-seq', text: 'Look closer', duration: 15 }
+                },
+                sequences: {
+                    'warning-seq': [
+                        { fire: 'hint-01' }
+                    ]
+                },
+                'command-sequences': {
+                    'hint-text-seq': {
+                        sequence: [
+                            { zone: 'clock', command: 'hint', text: '{{text}}', duration: '{{duration}}' }
+                        ]
+                    }
+                }
+            },
+            'game-modes': {
+                demo: {
+                    'short-label': 'Demo',
+                    'game-label': 'Demo Mode',
+                    phases: {
+                        gameplay: {
+                            duration: 60,
+                            schedule: [
+                                { at: 30, fire: 'hint-01' }
+                            ]
+                        },
+                        abort: { sequence: 'demo-abort' },
+                        reset: { sequence: 'demo-reset' }
+                    }
+                }
+            }
+        };
+
+        const validator = new ConfigValidator();
+        const result = validator.validate(config);
+
+        expect(result.isValid).toBe(true);
+        expect(result.warnings.filter(w => w.includes("Hint 'hint-01' is triggered via :fire; use :hint instead"))).toHaveLength(2);
+    });
+
     test('validates sequence hints against command-sequences and warns on unused fields', () => {
         const config = {
             global: {

@@ -609,6 +609,7 @@ Game-mode hint list behavior (`game-modes.<mode>.hints`):
 Notes:
 - `action` hints are reserved for a future feature. Current runtime behavior is warning-only (`hint_action_not_implemented`) and no action is executed.
 - Action hint syntax (future): `:my-action-hint {:type "action" :sequence "some-sequence" :text "Optional UI text"}`
+- Invoke hint definitions with `:hint`, not `:fire`. Example: `{:at 50 :hint :picture-cymbal-fx}`. PxO still accepts `:fire` for backward compatibility, but validation and runtime logs warn so configs can be migrated safely.
 - Text and sequence hints resolve only from `:command-sequences` (no fallback to `:system-sequences`).
 - Sequence hints may provide template values either directly on the hint or under `:parameters {}`.
 - Reserved built-ins for template substitution are `text` and `duration`.

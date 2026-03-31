@@ -114,7 +114,7 @@
 
                    ;; Example hints of each type
                    :picture-horror-speech {:type "speech" :zone "picture" :file "Aztec_Vocals_Horror.mp3" :description "Long horror chord played as speech"}
-                   :picture-cymbal-fx {:type "audioFx" :zone "picture" :file "Cymbal_Strange.mp3" :adjustVolume 5 :description "Cymbal on picture using audio fx"}
+                   :picture-cymbal-fx {:type "audio" :zone "picture" :file "Cymbal_Strange.mp3" :adjustVolume 5 :description "Cymbal on picture using audio fx"}
                    :picture-5min-video {:type "video" :file "5min_tp.mp4" :zone "picture" :description "5 min video warning on picture"}
                    :flash-lights-hint {:type "action" :action "flash-lights" :zone "lights" :duration 5 :description "Action hint - flash lights to reveal hidden items"}
 
@@ -321,7 +321,7 @@
                                                               {:at 80 :fire :show-clock-seq}
                                                               {:at 60 :fire :lights-green}
                                                               {:at 60 :hint :look-everywhere}
-                                                              {:at 50 :fire :picture-cymbal-fx}
+                                                              {:at 50 :hint :picture-cymbal-fx}
                                                               {:at 45 :fire :lights-soft-white}
                                                               {:at 30 :fire :hide-clock-seq}]}
 

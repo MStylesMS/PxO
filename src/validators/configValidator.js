@@ -13,6 +13,7 @@ class ConfigValidator {
     constructor() {
         this.errors = [];
         this.warnings = [];
+        this.globalHintIds = new Set();
     }
 
     /**
@@ -21,6 +22,7 @@ class ConfigValidator {
     validate(config) {
         this.errors = [];
         this.warnings = [];
+        this.globalHintIds = this.collectHintIds(config?.global?.hints);
 
         console.log('🔍 Validating configuration...');
 
@@ -49,6 +51,22 @@ class ConfigValidator {
             errors: [...this.errors],
             warnings: [...this.warnings]
         };
+    }
+
+    collectHintIds(hints) {
+        if (!hints || typeof hints !== 'object' || Array.isArray(hints)) {
+            return new Set();
+        }
+
+        return new Set(Object.keys(hints).filter(name => typeof name === 'string' && name.length > 0));
+    }
+
+    isDeprecatedFireHint(name) {
+        return typeof name === 'string' && this.globalHintIds.has(name);
+    }
+
+    warnDeprecatedFireHint(name, context) {
+        this.addWarning(`Hint '${name}' is triggered via :fire; use :hint instead`, context);
     }
 
     /**
@@ -535,6 +553,8 @@ class ConfigValidator {
         if (step.fire) {
             if (typeof step.fire !== 'string') {
                 this.addError(`Fire step in ${context} must reference a string cue/sequence name`);
+            } else if (this.isDeprecatedFireHint(step.fire)) {
+                this.warnDeprecatedFireHint(step.fire, context);
             }
         }
 
@@ -692,6 +712,8 @@ class ConfigValidator {
         if (command.fire) {
             if (typeof command.fire !== 'string') {
                 this.addError(`Schedule entry ${context} fire must reference a string cue/sequence name`);
+            } else if (this.isDeprecatedFireHint(command.fire)) {
+                this.warnDeprecatedFireHint(command.fire, context);
             }
         }
 
