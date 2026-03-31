@@ -11,6 +11,63 @@ const fs = require('fs');
 const path = require('path');
 const minimist = require('minimist');
 
+/**
+ * Publish retained MQTT discovery and schema messages for external integrations.
+ * Topics: {gameTopic}/discovery and {gameTopic}/schema (both retained).
+ */
+function _publishMqttMetadata(mqtt, cfg, sm) {
+  try {
+    const gameTopic = cfg?.global?.mqtt?.['game-topic'];
+    if (!gameTopic) {
+      log.debug('No game-topic configured; skipping discovery/schema publish');
+      return;
+    }
+
+    const zoneNames = sm.zones ? sm.zones.getZoneNames() : [];
+    const zones = zoneNames.map(name => {
+      const adapter = sm.zones.getZone(name);
+      return {
+        name,
+        type: adapter ? adapter.zoneType : 'unknown',
+        baseTopic: adapter ? adapter.zoneBaseTopic : null
+      };
+    });
+
+    const discoveryPayload = {
+      application: 'pxo',
+      timestamp: new Date().toISOString(),
+      gameTopic,
+      commandsTopic: `${gameTopic}/commands`,
+      stateTopic: `${gameTopic}/state`,
+      zones
+    };
+    mqtt.publish(`${gameTopic}/discovery`, discoveryPayload, { retain: true });
+
+    const schemaPayload = {
+      application: 'pxo',
+      commandsTopic: `${gameTopic}/commands`,
+      commands: [
+        { command: 'start',       description: 'Start or resume the game' },
+        { command: 'pause',       description: 'Pause the countdown timer' },
+        { command: 'resume',      description: 'Resume the countdown timer' },
+        { command: 'reset',       description: 'Reset game to ready state' },
+        { command: 'solve',       description: 'Trigger win/solved outcome' },
+        { command: 'fail',        description: 'Trigger fail outcome' },
+        { command: 'abort',       description: 'Abort current game' },
+        { command: 'setTime',     description: 'Set remaining time (seconds: number)' },
+        { command: 'executeHint', description: 'Fire a hint by id (id: string)' },
+        { command: 'listhints',   description: 'Publish hints registry to hintsRegistry topic' },
+        { command: 'getconfig',   description: 'Publish full UI config to config topic' }
+      ]
+    };
+    mqtt.publish(`${gameTopic}/schema`, schemaPayload, { retain: true });
+
+    log.info(`Published discovery and schema to ${gameTopic}/discovery and ${gameTopic}/schema`);
+  } catch (e) {
+    log.warn('Failed to publish MQTT metadata', e && e.message);
+  }
+}
+
 async function main() {
   // Parse command line arguments
   const argv = minimist(process.argv.slice(2), {
@@ -133,6 +190,9 @@ async function main() {
 
   const sm = new GameStateMachine({ cfg, mqtt });
   sm.init();
+
+  // Publish MQTT discovery and schema for external integrations (Node-RED, etc.)
+  _publishMqttMetadata(mqtt, cfg, sm);
 
   // Wire logger warn/error events to MQTT warnings topic so UI/operators can be notified
   try {
@@ -524,7 +584,7 @@ async function main() {
   });
 }
 
-module.exports = Object.assign(module.exports || {}, { main });
+module.exports = Object.assign(module.exports || {}, { main, _publishMqttMetadata });
 
 // --- Module-level helpers (exported for unit tests) -----------------
 // All helpers are now handled within the state machine or are no longer necessary.

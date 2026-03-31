@@ -46,6 +46,9 @@ Game orchestrator uses these topics:
 {baseTopic}/state       # Game state (published by PxO)
 {baseTopic}/status      # Game health/heartbeat (published by PxO)
 {baseTopic}/events      # Game events (published by PxO)
+
+{baseTopic}/discovery   # Retained: zones inventory (published on startup)
+{baseTopic}/schema      # Retained: supported commands schema (published on startup)
 ```
 
 **Example**:
@@ -54,6 +57,8 @@ paradox/game/commands   → External systems send commands here
 paradox/game/state      → PxO publishes game state here
 paradox/game/status     → PxO publishes heartbeat here
 paradox/game/events     → PxO publishes events here
+paradox/game/discovery  → PxO publishes retained zone inventory here
+paradox/game/schema     → PxO publishes retained command schema here
 ```
 
 ---
@@ -97,6 +102,51 @@ Health and heartbeat information:
   "state": "gameplay",
   "uptime": 12345,
   "mode": "60min"
+}
+```
+
+### Discovery Message
+
+Published **retained** to `{baseTopic}/discovery` at startup. Describes the full zone inventory for external tools (Node-RED, dashboards).
+
+```json
+{
+  "application": "pxo",
+  "timestamp": "2025-10-24T10:30:00.000Z",
+  "gameTopic": "paradox/game",
+  "commandsTopic": "paradox/game/commands",
+  "stateTopic": "paradox/game/state",
+  "zones": [
+    {
+      "name": "lights",
+      "type": "lights",
+      "baseTopic": "paradox/game/lights"
+    }
+  ]
+}
+```
+
+### Schema Message
+
+Published **retained** to `{baseTopic}/schema` at startup. Describes all supported game-level commands.
+
+```json
+{
+  "application": "pxo",
+  "commandsTopic": "paradox/game/commands",
+  "commands": [
+    { "command": "start",       "description": "Start or resume the game" },
+    { "command": "pause",       "description": "Pause the countdown timer" },
+    { "command": "resume",      "description": "Resume the countdown timer" },
+    { "command": "reset",       "description": "Reset game to ready state" },
+    { "command": "solve",       "description": "Trigger win/solved outcome" },
+    { "command": "fail",        "description": "Trigger fail outcome" },
+    { "command": "abort",       "description": "Abort current game" },
+    { "command": "setTime",     "description": "Set remaining time (seconds: number)" },
+    { "command": "executeHint", "description": "Fire a hint by id (id: string)" },
+    { "command": "listhints",   "description": "Publish hints registry to hintsRegistry topic" },
+    { "command": "getconfig",   "description": "Publish full UI config to config topic" }
+  ]
 }
 ```
 
