@@ -734,6 +734,35 @@ Files:
 - `pxo-latest.log` — Symlink to current log
 - Automatic rotation and cleanup
 
+### Gameplay Analytics JSONL Log
+
+When enabled, PxO writes a second gameplay-focused JSONL stream for run analysis.
+
+Behavior:
+
+- Enabled by INI `game_logging` + `game_log_path`, or forced by CLI `--game_log_path`.
+- Startup hard-fails if the resolved gameplay log path is invalid/unwritable.
+- File is created only after intro completes and gameplay begins (false starts are discarded).
+- File name format: `<ednBase>-YYYYMMDD-HH-MM-SS.jsonl`.
+- Time fields include:
+  - `wall_time` in `HH:MM:SS.hh`
+  - `game_time_remaining` in `MM:SS.hh` (countdown from configured gameplay duration)
+
+Included event classes (non-exhaustive):
+
+- Inbound commands and outcomes (accepted/rejected/malformed)
+- Phase transitions and game-end trigger events
+- Gameplay schedule firings
+- Top-level gameplay/control sequence lifecycle events
+- Sensor input changes with optional deadband filtering
+- PxT chat events when both chat topics are configured
+
+Excluded event classes:
+
+- Periodic `/state` heartbeat snapshots
+- `/warnings` stream records
+- Nested sequence internal command chatter
+
 ### Error Recovery
 
 **MQTT Connection Lost**:

@@ -69,6 +69,11 @@ class GameStateMachine extends EventEmitter {
     this.currentPhase = null; // current phase name (string)
     this.currentPhaseConfig = null; // current phase definition object
     this.globalSequences = {}; // loaded from :global :sequences for reference resolution
+    this.gameplayLogger = null;
+  }
+
+  setGameplayLogger(gameplayLogger) {
+    this.gameplayLogger = gameplayLogger || null;
   }
 
   _normalizePhaseType(phaseType) {
@@ -1961,12 +1966,14 @@ class GameStateMachine extends EventEmitter {
 
     let primaryLogged = false;
     let actionsTriggered = false;
+    const firedActions = [];
 
     // Handle :hint directive (v2.3.1+) - Trigger hint system
     if (entry.hint) {
       const hintId = entry.hint;
       const textOverride = entry.text; // Optional text override
       log.info(`Triggering hint '${hintId}' at ${atLabel}s${contextSuffix}`);
+      firedActions.push({ type: 'hint', value: hintId });
       try {
         // Fire hint without awaiting (fire-and-forget for schedule execution)
         this.fireHint(hintId, 'scheduled', textOverride).catch(e => {
@@ -1983,6 +1990,7 @@ class GameStateMachine extends EventEmitter {
     if (entry.fire) {
       log.info(`Firing '${entry.fire}' at ${atLabel}s${contextSuffix}`);
       this.fireByName(entry.fire).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
+      firedActions.push({ type: 'fire', value: entry.fire });
       primaryLogged = true;
       actionsTriggered = true;
     }
@@ -1992,6 +2000,7 @@ class GameStateMachine extends EventEmitter {
     if (cueName) {
       log.info(`Firing cue '${cueName}' at ${atLabel}s${contextSuffix}`);
       this.fireCueByName(cueName).catch(e => log.warn(`fireCueByName '${cueName}' failed: ${e.message}`));
+      firedActions.push({ type: 'fire-cue', value: cueName });
       primaryLogged = true;
       actionsTriggered = true;
     }
@@ -2002,6 +2011,7 @@ class GameStateMachine extends EventEmitter {
       log.info(`Firing sequence '${seqName}' at ${atLabel}s${contextSuffix}`);
       try {
         this.sequenceRunner.runSequence(seqName, { gameMode: this.gameType });
+        firedActions.push({ type: 'fire-seq', value: seqName });
       } catch (e) {
         log.warn(`runSequence failed for ${seqName}: ${e.message}`);
       }
@@ -2011,11 +2021,13 @@ class GameStateMachine extends EventEmitter {
 
     if (entry.zone || entry.zones) {
       actionsTriggered = true;
+      firedActions.push({ type: 'zone-command' });
       this.executeCueAction(entry, `${phaseLabel}@${atLabel}`).catch(e => log.warn(`Inline command failed at ${phaseLabel}@${atLabel}: ${e.message}`));
     }
 
     if (Array.isArray(entry.commands)) {
       actionsTriggered = true;
+      firedActions.push({ type: 'legacy-commands-array', count: entry.commands.length });
       log.warn(`DEPRECATED: Schedule entry at ${phaseLabel}@${atLabel} uses :commands array - migrate to inline syntax or sequences`);
       try { entry.commands.forEach(a => this.executeCueAction(a, `${phaseLabel}@${atLabel}`).catch(e => log.warn(`Legacy cmd at ${phaseLabel}@${atLabel}: ${e.message}`))); } catch (_) { }
     }
@@ -2024,6 +2036,7 @@ class GameStateMachine extends EventEmitter {
     const shouldCheckSuppression = options.checkHintSuppression !== false;
     if (hintId) {
       actionsTriggered = true;
+      firedActions.push({ type: 'play-hint', value: hintId });
       const suppressed = shouldCheckSuppression && typeof this.isScheduledHintSuppressed === 'function'
         ? this.isScheduledHintSuppressed(hintId)
         : false;
@@ -2034,12 +2047,14 @@ class GameStateMachine extends EventEmitter {
 
     if (entry.end) {
       actionsTriggered = true;
+      firedActions.push({ type: 'end', value: entry.end });
       if (entry.end === 'fail') this._triggerEnd('fail');
       if (entry.end === 'win') this._triggerEnd('win');
     }
 
     if (entry.log) {
       actionsTriggered = true;
+      firedActions.push({ type: 'log' });
       try { log.info(`[SCHED LOG] ${String(entry.log)}`); } catch (_) { }
     }
 
@@ -2049,6 +2064,14 @@ class GameStateMachine extends EventEmitter {
       } else {
         log.info(`Schedule entry at ${atLabel}s${contextSuffix} had no executable actions`);
       }
+    }
+
+    if (phaseLabel === 'gameplay' && this.gameplayLogger && firedActions.length > 0) {
+      this.gameplayLogger.event('schedule_fired', {
+        phase: phaseLabel,
+        at_seconds: Number.isFinite(atSeconds) ? atSeconds : null,
+        actions: firedActions
+      });
     }
   }
 

@@ -154,6 +154,38 @@ Notes:
 - `:additional-phases` in each mode is an allowlist of keys from `:global :additional-phases`.
 - Additional phases are optional and can be entered via operator command (`triggerPhase`).
 
+### Sensor Logging Controls (Per Sensor Input)
+
+Gameplay analytics logging supports per-topic sensor filtering controls on trigger definitions.
+
+Supported optional fields:
+
+- `:ignore_logging` (`true`/`yes`) to suppress gameplay sensor logging for that input.
+- `:deadband` as either:
+  - number threshold
+  - map with:
+    - `:threshold` numeric threshold
+    - `:field` payload field name (default `"value"`)
+    - `:min_interval_ms` minimum interval between logged events
+
+Example:
+
+```clojure
+:triggers {
+  :analog-knob {
+    :topic "paradox/room/sensors/knob"
+    :condition {:active true}
+    :deadband {:field "value" :threshold 0.5 :min_interval_ms 200}
+  }
+
+  :reed-switch {
+    :topic "paradox/room/sensors/reed"
+    :condition {:state "open"}
+    :ignore_logging true
+  }
+}
+```
+
 ### Top-Level Keys
 
 ```clojure

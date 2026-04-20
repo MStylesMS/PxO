@@ -61,6 +61,23 @@ paradox/game/discovery  → PxO publishes retained zone inventory here
 paradox/game/schema     → PxO publishes retained command schema here
 ```
 
+### Gameplay Analytics Capture (JSONL)
+
+When gameplay analytics logging is enabled, PxO captures selected MQTT-driven gameplay signals into a separate JSONL file stream.
+
+Captured:
+
+- Inbound commands to `{baseTopic}/commands` and their outcomes
+- Phase transitions and top-level gameplay/control sequence lifecycle events
+- Trigger/sensor topic changes used by gameplay triggers
+- Optional PxT chat topics from INI (`chat_to_player`, `chat_from_player`)
+
+Excluded:
+
+- Periodic `{baseTopic}/state` snapshots
+- `{baseTopic}/warnings` traffic
+- Nested sequence internal command chatter
+
 ---
 
 ## Message Formats

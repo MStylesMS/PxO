@@ -7,6 +7,7 @@ const GameStateMachine = require('./stateMachine');
 const { getUiTopics } = require('./engineUtils');
 const { loadIniConfig } = require('./ini-config-loader');
 const LogCleanup = require('./log-cleanup');
+const { GameplayLogger } = require('./gameplay-logger');
 const fs = require('fs');
 const path = require('path');
 const minimist = require('minimist');
@@ -47,17 +48,17 @@ function _publishMqttMetadata(mqtt, cfg, sm) {
       application: 'pxo',
       commandsTopic: `${gameTopic}/commands`,
       commands: [
-        { command: 'start',       description: 'Start or resume the game' },
-        { command: 'pause',       description: 'Pause the countdown timer' },
-        { command: 'resume',      description: 'Resume the countdown timer' },
-        { command: 'reset',       description: 'Reset game to ready state' },
-        { command: 'solve',       description: 'Trigger win/solved outcome' },
-        { command: 'fail',        description: 'Trigger fail outcome' },
-        { command: 'abort',       description: 'Abort current game' },
-        { command: 'setTime',     description: 'Set remaining time (seconds: number)' },
+        { command: 'start', description: 'Start or resume the game' },
+        { command: 'pause', description: 'Pause the countdown timer' },
+        { command: 'resume', description: 'Resume the countdown timer' },
+        { command: 'reset', description: 'Reset game to ready state' },
+        { command: 'solve', description: 'Trigger win/solved outcome' },
+        { command: 'fail', description: 'Trigger fail outcome' },
+        { command: 'abort', description: 'Abort current game' },
+        { command: 'setTime', description: 'Set remaining time (seconds: number)' },
         { command: 'executeHint', description: 'Fire a hint by id (id: string)' },
-        { command: 'listhints',   description: 'Publish hints registry to hintsRegistry topic' },
-        { command: 'getconfig',   description: 'Publish full UI config to config topic' }
+        { command: 'listhints', description: 'Publish hints registry to hintsRegistry topic' },
+        { command: 'getconfig', description: 'Publish full UI config to config topic' }
       ]
     };
     mqtt.publish(`${gameTopic}/schema`, schemaPayload, { retain: true });
@@ -68,13 +69,69 @@ function _publishMqttMetadata(mqtt, cfg, sm) {
   }
 }
 
+function ensureWritableDirectory(dirPath) {
+  const resolved = path.resolve(dirPath);
+  fs.mkdirSync(resolved, { recursive: true });
+  fs.accessSync(resolved, fs.constants.W_OK);
+  return resolved;
+}
+
+function getEdnBaseName(ednPath) {
+  const base = path.basename(ednPath || 'game.edn');
+  const ext = path.extname(base);
+  const stem = ext ? base.slice(0, -ext.length) : base;
+  return stem || 'game';
+}
+
+function getConfiguredGameplayDurationSeconds(cfg, mode) {
+  const game = cfg?.game?.[mode];
+  if (!game) return 0;
+
+  const direct = Number(game?.gameplay?.duration);
+  if (Number.isFinite(direct) && direct > 0) return Math.round(direct);
+
+  const phaseDuration = Number(game?.durations?.gameplay?.seconds);
+  if (Number.isFinite(phaseDuration) && phaseDuration > 0) return Math.round(phaseDuration);
+
+  const legacyDuration = Number(game?.durations?.game);
+  if (Number.isFinite(legacyDuration) && legacyDuration > 0) return Math.round(legacyDuration);
+
+  return 0;
+}
+
+function normalizeCommand(payload) {
+  return String(payload?.command || '').trim();
+}
+
+function isStartCommand(commandName) {
+  const c = String(commandName || '').toLowerCase();
+  return c === 'start' || c === 'startgame' || c === 'startmode' || c.startsWith('start:');
+}
+
+function inferStartMode(commandName, payload, cfg, sm) {
+  const normalized = String(commandName || '').trim();
+  if (normalized.toLowerCase().startsWith('start:')) {
+    return normalized.split(':', 2)[1] || null;
+  }
+
+  const explicit = payload?.mode || payload?.value || payload?.gameType;
+  if (explicit) return String(explicit);
+
+  if (sm?.currentGameMode) return sm.currentGameMode;
+  if (sm?.gameType) return sm.gameType;
+
+  const gameModes = Object.keys(cfg?.game || {});
+  return gameModes.length > 0 ? gameModes[0] : null;
+}
+
 async function main() {
   // Parse command line arguments
   const argv = minimist(process.argv.slice(2), {
     alias: {
       c: 'check'
     },
-    boolean: ['check']
+    boolean: ['check'],
+    string: ['game_log_path']
   });
 
   if (argv.check) {
@@ -83,10 +140,29 @@ async function main() {
     const ok = validateEdnFile(checkPath);
     process.exit(ok ? 0 : 1);
   }
-  
+
   // Check for --config option for INI file (infrastructure config)
   const iniConfigPath = argv.config || null;
   const iniConfig = loadIniConfig(iniConfigPath);
+
+  const cliGameLogPath = argv.game_log_path || argv['game-log-path'] || null;
+  let gameplayLogDirectory = null;
+
+  try {
+    if (cliGameLogPath) {
+      gameplayLogDirectory = ensureWritableDirectory(cliGameLogPath);
+      log.info(`Gameplay logging enabled via CLI path override: ${gameplayLogDirectory}`);
+    } else if (iniConfig.global?.game_logging) {
+      if (!iniConfig.global?.game_log_path) {
+        throw new Error('INI global.game_logging is enabled but global.game_log_path is missing');
+      }
+      gameplayLogDirectory = ensureWritableDirectory(iniConfig.global.game_log_path);
+      log.info(`Gameplay logging enabled via INI: ${gameplayLogDirectory}`);
+    }
+  } catch (err) {
+    log.error(`Gameplay logging configuration error: ${err.message}`);
+    process.exit(1);
+  }
 
   // Set log level from INI config
   if (iniConfig.global.log_level) {
@@ -153,25 +229,29 @@ async function main() {
 
   // Check for config format from command line or environment (for EDN/JSON game config)
   const configFormat = argv.json || argv._.includes('--json') || process.env.CONFIG_FORMAT === 'json' ? 'json' : 'edn';
-  
+
   // Check for --edn option for EDN file path (game content config)
   const ednConfigPath = argv.edn || null;
+  const resolvedEdnPath = ednConfigPath
+    ? path.resolve(ednConfigPath)
+    : path.resolve(__dirname, '..', 'config', 'game.edn');
+  const ednBase = getEdnBaseName(resolvedEdnPath);
 
   log.info(`Loading configuration in ${configFormat.toUpperCase()} format`);
   const cfg = loadConfig(configFormat, ednConfigPath);
-  
+
   // Override MQTT broker from INI config if provided
   if (iniConfig.mqtt && iniConfig.mqtt.broker) {
     log.info(`Overriding MQTT broker from INI: ${iniConfig.mqtt.broker}`);
     cfg.global.mqtt.broker = iniConfig.mqtt.broker;
   }
-  
+
   // Ensure we have a valid broker URL
   if (!cfg.global.mqtt.broker) {
     log.error('No MQTT broker configured! Check INI file or EDN config.');
     process.exit(1);
   }
-  
+
   log.info(`Connecting to MQTT broker: ${cfg.global.mqtt.broker}`);
   const mqtt = new MqttClient(cfg.global.mqtt.broker).connect();
 
@@ -190,6 +270,29 @@ async function main() {
 
   const sm = new GameStateMachine({ cfg, mqtt });
   sm.init();
+
+  const gameplayLogger = gameplayLogDirectory
+    ? new GameplayLogger({
+      logDir: gameplayLogDirectory,
+      ednBase,
+      logger: log,
+      getCurrentMode: () => sm.currentGameMode || sm.gameType || null,
+      getClockState: () => {
+        const state = sm.state;
+        if (state === 'gameplay' || state === 'paused' || state === 'intro') {
+          return { remainingSeconds: sm.remaining };
+        }
+        if (state === 'solved' || state === 'failed' || state === 'abort' || state === 'resetting' || state === 'ready') {
+          return { remainingSeconds: sm.resetRemaining };
+        }
+        return { remainingSeconds: sm.remaining };
+      }
+    })
+    : null;
+
+  if (gameplayLogger) {
+    sm.setGameplayLogger(gameplayLogger);
+  }
 
   // Publish MQTT discovery and schema for external integrations (Node-RED, etc.)
   _publishMqttMetadata(mqtt, cfg, sm);
@@ -230,6 +333,87 @@ async function main() {
 
   // Initialize trigger system
   const triggerRules = (cfg.global.triggers && cfg.global.triggers.escapeRoomRules) || [];
+  const sensorTopicConfig = new Map();
+  const sensorTopicState = new Map();
+
+  triggerRules.forEach((rule) => {
+    const topic = rule?.trigger?.topic;
+    if (!topic) return;
+    const existing = sensorTopicConfig.get(topic) || {
+      ignoreLogging: false,
+      deadband: null,
+      minIntervalMs: 0,
+      field: 'value'
+    };
+
+    const ignore = GameplayLogger.isTruthy(rule?.trigger?.ignore_logging) || GameplayLogger.isTruthy(rule?.ignore_logging);
+    if (ignore) existing.ignoreLogging = true;
+
+    const deadband = rule?.trigger?.deadband;
+    if (typeof deadband === 'number' && Number.isFinite(deadband) && deadband > 0) {
+      existing.deadband = deadband;
+    } else if (deadband && typeof deadband === 'object') {
+      if (Number.isFinite(deadband.threshold) && deadband.threshold > 0) {
+        existing.deadband = Number(deadband.threshold);
+      }
+      if (Number.isFinite(deadband.min_interval_ms) && deadband.min_interval_ms >= 0) {
+        existing.minIntervalMs = Number(deadband.min_interval_ms);
+      }
+      if (typeof deadband.field === 'string' && deadband.field.trim().length > 0) {
+        existing.field = deadband.field;
+      }
+    }
+
+    sensorTopicConfig.set(topic, existing);
+  });
+
+  function maybeLogSensorInput(topic, payload) {
+    if (!gameplayLogger || (!gameplayLogger.pending && !gameplayLogger.session)) return;
+    if (!sensorTopicConfig.has(topic)) return;
+
+    const cfgForTopic = sensorTopicConfig.get(topic);
+    if (cfgForTopic.ignoreLogging) return;
+
+    const now = Date.now();
+    const previous = sensorTopicState.get(topic);
+    let shouldLog = true;
+    let suppressionReason = null;
+
+    if (cfgForTopic.minIntervalMs > 0 && previous && (now - previous.tsMs) < cfgForTopic.minIntervalMs) {
+      shouldLog = false;
+      suppressionReason = 'min_interval';
+    }
+
+    if (shouldLog && cfgForTopic.deadband && payload && typeof payload === 'object') {
+      const field = cfgForTopic.field || 'value';
+      const currentValue = Number(payload[field]);
+      const previousValue = previous && previous.valueByField ? Number(previous.valueByField[field]) : null;
+      if (Number.isFinite(currentValue) && Number.isFinite(previousValue)) {
+        if (Math.abs(currentValue - previousValue) < cfgForTopic.deadband) {
+          shouldLog = false;
+          suppressionReason = 'deadband';
+        }
+      }
+    }
+
+    sensorTopicState.set(topic, {
+      tsMs: now,
+      payload,
+      valueByField: payload && typeof payload === 'object' ? payload : {}
+    });
+
+    if (!shouldLog) {
+      log.debug(`Gameplay sensor log suppressed for ${topic} (${suppressionReason})`);
+      return;
+    }
+
+    gameplayLogger.sensorChanged({
+      topic,
+      payload,
+      deadband: cfgForTopic.deadband,
+      field: cfgForTopic.field
+    });
+  }
 
   function initializeTriggers() {
     triggerRules.forEach(rule => {
@@ -258,6 +442,14 @@ async function main() {
     }
 
     log.info(`Trigger activated: ${rule.name} - executing ${rule.actions.length} actions`);
+    if (gameplayLogger) {
+      gameplayLogger.event('trigger_activated', {
+        name: rule.name,
+        topic,
+        payload,
+        actions_count: Array.isArray(rule.actions) ? rule.actions.length : 0
+      });
+    }
 
     // Execute all actions for this trigger
     for (const action of rule.actions) {
@@ -374,10 +566,46 @@ async function main() {
     }
   }
 
+  const chatToPlayerTopic = iniConfig.global?.chat_to_player || null;
+  const chatFromPlayerTopic = iniConfig.global?.chat_from_player || null;
+  const chatLoggingEnabled = !!(chatToPlayerTopic && chatFromPlayerTopic);
+  if ((chatToPlayerTopic || chatFromPlayerTopic) && !chatLoggingEnabled) {
+    log.warn('Gameplay chat logging disabled: both INI fields chat_to_player and chat_from_player are required');
+  }
+
+  const gameplayControlSequenceAllowlist = new Set([
+    'intro-to-gameplay-sequence',
+    'pause-sequence',
+    'resume-sequence',
+    'reset-sequence',
+    'closing-complete-sequence',
+    'adjust-time-sequence',
+    'game-mode-changed-sequence',
+    'emergency-stop-sequence'
+  ]);
+
+  function shouldLogSequenceEvent(sequenceData = {}) {
+    const depth = Number(sequenceData.depth);
+    const name = String(sequenceData.name || '');
+    if (!Number.isFinite(depth) || depth !== 0) return false;
+    if (sm.state === 'gameplay') return true;
+    return gameplayControlSequenceAllowlist.has(name);
+  }
+
   // Subscribe to incoming topics
   mqtt.on('message', (topic, payload) => {
     try {
       log.debug(`Received MQTT message on ${topic}:`, payload);
+
+      if (chatLoggingEnabled && gameplayLogger) {
+        if (topic === chatToPlayerTopic) {
+          gameplayLogger.chat('chat_to_player', topic, payload);
+        } else if (topic === chatFromPlayerTopic) {
+          gameplayLogger.chat('chat_from_player', topic, payload);
+        }
+      }
+
+      maybeLogSensorInput(topic, payload);
 
       // Check for trigger rules first
       const matchingRules = triggerRules.filter(rule => rule.trigger.topic === topic);
@@ -394,6 +622,9 @@ async function main() {
       if (topic === uiTopics.commands) {
         // Validate command structure first
         if (typeof payload === 'string') {
+          if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
+            gameplayLogger.commandRejected('unknown', 'malformed_json', payload, topic, { source: 'mqtt' });
+          }
           // Malformed JSON - publish event and warning
           const eventData = { topic, rawPayload: payload, error: 'malformed_json' };
           sm.publishEvent('command_validation_failed', eventData);
@@ -406,6 +637,9 @@ async function main() {
         }
 
         if (!payload || typeof payload !== 'object' || !payload.command) {
+          if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
+            gameplayLogger.commandRejected('unknown', 'missing_command_field', payload, topic, { source: 'mqtt' });
+          }
           // Missing or invalid command field
           const eventData = { topic, payload, error: 'missing_command_field' };
           sm.publishEvent('command_validation_failed', eventData);
@@ -418,19 +652,48 @@ async function main() {
         }
 
         // Process valid commands (allow a few synonyms for compatibility)
-        const cmdKey = String(payload.command || '').toLowerCase();
+        const commandName = normalizeCommand(payload);
+        const cmdKey = commandName.toLowerCase();
+        const startCommand = isStartCommand(commandName);
+
+        if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session || !startCommand)) {
+          gameplayLogger.commandReceived(commandName, payload, topic, { source: 'mqtt' });
+        }
+
+        if (startCommand && gameplayLogger && !gameplayLogger.canAcceptStart()) {
+          gameplayLogger.commandRejected(commandName, 'start_lockout_2s', payload, topic, { source: 'lockout' });
+          sm.publishEvent('command_validation_failed', {
+            command: commandName,
+            payload,
+            error: 'start_lockout_2s'
+          });
+          sm.publishWarning('start_lockout_2s', {
+            message: 'Start command ignored due to 2-second lockout window',
+            command: commandName
+          });
+          return;
+        }
 
         if (cmdKey === 'listhints' || cmdKey === 'gethints' || cmdKey === 'hints') {
           log.info('Publishing hints registry');
           publishHintsRegistry();
           sm.publishEvent('command_processed', { command: payload.command, topic });
+          if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
+            gameplayLogger.commandApplied(commandName, payload, topic, { source: 'ui-helper' });
+          }
         } else if (cmdKey === 'getconfig' || cmdKey === 'config') {
           log.info('Publishing full configuration');
           publishUiConfig();
           sm.publishEvent('command_processed', { command: payload.command, topic });
+          if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
+            gameplayLogger.commandApplied(commandName, payload, topic, { source: 'ui-helper' });
+          }
         } else if (payload.command === 'executeHint') {
           const hintId = payload && (payload.id || payload.hintId || payload.hint);
           if (!hintId) {
+            if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
+              gameplayLogger.commandRejected(commandName, 'missing_hint_id', payload, topic, { source: 'validation' });
+            }
             sm.publishEvent('command_validation_failed', { command: 'executeHint', payload, error: 'missing_hint_id' });
             sm.publishWarning('executeHint_missing_id', {
               message: 'executeHint command called without required id/hintId/hint parameter',
@@ -443,7 +706,13 @@ async function main() {
               // The state machine now handles hint execution directly.
               sm.fireHint(hintId, 'manual');
               sm.publishEvent('command_processed', { command: 'executeHint', hintId, topic });
+              if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
+                gameplayLogger.commandApplied(commandName, payload, topic, { hintId });
+              }
             } catch (e) {
+              if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
+                gameplayLogger.commandRejected(commandName, e.message || 'execute_hint_failed', payload, topic, { hintId });
+              }
               sm.publishEvent('command_execution_failed', { command: 'executeHint', hintId, error: e.message });
               sm.publishWarning('executeHint_failed', {
                 message: `Failed to execute hint '${hintId}': ${e.message}`,
@@ -454,24 +723,52 @@ async function main() {
           })();
         } else {
           log.info(`Delegating command to state machine: ${JSON.stringify(payload)}`);
-          sm.handleCommand(payload).catch(error => {
-            log.error('Error handling command:', error);
-            sm.publishEvent('command_execution_failed', { command: payload.command, payload, error: error.message });
-            sm.publishWarning('state_machine_command_failed', {
-              message: `State machine failed to process command '${payload.command}': ${error.message}`,
-              command: payload.command,
-              error: error.message
-            });
-            sm.runErrorSequence('command_execution_failed', {
-              command: payload.command,
-              error: error.message
-            }).catch(() => { /* best effort */ });
-          });
+          (async () => {
+            try {
+              const result = await sm.handleCommand(payload);
+              if (result === false) {
+                if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
+                  gameplayLogger.commandRejected(commandName, 'state_machine_rejected', payload, topic, { result });
+                }
+                return;
+              }
+
+              if (startCommand && gameplayLogger) {
+                const mode = inferStartMode(commandName, payload, cfg, sm);
+                const gameplayDurationSec = getConfiguredGameplayDurationSeconds(cfg, mode);
+                gameplayLogger.beginPendingRun({
+                  startCommand: commandName,
+                  mode,
+                  topic,
+                  gameplayDurationSec,
+                  tsMs: Date.now()
+                });
+              } else if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
+                gameplayLogger.commandApplied(commandName, payload, topic, { source: 'state_machine' });
+              }
+            } catch (error) {
+              if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session || startCommand)) {
+                gameplayLogger.commandRejected(commandName, error.message || 'state_machine_command_failed', payload, topic, { source: 'state_machine' });
+              }
+
+              log.error('Error handling command:', error);
+              sm.publishEvent('command_execution_failed', { command: payload.command, payload, error: error.message });
+              sm.publishWarning('state_machine_command_failed', {
+                message: `State machine failed to process command '${payload.command}': ${error.message}`,
+                command: payload.command,
+                error: error.message
+              });
+              sm.runErrorSequence('command_execution_failed', {
+                command: payload.command,
+                error: error.message
+              }).catch(() => { /* best effort */ });
+            }
+          })();
         }
       } else if (topic === uiTopics.hint) {
         // Hints execution topic handler
         log.debug('Received hint execution request:', payload);
-        
+
         // Validate payload structure
         if (!payload || typeof payload !== 'object') {
           sm.publishWarning('hint_execution_invalid_payload', {
@@ -514,9 +811,42 @@ async function main() {
       } else if (topic === uiTopics.events) {
         // React to mode changes to republish hints for the active game
         try {
-          if (payload && payload.event === 'game_mode_changed') {
+          const eventName = payload && payload.event;
+          const eventData = payload && payload.data ? payload.data : {};
+
+          if (eventName === 'game_mode_changed') {
             publishHintsRegistry();
             publishUiConfig();
+            if (gameplayLogger) {
+              gameplayLogger.noteModeChange(eventData.newMode || sm.currentGameMode || sm.gameType);
+            }
+          }
+
+          if (gameplayLogger && eventName) {
+            if (eventName === 'phase_transition') {
+              gameplayLogger.event('phase_transition', eventData);
+              if (eventData.to === 'gameplay') {
+                gameplayLogger.commitPendingRun({ mode: sm.currentGameMode || sm.gameType });
+              }
+              if (gameplayLogger.pending && eventData.from === 'intro' && eventData.to !== 'gameplay') {
+                gameplayLogger.discardPending('intro_ended_without_gameplay');
+              }
+              if (gameplayLogger.session && eventData.to === 'ready') {
+                gameplayLogger.endSession({ reason: 'phase_ready' });
+              }
+            } else if (eventName === 'game_end_trigger') {
+              gameplayLogger.event('game_end_triggered', eventData);
+            } else if (eventName === 'hint_executed') {
+              gameplayLogger.event('hint_executed', eventData);
+            } else if (eventName === 'time_adjusted') {
+              gameplayLogger.event('time_adjusted', eventData);
+            } else if ((eventName === 'sequence_start' || eventName === 'sequence_complete') && shouldLogSequenceEvent(eventData)) {
+              const mapped = eventName === 'sequence_start' ? 'sequence_started' : 'sequence_completed';
+              gameplayLogger.event(mapped, eventData);
+            } else if (eventName === 'reset_sequence_complete' && gameplayLogger.session) {
+              gameplayLogger.event('reset_sequence_complete', eventData);
+              gameplayLogger.endSession({ reason: 'reset_sequence_complete' });
+            }
           }
         } catch (_) { /* ignore */ }
       }
@@ -528,6 +858,10 @@ async function main() {
   mqtt.subscribe(uiTopics.commands);
   mqtt.subscribe(uiTopics.events);
   mqtt.subscribe(uiTopics.hint); // Subscribe to hints execution topic
+  if (chatLoggingEnabled) {
+    mqtt.subscribe(chatToPlayerTopic);
+    mqtt.subscribe(chatFromPlayerTopic);
+  }
 
   // Initialize trigger subscriptions
   initializeTriggers();
@@ -574,11 +908,13 @@ async function main() {
 
   process.on('SIGINT', () => {
     log.info('SIGINT, cleaning up and exiting');
+    if (gameplayLogger) gameplayLogger.endSession({ reason: 'sigint' });
     mqtt.disconnect();
     setTimeout(() => process.exit(0), 100);
   });
   process.on('SIGTERM', () => {
     log.info('SIGTERM, cleaning up and exiting');
+    if (gameplayLogger) gameplayLogger.endSession({ reason: 'sigterm' });
     mqtt.disconnect();
     setTimeout(() => process.exit(0), 100);
   });

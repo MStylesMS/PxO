@@ -9,6 +9,15 @@ const fs = require('fs');
 const path = require('path');
 const ini = require('ini');
 
+function parseBoolean(value) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value !== 'string') return false;
+
+    const normalized = value.trim().toLowerCase();
+    return ['1', 'true', 'yes', 'on', 'enabled'].includes(normalized);
+}
+
 function normalizeBrokerUrl(broker, port) {
     if (!broker) return null;
 
@@ -52,7 +61,11 @@ function loadIniConfig(configPath) {
         return {
             global: {
                 log_directory: null,
-                log_level: 'info'
+                log_level: 'info',
+                game_logging: false,
+                game_log_path: null,
+                chat_to_player: null,
+                chat_from_player: null
             },
             mqtt: {
                 broker: null,
@@ -68,12 +81,20 @@ function loadIniConfig(configPath) {
         const mqttBroker = normalizeBrokerUrl(config.mqtt?.broker || null, mqttPort);
         const logDirectory = config.global?.log_directory || config.logging?.directory || null;
         const logLevel = config.global?.log_level || config.logging?.level || 'info';
+        const gameLogging = parseBoolean(config.global?.game_logging ?? config.logging?.game_logging ?? false);
+        const gameLogPath = config.global?.game_log_path || config.logging?.game_log_path || null;
+        const chatToPlayer = config.global?.chat_to_player || config.logging?.chat_to_player || null;
+        const chatFromPlayer = config.global?.chat_from_player || config.logging?.chat_from_player || null;
 
         // Normalize configuration
         return {
             global: {
                 log_directory: logDirectory,
-                log_level: logLevel
+                log_level: logLevel,
+                game_logging: gameLogging,
+                game_log_path: gameLogPath,
+                chat_to_player: chatToPlayer,
+                chat_from_player: chatFromPlayer
             },
             mqtt: {
                 broker: mqttBroker,
@@ -86,7 +107,11 @@ function loadIniConfig(configPath) {
         return {
             global: {
                 log_directory: null,
-                log_level: 'info'
+                log_level: 'info',
+                game_logging: false,
+                game_log_path: null,
+                chat_to_player: null,
+                chat_from_player: null
             },
             mqtt: {
                 broker: null,

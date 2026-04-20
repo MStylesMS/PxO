@@ -120,6 +120,22 @@ node src/game.js --json
 
 ### Other Options
 
+#### `--game_log_path <path>`
+
+Overrides INI gameplay logging settings and forces gameplay analytics logging on.
+
+**Example**:
+
+```bash
+node src/game.js --game_log_path /opt/paradox/logs/pxo-gameplay
+```
+
+Behavior:
+
+- Overrides INI `game_log_path` and `game_logging`.
+- Path must be writable; PxO creates the directory if missing.
+- If path is invalid/unwritable, startup fails (hard fail).
+
 #### `--check`, `-c`
 
 Validate EDN configuration and exit without starting the game runtime.

@@ -191,6 +191,32 @@ persist_state = false
 state_file = /opt/paradox/data/pxo-state.json
 ```
 
+### Gameplay Analytics Logging
+
+Gameplay analytics logging is separate from the normal PxO logger and writes JSONL records focused on player progression.
+
+INI keys (recommended under `[global]`, also accepted under `[logging]`):
+
+```ini
+[global]
+# Enable gameplay analytics logging (accepted true values: true, on, yes, 1)
+game_logging = true
+
+# Directory for gameplay JSONL files
+game_log_path = /opt/paradox/logs/pxo-gameplay
+
+# Optional chat capture topics (both are required to enable chat logging)
+chat_to_player = paradox/houdini/chat/to-player
+chat_from_player = paradox/houdini/chat/from-player
+```
+
+Rules:
+
+- `game_logging` is enabled only when `game_log_path` resolves to a writable directory.
+- PxO will create `game_log_path` if it does not exist.
+- If gameplay logging is enabled but path validation fails, PxO startup fails (hard fail).
+- CLI `--game_log_path` overrides INI and forces gameplay logging on when valid.
+
 **Heartbeat**:
 - `heartbeat_ms` — Interval for state/status publishing to MQTT
 

@@ -83,6 +83,14 @@ global.expect = (received) => ({
   toBeGreaterThan: (n) => {
     if (!(Number(received) > n)) throw new Error(`Expected ${received} to be > ${n}`);
   },
+  toHaveLength: (n) => {
+    if (!received || typeof received.length !== 'number') {
+      throw new Error('toHaveLength expects a value with a length property');
+    }
+    if (received.length !== n) {
+      throw new Error(`Expected length ${n}; received ${received.length}`);
+    }
+  },
   some: (predicate) => { if (!Array.isArray(received) || !received.some(predicate)) throw new Error('Expected array.some(predicate) to be true'); },
   filter: (predicate) => { if (!Array.isArray(received)) throw new Error('Expected array'); return received.filter(predicate); },
   toHaveBeenCalledWith: (...args) => {
