@@ -170,6 +170,51 @@ class ModularConfigAdapter {
     }
 
     const settings = modular.global.settings || {};
+
+    function normalizeTriggerRules(triggerConfig) {
+      if (!triggerConfig || typeof triggerConfig !== 'object') {
+        return [];
+      }
+
+      if (Array.isArray(triggerConfig)) {
+        return triggerConfig.filter(rule => rule && typeof rule === 'object');
+      }
+
+      if (Array.isArray(triggerConfig.escapeRoomRules)) {
+        return triggerConfig.escapeRoomRules.filter(rule => rule && typeof rule === 'object');
+      }
+
+      return Object.entries(triggerConfig)
+        .map(([name, definition]) => {
+          if (!definition || typeof definition !== 'object') {
+            return null;
+          }
+
+          const trigger = definition.trigger && typeof definition.trigger === 'object'
+            ? { ...definition.trigger }
+            : {
+                topic: definition.topic,
+                source: definition.source,
+                condition: definition.condition
+              };
+
+          const actions = Array.isArray(definition.actions) ? definition.actions : [];
+
+          return {
+            name,
+            ...(definition.description ? { description: definition.description } : {}),
+            trigger,
+            actions
+          };
+        })
+        .filter(Boolean);
+    }
+
+    const triggerRules = normalizeTriggerRules(modular.global.triggers || {});
+    const inputSources = modular.global.inputs
+      || modular.global['trigger-sources']
+      || modular.global.triggerSources
+      || {};
     // Build topics required by legacy tests: ui.base_topic, clock.base_topic, fx.<zone>.base_topic
     const topics = { ...(modular.global.mqtt?.topics || {}) };
     const base = modular.global?.mqtt?.['game-topic'];
@@ -222,7 +267,14 @@ class ModularConfigAdapter {
         // Expose command-sequences for newer EDN layout and fall back to legacy nested game-actions
         'command-sequences': modular.global['command-sequences'] || (modular.global.sequences && modular.global.sequences['game-actions']) || {},
         // Also expose sequences directly for backward compatibility with code expecting cfg.global.sequences
-        sequences: modular.global.sequences || {}
+        sequences: modular.global.sequences || {},
+        // Expose trigger source registry and normalized trigger rules for runtime subscriptions.
+        inputs: inputSources,
+        'trigger-sources': modular.global['trigger-sources'] || modular.global.triggerSources || inputSources,
+        triggerSources: modular.global.triggerSources || modular.global['trigger-sources'] || inputSources,
+        triggers: {
+          escapeRoomRules: triggerRules
+        }
       },
       game: buildGameModes(modular['game-modes'], videos)
     };

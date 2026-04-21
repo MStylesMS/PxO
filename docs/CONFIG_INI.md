@@ -208,6 +208,9 @@ game_log_path = /opt/paradox/logs/pxo-gameplay
 # Optional chat capture topics (both are required to enable chat logging)
 chat_to_player = paradox/houdini/chat/to-player
 chat_from_player = paradox/houdini/chat/from-player
+
+# Trigger source validation mode: off | warn | fail
+trigger_source_strict = warn
 ```
 
 Rules:
@@ -216,6 +219,10 @@ Rules:
 - PxO will create `game_log_path` if it does not exist.
 - If gameplay logging is enabled but path validation fails, PxO startup fails (hard fail).
 - CLI `--game_log_path` overrides INI and forces gameplay logging on when valid.
+- `trigger_source_strict` controls startup behavior for invalid trigger source config:
+	- `off`: suppresses validation warnings
+	- `warn` (default): logs warnings and continues startup
+	- `fail`: startup exits on invalid/duplicate sources, unknown source references, or unresolved trigger topics
 
 **Heartbeat**:
 - `heartbeat_ms` — Interval for state/status publishing to MQTT

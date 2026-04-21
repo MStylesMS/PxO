@@ -14,6 +14,8 @@ Paradox Orchestrator (PxO) uses MQTT for all zone communication following standa
 - **Status**: Zones → Monitoring systems (`{baseTopic}/status`)
 - **Warnings**: Zones → Monitoring systems (`{baseTopic}/warnings`)
 
+PxO can also subscribe to external producer topics for gameplay triggers (for example PFx input events or Pio GPIO topics). These are configured in EDN trigger/source definitions, not hardcoded in the runtime topic list.
+
 ---
 
 ## Topic Structure
@@ -60,6 +62,22 @@ paradox/game/events     → PxO publishes events here
 paradox/game/discovery  → PxO publishes retained zone inventory here
 paradox/game/schema     → PxO publishes retained command schema here
 ```
+
+### External Trigger Source Topics
+
+PxO trigger rules may subscribe to topics outside game control and zone adapter topics.
+
+Recommended pattern:
+- Prefer canonical producer event topics for repeatable gameplay integrations.
+- Allow direct producer/raw topics when canonicalization adds little value.
+
+Examples:
+```
+paradox/houdini/inputs/front-door/events   → PFx-produced normalized sensor events
+paradox/houdini/pio/gpio/door              → Pio-produced direct GPIO state
+```
+
+PxO does not require PFx as a proxy for Pio or other producer apps. All integrations are broker-based.
 
 ### Gameplay Analytics Capture (JSONL)
 

@@ -124,6 +124,276 @@ function inferStartMode(commandName, payload, cfg, sm) {
   return gameModes.length > 0 ? gameModes[0] : null;
 }
 
+function normalizeTriggerStrictMode(value) {
+  if (value === undefined || value === null || value === '') return 'warn';
+  const normalized = String(value).trim().toLowerCase();
+  if (['off', 'false', '0', 'no'].includes(normalized)) return 'off';
+  if (['warn', 'warning'].includes(normalized)) return 'warn';
+  if (['fail', 'error', 'strict', 'true', '1', 'yes'].includes(normalized)) return 'fail';
+  return 'warn';
+}
+
+function buildInputSourceMap(cfg) {
+  const sourceMap = new Map();
+  const diagnostics = {
+    invalidSources: [],
+    duplicateSources: []
+  };
+
+  const candidates = cfg?.global?.inputs
+    || cfg?.global?.['trigger-sources']
+    || cfg?.global?.triggerSources
+    || {};
+
+  if (Array.isArray(candidates)) {
+    candidates.forEach((entry, index) => {
+      if (!entry || typeof entry !== 'object') return;
+
+      const sourceNameRaw = entry.name || entry.id;
+      const sourceName = typeof sourceNameRaw === 'string' ? sourceNameRaw.trim() : '';
+      if (!sourceName) {
+        diagnostics.invalidSources.push({ index, reason: 'missing_name' });
+        return;
+      }
+
+      const topic = typeof entry.topic === 'string' ? entry.topic.trim() : '';
+      if (!topic) {
+        diagnostics.invalidSources.push({ index, source: sourceName, reason: 'missing_topic' });
+        return;
+      }
+
+      if (sourceMap.has(sourceName)) {
+        diagnostics.duplicateSources.push({ source: sourceName, index });
+        return;
+      }
+
+      sourceMap.set(sourceName, { ...entry, topic });
+    });
+
+    return { sourceMap, diagnostics };
+  }
+
+  Object.entries(candidates).forEach(([name, definition]) => {
+    if (!definition || typeof definition !== 'object') return;
+    const sourceName = typeof name === 'string' ? name.trim() : '';
+    if (!sourceName) {
+      diagnostics.invalidSources.push({ source: String(name), reason: 'invalid_name' });
+      return;
+    }
+
+    const topic = typeof definition.topic === 'string' ? definition.topic.trim() : '';
+    if (!topic) {
+      diagnostics.invalidSources.push({ source: sourceName, reason: 'missing_topic' });
+      return;
+    }
+
+    sourceMap.set(sourceName, { ...definition, topic });
+  });
+
+  return { sourceMap, diagnostics };
+}
+
+function buildTriggerRules(rawTriggerRules, inputSources) {
+  const diagnostics = {
+    unresolvedRules: [],
+    unknownSourceRules: []
+  };
+
+  const triggerRules = rawTriggerRules
+    .map((rule, index) => {
+      if (!rule || typeof rule !== 'object') return null;
+
+      const trigger = { ...(rule.trigger || {}) };
+      let resolvedTopic = typeof trigger.topic === 'string' ? trigger.topic.trim() : '';
+      const sourceNameRaw = trigger.source || rule.source;
+      const sourceName = typeof sourceNameRaw === 'string' ? sourceNameRaw.trim() : '';
+
+      if (!resolvedTopic && sourceName && inputSources.has(sourceName)) {
+        resolvedTopic = inputSources.get(sourceName).topic;
+      }
+
+      if (!resolvedTopic) {
+        diagnostics.unresolvedRules.push({
+          name: rule.name || `rule-${index + 1}`,
+          index,
+          source: sourceName || null
+        });
+        return null;
+      }
+
+      if (sourceName && !inputSources.has(sourceName)) {
+        diagnostics.unknownSourceRules.push({
+          name: rule.name || `rule-${index + 1}`,
+          index,
+          source: sourceName,
+          topic: resolvedTopic
+        });
+      }
+
+      return {
+        ...rule,
+        actions: Array.isArray(rule.actions) ? rule.actions : [],
+        trigger: {
+          ...trigger,
+          condition: (trigger.condition && typeof trigger.condition === 'object') ? trigger.condition : {},
+          topic: resolvedTopic,
+          source: sourceName || trigger.source
+        }
+      };
+    })
+    .filter(Boolean);
+
+  return { triggerRules, diagnostics };
+}
+
+function logTriggerDiagnostics({ strictMode, rawTriggerRules, inputSources, triggerRules, sourceDiagnostics, triggerDiagnostics }) {
+  const report = {
+    strictMode,
+    configuredRules: rawTriggerRules.length,
+    activeRules: triggerRules.length,
+    skippedRules: triggerDiagnostics.unresolvedRules.length,
+    sources: inputSources.size,
+    invalidSources: sourceDiagnostics.invalidSources.length,
+    duplicateSources: sourceDiagnostics.duplicateSources.length,
+    unknownSourceRules: triggerDiagnostics.unknownSourceRules.length
+  };
+
+  log.info(`Trigger startup diagnostics: ${JSON.stringify(report)}`);
+
+  if (sourceDiagnostics.invalidSources.length > 0) {
+    sourceDiagnostics.invalidSources.forEach((entry) => {
+      log.warn(`Trigger source ignored (${entry.reason}): ${JSON.stringify(entry)}`);
+    });
+  }
+
+  if (sourceDiagnostics.duplicateSources.length > 0) {
+    sourceDiagnostics.duplicateSources.forEach((entry) => {
+      log.warn(`Duplicate trigger source ignored: ${entry.source} (entry index ${entry.index})`);
+    });
+  }
+
+  if (triggerDiagnostics.unresolvedRules.length > 0) {
+    triggerDiagnostics.unresolvedRules.forEach((entry) => {
+      log.warn(`Skipping trigger rule '${entry.name}': missing trigger topic and unresolved source '${entry.source || 'none'}'`);
+    });
+  }
+
+  if (triggerDiagnostics.unknownSourceRules.length > 0) {
+    triggerDiagnostics.unknownSourceRules.forEach((entry) => {
+      log.warn(`Trigger rule '${entry.name}' references unknown source '${entry.source}', using explicit topic '${entry.topic}'`);
+    });
+  }
+
+  if (triggerRules.length > 0) {
+    triggerRules.forEach((rule) => {
+      const sourceLabel = rule?.trigger?.source ? ` source=${rule.trigger.source}` : ' source=topic-only';
+      log.info(`Trigger binding: ${rule.name || 'unnamed'} topic=${rule.trigger.topic}${sourceLabel}`);
+    });
+  }
+}
+
+function shouldFailForTriggerDiagnostics(strictMode, sourceDiagnostics, triggerDiagnostics) {
+  if (strictMode !== 'fail') return false;
+  return sourceDiagnostics.invalidSources.length > 0
+    || sourceDiagnostics.duplicateSources.length > 0
+    || triggerDiagnostics.unresolvedRules.length > 0
+    || triggerDiagnostics.unknownSourceRules.length > 0;
+}
+
+function getRulePhaseConstraint(rule) {
+  const phaseRaw = rule?.whenPhase
+    || rule?.when_phase
+    || rule?.['when-phase']
+    || rule?.trigger?.whenPhase
+    || rule?.trigger?.when_phase
+    || rule?.trigger?.['when-phase'];
+
+  if (!phaseRaw) return null;
+
+  const values = Array.isArray(phaseRaw) ? phaseRaw : [phaseRaw];
+  const phases = values
+    .map(v => String(v || '').trim())
+    .filter(Boolean);
+
+  return phases.length > 0 ? phases : null;
+}
+
+function getValueByPath(obj, pathExpr) {
+  if (!obj || typeof obj !== 'object') return undefined;
+  if (!pathExpr || typeof pathExpr !== 'string') return undefined;
+  const parts = pathExpr.split('.').map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0) return undefined;
+
+  let cursor = obj;
+  for (const part of parts) {
+    if (!cursor || typeof cursor !== 'object' || !(part in cursor)) {
+      return undefined;
+    }
+    cursor = cursor[part];
+  }
+  return cursor;
+}
+
+function normalizeEventToken(value) {
+  const token = String(value || '').trim().toLowerCase();
+  const aliases = {
+    opened: 'open',
+    open: 'open',
+    closed: 'close',
+    close: 'close',
+    activated: 'activate',
+    activate: 'activate',
+    deactivated: 'deactivate',
+    deactivate: 'deactivate',
+    pressed: 'press',
+    press: 'press',
+    released: 'release',
+    release: 'release'
+  };
+  return aliases[token] || token;
+}
+
+function conditionEntryMatches(actualValue, expectedValue, key) {
+  if (Array.isArray(expectedValue)) {
+    return expectedValue.some((candidate) => conditionEntryMatches(actualValue, candidate, key));
+  }
+
+  if (typeof actualValue === 'string' && typeof expectedValue === 'string') {
+    const keyName = String(key || '').trim().toLowerCase();
+    const keyLeaf = keyName.includes('.') ? keyName.split('.').pop() : keyName;
+    if (keyLeaf === 'event') {
+      return normalizeEventToken(actualValue) === normalizeEventToken(expectedValue);
+    }
+  }
+
+  return actualValue === expectedValue;
+}
+
+function doesTriggerConditionMatch(payload, condition = {}) {
+  const entries = Object.entries(condition || {});
+  if (entries.length === 0) return true;
+
+  for (const [key, expectedValue] of entries) {
+    let actualValue = payload ? payload[key] : undefined;
+
+    // Support nested key paths, e.g. input_event.event
+    if (actualValue === undefined && key.includes('.')) {
+      actualValue = getValueByPath(payload, key);
+    }
+
+    // Backward-compatible convenience: if key is flat and absent, probe common nested input event envelope.
+    if (actualValue === undefined && payload && payload.input_event && typeof payload.input_event === 'object') {
+      actualValue = payload.input_event[key];
+    }
+
+    if (!conditionEntryMatches(actualValue, expectedValue, key)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 async function main() {
   // Parse command line arguments
   const argv = minimist(process.argv.slice(2), {
@@ -332,7 +602,30 @@ async function main() {
   // The functions normalizeGlobalHint, normalizeGameHint, and combineHints are removed.
 
   // Initialize trigger system
-  const triggerRules = (cfg.global.triggers && cfg.global.triggers.escapeRoomRules) || [];
+  const rawTriggerRules = (cfg.global.triggers && cfg.global.triggers.escapeRoomRules) || [];
+  const strictMode = normalizeTriggerStrictMode(
+    argv['trigger-source-strict']
+      || argv.trigger_source_strict
+      || iniConfig.global?.trigger_source_strict
+      || process.env.PXO_TRIGGER_SOURCE_STRICT
+  );
+  const { sourceMap: inputSources, diagnostics: sourceDiagnostics } = buildInputSourceMap(cfg);
+  const { triggerRules, diagnostics: triggerDiagnostics } = buildTriggerRules(rawTriggerRules, inputSources);
+
+  logTriggerDiagnostics({
+    strictMode,
+    rawTriggerRules,
+    inputSources,
+    triggerRules,
+    sourceDiagnostics,
+    triggerDiagnostics
+  });
+
+  if (shouldFailForTriggerDiagnostics(strictMode, sourceDiagnostics, triggerDiagnostics)) {
+    log.error('Trigger startup validation failed in strict mode. Set trigger_source_strict=warn|off to continue while fixing config issues.');
+    process.exit(1);
+  }
+
   const sensorTopicConfig = new Map();
   const sensorTopicState = new Map();
 
@@ -417,7 +710,8 @@ async function main() {
 
   function initializeTriggers() {
     triggerRules.forEach(rule => {
-      log.info(`Subscribing to trigger: ${rule.name} on topic ${rule.trigger.topic}`);
+      const sourceLabel = rule?.trigger?.source ? ` (source ${rule.trigger.source})` : '';
+      log.info(`Subscribing to trigger: ${rule.name} on topic ${rule.trigger.topic}${sourceLabel}`);
       mqtt.subscribe(rule.trigger.topic);
     });
   }
@@ -425,34 +719,35 @@ async function main() {
   async function handleTrigger(topic, payload, rule) {
     log.debug(`Evaluating trigger rule: ${rule.name}`);
 
-    // Check if trigger condition matches
-    const condition = rule.trigger.condition;
-    let conditionMet = true;
-
-    for (const [key, expectedValue] of Object.entries(condition)) {
-      if (payload[key] !== expectedValue) {
-        conditionMet = false;
-        break;
-      }
+    const allowedPhases = getRulePhaseConstraint(rule);
+    if (allowedPhases && !allowedPhases.includes(sm.state)) {
+      log.debug(`Trigger ${rule.name} ignored: current phase '${sm.state}' not in [${allowedPhases.join(', ')}]`);
+      return;
     }
+
+    // Check if trigger condition matches
+    const condition = (rule.trigger && typeof rule.trigger.condition === 'object') ? rule.trigger.condition : {};
+    const conditionMet = doesTriggerConditionMatch(payload, condition);
 
     if (!conditionMet) {
       log.debug(`Trigger condition not met for ${rule.name}`);
       return;
     }
 
-    log.info(`Trigger activated: ${rule.name} - executing ${rule.actions.length} actions`);
+    const actions = Array.isArray(rule.actions) ? rule.actions : [];
+    log.info(`Trigger activated: ${rule.name} - executing ${actions.length} actions`);
     if (gameplayLogger) {
       gameplayLogger.event('trigger_activated', {
         name: rule.name,
+        source: rule?.trigger?.source || null,
         topic,
         payload,
-        actions_count: Array.isArray(rule.actions) ? rule.actions.length : 0
+        actions_count: actions.length
       });
     }
 
     // Execute all actions for this trigger
-    for (const action of rule.actions) {
+    for (const action of actions) {
       try {
         await executeAction(action, rule.name);
       } catch (error) {
@@ -920,7 +1215,18 @@ async function main() {
   });
 }
 
-module.exports = Object.assign(module.exports || {}, { main, _publishMqttMetadata });
+module.exports = Object.assign(module.exports || {}, {
+  main,
+  _publishMqttMetadata,
+  normalizeTriggerStrictMode,
+  buildInputSourceMap,
+  buildTriggerRules,
+  getRulePhaseConstraint,
+  doesTriggerConditionMatch,
+  conditionEntryMatches,
+  normalizeEventToken,
+  getValueByPath
+});
 
 // --- Module-level helpers (exported for unit tests) -----------------
 // All helpers are now handled within the state machine or are no longer necessary.

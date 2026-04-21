@@ -186,6 +186,47 @@ Example:
 }
 ```
 
+### Input Source Registry (External Producer Inputs)
+
+PxO can consume gameplay-driving input topics from multiple producer apps (for example PFx and Pio).
+
+To keep trigger rules maintainable, define named input sources in `:inputs` and reference them from trigger rules.
+
+```clojure
+:inputs {
+  :front-door {:topic "paradox/houdini/inputs/front-door/events"
+               :producer :pfx
+               :kind :event
+               :description "Normalized PFx contact events"}
+
+  :gpio-door {:topic "paradox/houdini/pio/gpio/door"
+              :producer :pio
+              :kind :raw
+              :description "Direct GPIO reed switch"}
+}
+
+:triggers {
+  :door-open {
+    :source :front-door
+    :condition {:event "open"}
+    :when-phase :gameplay
+    :actions [{:type :cue :cue :door-open-cue}]
+  }
+
+  :gpio-open {
+    :source :gpio-door
+    :condition {:value "1"}
+    :actions [{:type :game :command "solve"}]
+  }
+}
+```
+
+Compatibility notes:
+- Existing `:trigger {:topic "..."}` style rules remain supported.
+- Source-based rules are resolved to topics at startup.
+- If a rule references an unknown source and has no explicit topic, the rule is skipped with a warning.
+- Trigger phase guards are optional via `:when-phase` (string or vector). If provided, the trigger is evaluated only when the current phase matches.
+
 ### Top-Level Keys
 
 ```clojure
