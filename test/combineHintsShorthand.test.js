@@ -24,4 +24,23 @@ describe('getCombinedHints shorthand parsing', () => {
         const texts = out.map(e => e.displayText);
         expect(texts.length).toBe(new Set(texts).size);
     });
+
+    test('parses playAudioFX shorthand as audioFx', () => {
+        const cfg = { global: { hints: {} } };
+        const out = getCombinedHints(cfg, ['playAudioFX:bell.wav']);
+
+        expect(out[0].type).toBe('audioFx');
+        expect(out[0].displayText).toContain('bell.wav');
+        expect(out[0].data.type).toBe('audioFx');
+    });
+
+    test('parses playBackground and setImage shorthand using canonical media types', () => {
+        const cfg = { global: { hints: {} } };
+        const out = getCombinedHints(cfg, ['playBackground:ambient.mp3', 'setImage:poster.png']);
+
+        expect(out[0].type).toBe('background');
+        expect(out[0].data.type).toBe('background');
+        expect(out[1].type).toBe('image');
+        expect(out[1].data.type).toBe('image');
+    });
 });

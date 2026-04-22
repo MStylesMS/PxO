@@ -6,7 +6,8 @@ describe('getCombinedHints', () => {
             global: {
                 hints: {
                     'g1': { type: 'speech', file: 's1.mp3', target: 'Kitchen', description: 'Speak now' },
-                    'g2': { type: 'video', file: 'v1.mp4', target: 'Mirror', description: 'Watch this' }
+                    'g2': { type: 'video', file: 'v1.mp4', target: 'Mirror', description: 'Watch this' },
+                    'g3': { type: 'audioFx', file: 'bell.wav', target: 'Audio', description: 'Bell' }
                 }
             }
         };
@@ -14,8 +15,8 @@ describe('getCombinedHints', () => {
 
         const out = getCombinedHints(cfg, gameHints);
         // game-mode hints should appear before global ones
-        expect(['text', 'video', 'speech', 'audio']).toContain(out[0].type);
-        expect(['text', 'video', 'speech', 'audio']).toContain(out[1].type);
+        expect(['text', 'video', 'speech', 'audioFx']).toContain(out[0].type);
+        expect(['text', 'video', 'speech', 'audioFx']).toContain(out[1].type);
         // dedupe should remove duplicate displayText ("Speak now" present in global)
         const texts = out.map(h => h.displayText);
         // displayText includes emoji + target prefix, so match by substring
@@ -27,6 +28,10 @@ describe('getCombinedHints', () => {
         expect(g.emoji).toBeTruthy();
         // normalized hints carry data/file under data or in displayText; ensure type mapping kept
         expect(g.type).toBe('video');
+
+        const g3 = out.find(h => h.id === 'g3');
+        expect(g3).toBeDefined();
+        expect(g3.type).toBe('audioFx');
     });
 
     test('treats game-mode string hint ids as references to global hints', () => {

@@ -97,22 +97,9 @@ node src/game.js --mode demo
 
 ### Configuration Format
 
-#### `--json`
+PxO game content is loaded from EDN.
 
-Forces JSON configuration format instead of EDN.
-
-**Example**:
-
-```bash
-node src/game.js --json
-```
-
-**Default**: EDN format
-
-**When to use**:
-
-- Legacy configurations
-- Systems that can't parse EDN
+Use `--edn /path/to/game.edn` to point at a non-default game file.
 
 **Note**: EDN is recommended for new projects
 

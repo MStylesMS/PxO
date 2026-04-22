@@ -10,18 +10,11 @@ function grepFile(p, re) {
 
 function main() {
   const root = path.resolve(__dirname, '..');
-  const configPath = path.join(root, 'config', 'example.json');
-  const modular = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  const ednPath = path.join(root, 'config', 'game.edn');
+  const ednText = fs.readFileSync(ednPath, 'utf8');
 
-  // 1. Ensure no lowercase playAudioFx: prefix anywhere in cues
-  const cues = modular.global.cues || {};
-  Object.entries(cues).forEach(([name, c]) => {
-    ['mirror', 'picture', 'audio'].forEach(k => {
-      if (c && typeof c[k] === 'string') {
-        if (c[k].includes('playAudioFx:')) throw new Error(`Cue ${name}.${k} contains lowercase playAudioFx variant`);
-      }
-    });
-  });
+  // 1. Ensure no lowercase playAudioFx: prefix remains in the EDN config.
+  if (ednText.includes('playAudioFx:')) throw new Error('EDN config contains lowercase playAudioFx variant');
 
   // 2. Ensure adapter pfx.js uses file key not video/audio/image
   const adapterPath = path.join(root, 'src', 'adapters', 'pfx.js');

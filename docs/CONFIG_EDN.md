@@ -666,7 +666,7 @@ Game-mode hint list behavior (`game-modes.<mode>.hints`):
 
 **Required Fields**:
 - Hint ID is the map key (example `:hint-03`)
-- `:type` — Hint type (`text`, `speech`, `audio`, `audioFx`, `video`, `action`, `sequence`)
+- `:type` — Hint type (`text`, `speech`, `audioFx`, `background`, `video`, `image`, `action`, `sequence`)
 
 **Type-Specific Fields**:
 
@@ -674,8 +674,10 @@ Game-mode hint list behavior (`game-modes.<mode>.hints`):
 |------|----------|----------|
 | `text` | `:sequence` (must be in `:command-sequences`) | `:text` (default UI/edit value), `:duration` |
 | `speech` | `:file` | `:zone` |
-| `audio` / `audioFx` | `:file` | `:zone` |
+| `audioFx` | `:file` | `:zone` |
+| `background` | `:file` | `:zone`, `:loop` |
 | `video` | `:file` | `:zone` |
+| `image` | `:file` | `:zone` |
 | `action` | `:sequence` | `:text` |
 | `sequence` | `:sequence` (must be in `:command-sequences`) | `:parameters {}`, direct template fields |
 

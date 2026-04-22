@@ -5,8 +5,10 @@ function hintEmoji(type) {
         case 'text': return '🅣';
         case 'sequence': return '🪄';
         case 'speech': return '💬';
-        case 'audio': return '🔊';
+        case 'audiofx': return '🔊';
+        case 'background': return '🎵';
         case 'video': return '🎥';
+        case 'image': return '🖼️';
         case 'action': return '🎭';
         default: return '🅣';
     }
@@ -14,7 +16,7 @@ function hintEmoji(type) {
 
 function normalizeType(type) {
     const value = String(type || 'text').toLowerCase();
-    if (value === 'audiofx') return 'audio';
+    if (value === 'audiofx') return 'audioFx';
     return value;
 }
 
@@ -81,15 +83,43 @@ function normalizeGameHint(idx, h) {
             if (action === 'playaudiofx') {
                 return {
                     id: `gm-${idx}`,
-                    type: 'audio',
-                    emoji: hintEmoji('audio'),
+                    type: 'audioFx',
+                    emoji: hintEmoji('audioFx'),
                     zone: '',
                     target: '',
                     description: payload,
-                    displayText: toDisplayLabel(hintEmoji('audio'), 'audio', '', payload),
+                    displayText: toDisplayLabel(hintEmoji('audioFx'), 'audioFx', '', payload),
                     baseText: payload.trim(),
                     isEditable: false,
-                    data: { type: 'audio', file: payload, target: '' }
+                    data: { type: 'audioFx', file: payload, target: '' }
+                };
+            }
+            if (action === 'playbackground') {
+                return {
+                    id: `gm-${idx}`,
+                    type: 'background',
+                    emoji: hintEmoji('background'),
+                    zone: '',
+                    target: '',
+                    description: payload,
+                    displayText: toDisplayLabel(hintEmoji('background'), 'background', '', payload),
+                    baseText: payload.trim(),
+                    isEditable: false,
+                    data: { type: 'background', file: payload, target: '' }
+                };
+            }
+            if (action === 'setimage') {
+                return {
+                    id: `gm-${idx}`,
+                    type: 'image',
+                    emoji: hintEmoji('image'),
+                    zone: '',
+                    target: '',
+                    description: payload,
+                    displayText: toDisplayLabel(hintEmoji('image'), 'image', '', payload),
+                    baseText: payload.trim(),
+                    isEditable: false,
+                    data: { type: 'image', file: payload, target: '' }
                 };
             }
             const text = payload.trim();

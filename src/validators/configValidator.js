@@ -155,9 +155,15 @@ class ConfigValidator {
             if (!hintDef || typeof hintDef !== 'object') return;
 
             const type = String(hintDef.type || 'text').toLowerCase();
-            if (type === 'audiofx') {
-                this.addWarning(
-                    `Hint '${hintName}' uses deprecated type 'audioFx'; prefer 'audio'`,
+            const allowedTypes = new Set(['text', 'sequence', 'speech', 'audiofx', 'background', 'video', 'image', 'action']);
+            if (type === 'audio') {
+                this.addError(
+                    `Hint '${hintName}' uses unsupported type 'audio'. Use 'audioFx' for sound effects, 'speech' for spoken audio, or 'background' for looping background audio.`,
+                    hintContext
+                );
+            } else if (!allowedTypes.has(type)) {
+                this.addError(
+                    `Hint '${hintName}' uses unsupported type '${hintDef.type}'. Supported types: text, sequence, speech, audioFx, background, video, image, action.`,
                     hintContext
                 );
             }

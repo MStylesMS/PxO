@@ -29,24 +29,9 @@ class EdnConfigLoader {
       if (error.ednParseError) {
         throw error;
       }
-      
-      console.error(`Failed to load EDN config from ${configPath}:`, error.message);
-      console.log('Falling back to JSON configuration...');
 
-      // Fallback to JSON configuration
-      try {
-        // Prefer room-level JSON mirror of the EDN
-        const jsonPath = path.isAbsolute(configPath)
-          ? path.join(path.dirname(path.dirname(configPath)), 'config', 'houdini.json')
-          : path.join(process.cwd(), 'config', 'houdini.json');
-        const jsonText = fs.readFileSync(jsonPath, 'utf8');
-        const config = JSON.parse(jsonText);
-        console.log('Successfully loaded JSON configuration as fallback');
-        return this.convertToJavaScript(config);
-      } catch (jsonError) {
-        console.error('JSON fallback also failed:', jsonError.message);
-        throw error; // Throw original EDN error
-      }
+      console.error(`Failed to load EDN config from ${configPath}:`, error.message);
+      throw error;
     }
   }
 

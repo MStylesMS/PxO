@@ -205,7 +205,8 @@ class GameStateMachine extends EventEmitter {
 
     // Execute based on type
     try {
-      switch (effectiveHint.type || 'text') {
+      const hintType = String(effectiveHint.type || 'text').toLowerCase();
+      switch (hintType) {
         case 'text':
           await this.executeTextHint(effectiveHint, source);
           break;
@@ -215,12 +216,23 @@ class GameStateMachine extends EventEmitter {
         case 'speech':
           await this.executeSpeechHint(effectiveHint, source);
           break;
-        case 'audio':
-        case 'audioFx':  // Accept both 'audio' and 'audioFx' for backward compatibility
+        case 'audio': {
+          const message = "Unsupported hint type 'audio'. Use 'audioFx' for sound effects, 'speech' for spoken audio, or 'background' for looping background audio.";
+          log.warn(message);
+          this.publishWarning('hint_invalid_type', { id: hintId, type: effectiveHint.type, message });
+          return false;
+        }
+        case 'audiofx':
           await this.executeAudioHint(effectiveHint, source);
+          break;
+        case 'background':
+          await this.executeBackgroundHint(effectiveHint, source);
           break;
         case 'video':
           await this.executeVideoHint(effectiveHint, source);
+          break;
+        case 'image':
+          await this.executeImageHint(effectiveHint, source);
           break;
         case 'action':
           await this.executeActionHint(effectiveHint, source);
@@ -230,7 +242,7 @@ class GameStateMachine extends EventEmitter {
           this.publishWarning('hint_unknown_type', { id: hintId, type: effectiveHint.type });
           return false;
       }
-      this.publishEvent('hint_executed', { id: hintId, type: effectiveHint.type, source });
+      this.publishEvent('hint_executed', { id: hintId, type: hintType === 'audiofx' ? 'audioFx' : hintType, source });
       return true;
     } catch (e) {
       log.error(`Failed to execute hint ${hintId}:`, e.message);
@@ -486,6 +498,27 @@ class GameStateMachine extends EventEmitter {
     }
   }
 
+  async executeBackgroundHint(hint, source = 'direct') {
+    const file = this.resolveMediaReference(hint.file || hint.audio, `hint:${hint.id || 'background'}.file`);
+    const zone = hint.zone || 'audio';
+
+    if (!file) {
+      log.warn('Background hint has no file');
+      return false;
+    }
+
+    log.info(`Executing background hint: "${file}" on zone ${zone}`);
+
+    try {
+      await this.zones.execute(zone, 'playBackground', { file, loop: hint.loop });
+      return true;
+    } catch (e) {
+      log.warn('Failed to execute background hint:', e.message);
+      this.publishWarning('hint_background_failed', { file, zone, error: e.message });
+      return false;
+    }
+  }
+
   // Execute video hint with playVideo command
   async executeVideoHint(hint, source = 'direct') {
     const file = this.resolveMediaReference(hint.file || hint.video, `hint:${hint.id || 'video'}.file`);
@@ -504,6 +537,27 @@ class GameStateMachine extends EventEmitter {
     } catch (e) {
       log.warn(`Failed to execute video hint:`, e.message);
       this.publishWarning('hint_video_failed', { file, zone, error: e.message });
+      return false;
+    }
+  }
+
+  async executeImageHint(hint, source = 'direct') {
+    const file = this.resolveMediaReference(hint.file || hint.image, `hint:${hint.id || 'image'}.file`);
+    const zone = hint.zone || 'picture';
+
+    if (!file) {
+      log.warn('Image hint has no file');
+      return false;
+    }
+
+    log.info(`Executing image hint: "${file}" on zone ${zone}`);
+
+    try {
+      await this.zones.execute(zone, 'setImage', { file });
+      return true;
+    } catch (e) {
+      log.warn('Failed to execute image hint:', e.message);
+      this.publishWarning('hint_image_failed', { file, zone, error: e.message });
       return false;
     }
   }

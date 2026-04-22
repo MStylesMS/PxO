@@ -1,53 +1,43 @@
 // Modular Configuration Adapter
 // Transforms the new modular building-block configuration format to the legacy format expected by existing game code
 
-// Supports both JSON and EDN configuration formats
+// Supports EDN game configuration input.
 
-const fs = require('fs');
 const log = require('./logger');
 const EdnConfigLoader = require('./edn-config-loader');
 const { expandTemplates } = require('./template-expander');
 
 class ModularConfigAdapter {
   /**
-   * Load configuration from file with automatic format detection
-   * @param {string} format - 'json' or 'edn' (defaults to 'json')
+   * Load configuration from EDN file.
+   * @param {string} format - must be 'edn'
    * @param {string} configPath - Path to config file
    * @returns {Object} Legacy format configuration
    */
-  static loadConfig(format = 'json', configPath = null) {
-    let modular;
+  static loadConfig(format = 'edn', configPath = null) {
+    if (format !== 'edn') {
+      throw new Error('JSON game configuration is no longer supported. Use EDN input.');
+    }
 
-    if (format === 'edn') {
-      // Load EDN configuration
-      const ednPath = configPath || './config/houdini.edn';
-      log.debug(`Loading EDN configuration from: ${ednPath}`);
-      modular = EdnConfigLoader.load(ednPath);
-      // Phase 1: template expansion (EDN only)
-      try {
-        modular = expandTemplates(modular);
-      } catch (e) {
-        log.error('Template expansion failed:', e.message);
-        throw e;
-      }
+    const ednPath = configPath || './config/game.edn';
+    log.debug(`Loading EDN configuration from: ${ednPath}`);
+    let modular = EdnConfigLoader.load(ednPath);
 
-      // Validate EDN structure using our loader
-      try {
-        EdnConfigLoader.validateConfig(modular);
-        log.info('EDN configuration validation passed');
-      } catch (error) {
-        log.error('EDN configuration validation failed:', error.message);
-        throw error;
-      }
-    } else {
-      // Load JSON configuration
-      let jsonPath = configPath || './config/houdini.json';
-      if (!configPath && !fs.existsSync(jsonPath)) {
-        // Fallback to historical path used by tests/fixtures
-        jsonPath = './config/example.json';
-      }
-      log.info(`Loading JSON configuration from: ${jsonPath}`);
-      modular = require(jsonPath);
+    // Phase 1: template expansion (EDN only)
+    try {
+      modular = expandTemplates(modular);
+    } catch (e) {
+      log.error('Template expansion failed:', e.message);
+      throw e;
+    }
+
+    // Validate EDN structure using our loader
+    try {
+      EdnConfigLoader.validateConfig(modular);
+      log.info('EDN configuration validation passed');
+    } catch (error) {
+      log.error('EDN configuration validation failed:', error.message);
+      throw error;
     }
 
     // Transform to legacy format

@@ -317,9 +317,11 @@ Sequences execute timeline-based actions:
 
 **Hint Types**:
 - `text` — Text only (sent to MQTT, displayed by UI)
-- `speech` — Audio + text (plays audio, shows text)
-- `audio` — Background audio (music/ambient)
+- `speech` — Spoken hint audio
+- `audioFx` — Sound effect / one-shot audio cue
+- `background` — Looping background audio
 - `video` — Video playback
+- `image` — Still image display
 - `action` — Execute sequence
 
 ---
@@ -939,7 +941,7 @@ Don't duplicate sequences — use modes:
 ### Hints Not Delivered
 
 - Check hint ID exists in `:hints` array
-- Verify hint type is valid (`text`, `speech`, `audio`, `video`, `action`)
+- Verify hint type is valid (`text`, `speech`, `audioFx`, `background`, `video`, `image`, `action`)
 - Check media files exist for `speech`/`video` hints
 
 ---
@@ -962,7 +964,7 @@ See `/opt/paradox/rooms/houdinis-challenge/config/game.edn` for a complete 60-mi
 **Features**:
 - 45-second intro with video briefing
 - 60-minute gameplay with puzzle zones
-- 5 hint types (text, speech, video, audio, action)
+- 7 hint types (text, speech, audioFx, background, video, image, action)
 - Victory/failure sequences
 - 3 game modes (60min, 30min, demo)
 

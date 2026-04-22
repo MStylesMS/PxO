@@ -530,8 +530,10 @@ class SequenceRunner {
 |------|-------------|-----------------|-----------------|
 | `text` | User-editable text hint executed through a command sequence | `sequence` | `text`, `duration` |
 | `speech` | Play speech asset | `file` | `zone` |
-| `audio` / `audioFx` | Play sound effect | `file` | `zone` |
+| `audioFx` | Play sound effect | `file` | `zone` |
+| `background` | Play looping background audio | `file` | `zone`, `loop` |
 | `video` | Show video | `file` | `zone` |
+| `image` | Show still image | `file` | `zone` |
 | `action` | Future action-hint hook (currently warning/no-op) | `sequence` | `text` |
 | `sequence` | Execute command-sequence template | `sequence` | `parameters`, template fields |
 

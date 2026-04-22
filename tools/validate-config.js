@@ -1,11 +1,5 @@
 #!/usr/bin/env node
-/* Config validation script
- * Ensures:
- *  - Only playAudioFX: (uppercase FX) cue prefixes for audio fx
- *  - No playAudioFx: lowercase variant
- *  - No mixed media payload keys (video/image/audio) in adapter-produced commands (we just inspect config cues/hints)
- *  - Required global media.win/fail entries exist
- */
+/* Config validation script for EDN-based game configuration. */
 const fs = require('fs');
 const path = require('path');
 
@@ -18,37 +12,22 @@ function fail(msg) {
   process.exitCode = 1;
 }
 
-function loadJson(p) {
-  return JSON.parse(fs.readFileSync(p, 'utf8'));
-}
-
 function main() {
-  const modularPath = path.join(CONFIG_DIR, 'example.json');
-  if (!fs.existsSync(modularPath)) {
-    fail('Missing example.json');
+  const ednPath = path.join(CONFIG_DIR, 'game.edn');
+  if (!fs.existsSync(ednPath)) {
+    fail('Missing game.edn');
     return;
   }
-  const rawCfg = loadJson(modularPath);
+  const rawEdn = fs.readFileSync(ednPath, 'utf8');
   const cfg = loadConfig();
 
   // Collect issues
   const issues = [];
 
-  // 1. Check cues for lowercase playAudioFx: variant and enforce uppercase FX
-  const cues = (rawCfg.global && rawCfg.global.cues) || {};
-  Object.entries(cues).forEach(([name, cue]) => {
-    ['mirror', 'picture', 'audio'].forEach(k => {
-      if (!cue || typeof cue[k] !== 'string') return;
-      const v = cue[k];
-      if (v.includes('playAudioFx:')) {
-        issues.push(`Cue ${name}.${k} uses disallowed prefix playAudioFx: → ${v}`);
-      }
-      // If it contains playAudioFX ensure proper case
-      if (v.toLowerCase().includes('playaudiofx:') && !v.includes('playAudioFX:')) {
-        issues.push(`Cue ${name}.${k} has incorrectly cased playAudioFX prefix: ${v}`);
-      }
-    });
-  });
+  // 1. Check raw EDN text for obsolete lowercase playAudioFx prefixes.
+  if (rawEdn.includes('playAudioFx:')) {
+    issues.push('EDN config contains disallowed playAudioFx: prefix; use playAudioFX:');
+  }
 
   // 2. (Refactor) Media catalog removed; skip enforcing legacy videos.* assets.
   // Optionally warn if old structure still present but incomplete.
@@ -58,18 +37,6 @@ function main() {
       console.warn('CONFIG WARNING: partial legacy videos catalog detected; consider removing videos map entirely.');
     }
   }
-
-  // 3. Ensure no legacy keys in games[].game.schedule entries
-  const legacyDirectivePatterns = [/playAudioFx:/];
-  const games = rawCfg.games || {};
-  Object.entries(games).forEach(([gName, gCfg]) => {
-    const schedules = [gCfg.intro, gCfg.game, gCfg.win, gCfg.fail].filter(Boolean).map(s => s.schedule || []);
-    schedules.flat().forEach(entry => {
-      if (entry.fireCue && typeof entry.fireCue === 'string') {
-        legacyDirectivePatterns.forEach(re => { if (re.test(entry.fireCue)) issues.push(`Game ${gName} schedule entry at ${entry.at} fireCue has legacy prefix pattern: ${entry.fireCue}`); });
-      }
-    });
-  });
 
   if (issues.length) {
     issues.forEach(i => console.error(' -', i));

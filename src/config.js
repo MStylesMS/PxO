@@ -8,7 +8,7 @@ function loadConfig(format = 'edn', configPath = null) {
   if (format === 'edn') {
     return loadEdnConfig(configPath);
   } else if (format === 'json') {
-    return loadJsonConfig();
+    throw new Error('JSON game configuration is no longer supported. Use an EDN file with --edn.');
   } else {
     // Default behavior: only try EDN, no JSON fallback to avoid confusion
     return loadEdnConfig(configPath);
@@ -65,49 +65,6 @@ function loadEdnConfig(configPath = null) {
     console.error('');
     process.exit(1);
   }
-}
-
-function loadJsonConfig() {
-  // Try to load modular configuration first (default)
-  // Prefer room-level JSON mirror of EDN
-  const roomJson = path.resolve(__dirname, '..', 'config', 'game.json');
-  const modularFile = fs.existsSync(roomJson)
-    ? roomJson
-    : path.resolve(__dirname, '..', 'config', 'example.json');
-  log.info(`Attempting to load default config file: ${modularFile}`);
-  try {
-    const raw = fs.readFileSync(modularFile, 'utf8');
-    const modularConfig = JSON.parse(raw);
-    log.info('Loading modular configuration format from default file');
-    const cfg = ModularConfigAdapter.transform(modularConfig);
-    validateConfig(cfg);
-    log.info(`✓ Default modular config loaded successfully: ${modularFile}`);
-    return cfg;
-  } catch (e) {
-    log.error(`✗ Failed to load default modular config (${modularFile}):`, e.message);
-    log.info('Falling back to legacy configuration format');
-  }
-
-  // Fallback to legacy configuration
-  const file = path.resolve(__dirname, '..', 'config', 'game.config.json');
-  log.info(`Attempting to load legacy config file: ${file}`);
-  let raw;
-  try {
-    raw = fs.readFileSync(file, 'utf8');
-  } catch (e) {
-    // fallback to repo path
-    const alt = path.resolve(__dirname, '..', 'config.json');
-    log.info(`Primary legacy config not found, trying alternate path: ${alt}`);
-    try {
-      raw = fs.readFileSync(alt, 'utf8');
-    } catch (e2) {
-      throw new Error(`Failed to load config: ${file}`);
-    }
-  }
-  const cfg = JSON.parse(raw);
-  validateConfig(cfg);
-  log.info(`✓ Legacy config loaded successfully: ${file}`);
-  return cfg;
 }
 
 function validateConfig(cfg) {

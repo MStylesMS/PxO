@@ -497,9 +497,6 @@ async function main() {
     log.info('File logging disabled (no log_directory configured in INI)');
   }
 
-  // Check for config format from command line or environment (for EDN/JSON game config)
-  const configFormat = argv.json || argv._.includes('--json') || process.env.CONFIG_FORMAT === 'json' ? 'json' : 'edn';
-
   // Check for --edn option for EDN file path (game content config)
   const ednConfigPath = argv.edn || null;
   const resolvedEdnPath = ednConfigPath
@@ -507,8 +504,8 @@ async function main() {
     : path.resolve(__dirname, '..', 'config', 'game.edn');
   const ednBase = getEdnBaseName(resolvedEdnPath);
 
-  log.info(`Loading configuration in ${configFormat.toUpperCase()} format`);
-  const cfg = loadConfig(configFormat, ednConfigPath);
+  log.info('Loading configuration in EDN format');
+  const cfg = loadConfig('edn', ednConfigPath);
 
   // Override MQTT broker from INI config if provided
   if (iniConfig.mqtt && iniConfig.mqtt.broker) {
