@@ -183,16 +183,24 @@ class ModularConfigAdapter {
           const trigger = definition.trigger && typeof definition.trigger === 'object'
             ? { ...definition.trigger }
             : {
-                topic: definition.topic,
-                source: definition.source,
-                condition: definition.condition
-              };
+              topic: definition.topic,
+              source: definition.source,
+              condition: definition.condition
+            };
 
           const actions = Array.isArray(definition.actions) ? definition.actions : [];
+          const whenPhase = definition.whenPhase
+            || definition.when_phase
+            || definition['when-phase']
+            || trigger.whenPhase
+            || trigger.when_phase
+            || trigger['when-phase']
+            || null;
 
           return {
             name,
             ...(definition.description ? { description: definition.description } : {}),
+            ...(whenPhase ? { whenPhase, 'when-phase': whenPhase } : {}),
             trigger,
             actions
           };

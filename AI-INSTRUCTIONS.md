@@ -16,6 +16,20 @@ PxO is a **modular, MQTT-based game orchestration engine** for escape rooms and 
 
 PxO uses a **three-tier command model**: Commands (atomic zone operations) → Cues (named shortcuts, fire-and-forget) → Sequences (timeline-based with blocking semantics). Each zone (lights, mirror, picture, audio, clock, system) is an independent adapter communicating via MQTT. The state machine manages game flow with explicit transitions, entry/exit handlers, and timer preservation on pause/resume.
 
+## Paradox Family
+
+PxO is the game engine in a seven-product family. Commands flow PxO → PFx (media) and PxO → PZB (radio devices) over MQTT; inputs flow from PFx / PZB / Pio / PxT → PxO.
+
+- **PFx** — media/audio/lights/relays controller
+- **PxO** — this project (game orchestration engine)
+- **PxC** — configurable clock app framework
+- **PxT** — player terminal kiosk
+- **Pio** — GPIO-to-MQTT bridge (C++)
+- **PZB** — Z-Wave / Zigbee / Thread to MQTT bridge (Node.js)
+- Rooms: `agent22`, `houdinis-challenge` — EDN game packages consumed by this engine
+
+Z-Wave and Zigbee sensor events reach PxO via PZB node event topics (schema identical to PFx InputZone events), not from PFx.
+
 ## Critical Constraints
 
 - **MQTT topic structure is sacred**: `{baseTopic}/{commands|state|status|warnings}`

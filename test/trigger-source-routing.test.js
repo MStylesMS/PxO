@@ -126,6 +126,7 @@ describe('modular trigger transformation', () => {
           'spell-box-opened-solve': {
             description: 'Solve on spell-box open',
             source: 'spell-box',
+            'when-phase': 'gameplay',
             condition: { event: 'opened' },
             actions: [{ type: 'game', command: 'solve' }]
           }
@@ -156,5 +157,7 @@ describe('modular trigger transformation', () => {
     expect(Array.isArray(transformed.global.triggers.escapeRoomRules)).toBe(true);
     expect(transformed.global.triggers.escapeRoomRules[0].name).toBe('spell-box-opened-solve');
     expect(transformed.global.triggers.escapeRoomRules[0].trigger.source).toBe('spell-box');
+    expect(transformed.global.triggers.escapeRoomRules[0]['when-phase']).toBe('gameplay');
+    expect(transformed.global.triggers.escapeRoomRules[0].whenPhase).toBe('gameplay');
   });
 });
