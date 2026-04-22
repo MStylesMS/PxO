@@ -624,7 +624,7 @@ mosquitto_pub -h localhost -t 'paradox/game/mirror/commands' \
   -m '{"command":"enableBrowser","url":"http://localhost/clock/index.html"}'
 ```
 
-### Houdini Clock Zone (`houdini-clock`)
+### Clock Zone (`pfx-clock`)
 
 **Show Clock**:
 ```json
@@ -633,12 +633,38 @@ mosquitto_pub -h localhost -t 'paradox/game/mirror/commands' \
 }
 ```
 
+Shows clock instantly (equivalent to `fadeIn` with duration `0`).
+
 **Hide Clock**:
 ```json
 {
   "command": "hide"
 }
 ```
+
+Hides clock instantly (equivalent to `fadeOut` with duration `0`).
+
+**Fade In Clock**:
+```json
+{
+  "command": "fadeIn",
+  "duration": 2
+}
+```
+
+**Parameters**:
+- `duration` (optional): Fade-in duration in seconds. If omitted, the clock app default is used.
+
+**Fade Out Clock**:
+```json
+{
+  "command": "fadeOut",
+  "duration": 2
+}
+```
+
+**Parameters**:
+- `duration` (optional): Fade-out duration in seconds. If omitted, the clock app default is used.
 
 **Set Time**:
 ```json
