@@ -36,7 +36,7 @@ describe('GameplayLogger', () => {
 
         const files = fs.readdirSync(tmpDir).filter((name) => name.endsWith('.jsonl'));
         expect(files.length).toBe(1);
-        expect(files[0].startsWith('houdini-')).toBe(true);
+        expect(files[0].startsWith('houdini_')).toBe(true);
         expect(files[0].endsWith('.jsonl')).toBe(true);
 
         const lines = fs

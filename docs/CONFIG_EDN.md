@@ -300,8 +300,8 @@ Define zone adapters and MQTT topics:
 **Zone Types**:
 - `pfx-lights` — Lighting control (ParadoxFX)
 - `pfx-media` — Video/audio playback (ParadoxFX)
-- `houdini-clock` — Countdown timer UI
-- `system` — System commands
+- `pfx-clock` — Countdown timer UI (PxC/PFx clock surface)
+- `mqtt` — Generic MQTT passthrough zone (`{baseTopic}/commands`, `{baseTopic}/events`)
 
 ---
 

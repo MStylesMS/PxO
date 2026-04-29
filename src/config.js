@@ -138,7 +138,7 @@ function validateConfig(cfg) {
 }
 
 function validateZoneFormat(zones) {
-  const supportedTypes = ['pfx-media', 'pfx-lights', 'pfx-clock'];
+  const supportedTypes = ['pfx-media', 'pfx-lights', 'pfx-clock', 'mqtt'];
 
   Object.entries(zones).forEach(([zoneName, zoneConfig]) => {
     if (!zoneConfig || typeof zoneConfig !== 'object') {

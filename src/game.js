@@ -83,6 +83,17 @@ function getEdnBaseName(ednPath) {
   return stem || 'game';
 }
 
+function formatSessionLogTimestamp(tsMs = Date.now()) {
+  const d = new Date(tsMs);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}_${hh}-${mi}-${ss}`;
+}
+
 function getConfiguredGameplayDurationSeconds(cfg, mode) {
   const game = cfg?.game?.[mode];
   if (!game) return 0;
@@ -415,8 +426,16 @@ async function main() {
   const iniConfigPath = argv.config || null;
   const iniConfig = loadIniConfig(iniConfigPath);
 
+  // Resolve EDN path/name early so both startup logs and gameplay logs can use it.
+  const ednConfigPath = argv.edn || null;
+  const resolvedEdnPath = ednConfigPath
+    ? path.resolve(ednConfigPath)
+    : path.resolve(__dirname, '..', 'config', 'game.edn');
+  const ednBase = getEdnBaseName(resolvedEdnPath);
+
   const cliGameLogPath = argv.game_log_path || argv['game-log-path'] || null;
   let gameplayLogDirectory = null;
+  const defaultGameLogPath = '/opt/paradox/logs/game';
 
   try {
     if (cliGameLogPath) {
@@ -428,6 +447,10 @@ async function main() {
       }
       gameplayLogDirectory = ensureWritableDirectory(iniConfig.global.game_log_path);
       log.info(`Gameplay logging enabled via INI: ${gameplayLogDirectory}`);
+    } else {
+      // Safe default for local/dev runs so gameplay logs are always discoverable.
+      gameplayLogDirectory = ensureWritableDirectory(defaultGameLogPath);
+      log.info(`Gameplay logging enabled via default path: ${gameplayLogDirectory}`);
     }
   } catch (err) {
     log.error(`Gameplay logging configuration error: ${err.message}`);
@@ -441,8 +464,9 @@ async function main() {
 
   // Set up file logging if log_directory is configured
   let logStream = null;
-  if (iniConfig.global.log_directory) {
-    const logDir = path.resolve(iniConfig.global.log_directory);
+  const startupLogDirectory = iniConfig.global.log_directory || '/opt/paradox/logs/game';
+  if (startupLogDirectory) {
+    const logDir = path.resolve(startupLogDirectory);
     fs.mkdirSync(logDir, { recursive: true });
 
     // Clean up old logs on startup
@@ -456,12 +480,12 @@ async function main() {
     }
 
     // Create timestamped log file for this session
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
-    const logFile = path.join(logDir, `pxo-${timestamp}.log`);
+    const timestamp = formatSessionLogTimestamp();
+    const logFile = path.join(logDir, `${ednBase}_pxo_${timestamp}.log`);
     logStream = fs.createWriteStream(logFile, { flags: 'a' });
 
     // Also create/update the latest log symlink
-    const latestLogFile = path.join(logDir, 'pxo-latest.log');
+    const latestLogFile = path.join(logDir, `${ednBase}_pxo_latest.log`);
     try {
       // Remove existing path even if it's a dangling symlink.
       try {
@@ -493,16 +517,7 @@ async function main() {
     };
 
     log.info(`Logging to: ${logFile}`);
-  } else {
-    log.info('File logging disabled (no log_directory configured in INI)');
   }
-
-  // Check for --edn option for EDN file path (game content config)
-  const ednConfigPath = argv.edn || null;
-  const resolvedEdnPath = ednConfigPath
-    ? path.resolve(ednConfigPath)
-    : path.resolve(__dirname, '..', 'config', 'game.edn');
-  const ednBase = getEdnBaseName(resolvedEdnPath);
 
   log.info('Loading configuration in EDN format');
   const cfg = loadConfig('edn', ednConfigPath);

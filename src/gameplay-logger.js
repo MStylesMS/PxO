@@ -22,7 +22,7 @@ function formatFileTimestamp(tsMs) {
     const hh = pad2(d.getHours());
     const mi = pad2(d.getMinutes());
     const ss = pad2(d.getSeconds());
-    return `${yyyy}${mm}${dd}-${hh}-${mi}-${ss}`;
+    return `${yyyy}-${mm}-${dd}_${hh}-${mi}-${ss}`;
 }
 
 function formatRemaining(remainingMs) {
@@ -108,7 +108,7 @@ class GameplayLogger {
 
         const startTsMs = this.pending.startTsMs;
         const fileTimestamp = formatFileTimestamp(startTsMs);
-        const fileName = `${this.ednBase}-${fileTimestamp}.jsonl`;
+        const fileName = `${this.ednBase}_${fileTimestamp}.jsonl`;
         const filePath = path.join(this.logDir, fileName);
         fs.writeFileSync(filePath, '', { flag: 'a' });
 
