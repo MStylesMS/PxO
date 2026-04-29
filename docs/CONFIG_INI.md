@@ -98,7 +98,7 @@ clean_session = true
 reconnect_period = 5000
 connect_timeout = 30000
 
-# QoS for state/status publishing
+# QoS for state publishing
 qos = 1
 retain = false
 ```
@@ -225,7 +225,7 @@ Rules:
 	- `fail`: startup exits on invalid/duplicate sources, unknown source references, or unresolved trigger topics
 
 **Heartbeat**:
-- `heartbeat_ms` — Interval for state/status publishing to MQTT
+- `heartbeat_ms` — Interval for state heartbeat publishing to MQTT
 
 **Auto-Reset**:
 - `auto_reset_enabled` — Automatically reset game after completion

@@ -171,8 +171,8 @@ Each zone is an independent adapter that communicates via MQTT:
 
 ```text
 {baseTopic}/commands    # Incoming commands
-{baseTopic}/state       # Zone state updates
-{baseTopic}/status      # Health monitoring
+{baseTopic}/events      # Discrete zone events
+{baseTopic}/state       # Zone state + health monitoring
 {baseTopic}/warnings    # Error reporting
 ```
 

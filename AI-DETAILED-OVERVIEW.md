@@ -82,8 +82,7 @@ PxO is the game orchestration engine for Paradox escape rooms. It manages game s
 ### Zone Communication (Sacred — Do Not Change)
 ```
 {baseTopic}/commands    # Incoming commands
-{baseTopic}/state       # State updates
-{baseTopic}/status      # Health/heartbeat
+{baseTopic}/state       # State + health/heartbeat updates
 {baseTopic}/warnings    # Errors
 ```
 

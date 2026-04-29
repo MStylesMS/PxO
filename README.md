@@ -270,7 +270,7 @@ See [SETUP.md](docs/SETUP.md) for complete deployment instructions.
 ```
 paradox/game/commands      # Game control commands (startGame, pauseGame, etc.)
 paradox/game/state         # Current game state (ready, intro, gameplay, etc.)
-paradox/game/status        # Game status updates
+paradox/game/state         # Also carries lifecycle/heartbeat updates
 ```
 
 ### Zone Topics (example: lights)
@@ -278,7 +278,7 @@ paradox/game/status        # Game status updates
 ```
 paradox/game/lights/commands    # Send commands to lights zone
 paradox/game/lights/state       # Current lights state
-paradox/game/lights/status      # Lights status updates
+paradox/game/lights/state       # Also carries lifecycle/health for lights zone
 ```
 
 See [MQTT_API.md](docs/MQTT_API.md) for complete API reference.

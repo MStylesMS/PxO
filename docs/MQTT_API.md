@@ -10,8 +10,8 @@ Paradox Orchestrator (PxO) uses MQTT for all zone communication following standa
 ### Communication Model
 
 - **Commands**: Game orchestrator → Zones (`{baseTopic}/commands`)
+- **Events**: Zones → Game orchestrator/consumers (`{baseTopic}/events`)
 - **State**: Zones → Game orchestrator (`{baseTopic}/state`)
-- **Status**: Zones → Monitoring systems (`{baseTopic}/status`)
 - **Warnings**: Zones → Monitoring systems (`{baseTopic}/warnings`)
 
 PxO can also subscribe to external producer topics for gameplay triggers (for example PFx input events or Pio GPIO topics). These are configured in EDN trigger/source definitions, not hardcoded in the runtime topic list.
@@ -26,16 +26,17 @@ Each zone follows this pattern:
 
 ```
 {baseTopic}/commands    # Incoming commands to zone
-{baseTopic}/state       # Zone state updates (published by zone)
-{baseTopic}/status      # Zone health/status (published by zone)
+{baseTopic}/events      # Zone discrete events (published by zone)
+{baseTopic}/state       # Zone state + health/status (published by zone)
 {baseTopic}/warnings    # Zone error messages (published by zone)
 ```
 
 **Example**:
 ```
 paradox/game/lights/commands   → PxO publishes commands here
+paradox/game/lights/events     → Lights device publishes discrete events here
 paradox/game/lights/state      → Lights device publishes state here
-paradox/game/lights/status     → Lights device publishes health here
+paradox/game/lights/state      → Lights device also publishes health here
 paradox/game/lights/warnings   → Lights device publishes errors here
 ```
 
@@ -45,8 +46,7 @@ Game orchestrator uses these topics:
 
 ```
 {baseTopic}/commands    # Commands to game orchestrator
-{baseTopic}/state       # Game state (published by PxO)
-{baseTopic}/status      # Game health/heartbeat (published by PxO)
+{baseTopic}/state       # Game state + health/heartbeat (published by PxO)
 {baseTopic}/events      # Game events (published by PxO)
 
 {baseTopic}/discovery   # Retained: zones inventory (published on startup)
@@ -57,7 +57,7 @@ Game orchestrator uses these topics:
 ```
 paradox/game/commands   → External systems send commands here
 paradox/game/state      → PxO publishes game state here
-paradox/game/status     → PxO publishes heartbeat here
+paradox/game/state      → PxO also publishes heartbeat here
 paradox/game/events     → PxO publishes events here
 paradox/game/discovery  → PxO publishes retained zone inventory here
 paradox/game/schema     → PxO publishes retained command schema here
@@ -743,7 +743,7 @@ PxO publishes the command to each zone's `/commands` topic.
 
 ### Heartbeat Message
 
-Published to: `{baseTopic}/status` at regular intervals (default: 1Hz)
+Published to: `{baseTopic}/state` at regular intervals (default: 1Hz)
 
 ```json
 {

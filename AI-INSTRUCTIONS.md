@@ -32,7 +32,7 @@ Z-Wave and Zigbee sensor events reach PxO via PZB node event topics (schema iden
 
 ## Critical Constraints
 
-- **MQTT topic structure is sacred**: `{baseTopic}/{commands|state|status|warnings}`
+- **MQTT topic structure is sacred**: `{baseTopic}/{commands|events|state|warnings}`
 - **Command format**: `{"zone": "name", "command": "action", ...params}`
 - **EDN backward compatibility**: existing game configs must continue working; new features must be opt-in with defaults
 - **Sequence runner is blocking by design** — long sequences delay state transitions

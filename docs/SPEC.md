@@ -251,8 +251,8 @@ All zones follow standardized topic pattern:
 
 ```
 {baseTopic}/commands    # Incoming commands to zone
-{baseTopic}/state       # Zone state updates (published by zone)
-{baseTopic}/status      # Zone health/status (published by zone)
+{baseTopic}/events      # Zone discrete events (published by zone)
+{baseTopic}/state       # Zone state + health/status (published by zone)
 {baseTopic}/warnings    # Zone error messages (published by zone)
 ```
 
@@ -263,8 +263,9 @@ Base Topic: paradox/houdini/mirror
 
 Topics:
   paradox/houdini/mirror/commands   → PxO publishes commands here
+  paradox/houdini/mirror/events     → Mirror device publishes discrete events here
   paradox/houdini/mirror/state      → Mirror device publishes state here
-  paradox/houdini/mirror/status     → Mirror device publishes health here
+  paradox/houdini/mirror/state      → Mirror device also publishes health here
   paradox/houdini/mirror/warnings   → Mirror device publishes errors here
 ```
 
@@ -648,7 +649,7 @@ Published to: `{baseTopic}/state`
 
 ### Heartbeat
 
-Published to: `{baseTopic}/status` at regular intervals (default 1Hz):
+Published to: `{baseTopic}/state` at regular intervals (default 1Hz):
 
 ```json
 {
