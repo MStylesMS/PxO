@@ -1,6 +1,7 @@
 const PfxAdapter = require('./pfx');
 const LightsAdapter = require('./lights');
 const PxcAdapter = require('./pxc');
+const GenericMqttAdapter = require('./genericMqtt');
 const log = require('../logger');
 
 /**
@@ -22,6 +23,7 @@ class AdapterRegistry {
         this.registerAdapterType('pfx-media', PfxAdapter);
         this.registerAdapterType('pfx-lights', LightsAdapter);
         this.registerAdapterType('pfx-clock', PxcAdapter);
+        this.registerAdapterType('mqtt', GenericMqttAdapter);
         this.initializeZones(zonesConfig);
     }
 
@@ -234,6 +236,12 @@ class AdapterRegistry {
                     defaultFadeMs: this.options.defaultFadeMs,
                     mirrorUI: this.options.mirrorUI === true,
                 });
+                break;
+
+            case 'mqtt':
+                // GenericMqttAdapter expects { baseTopic }
+                topicsArg = { baseTopic };
+                adapter = new AdapterClass(this.mqtt, topicsArg);
                 break;
 
             default:
