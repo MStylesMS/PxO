@@ -274,6 +274,8 @@ Topics:
 | Zone Type | Purpose | Adapter | Example Commands |
 |-----------|---------|---------|------------------|
 | `pfx-lights` | Lighting control | `src/adapters/lights.js` | `scene`, `setColor`, `setBrightness` |
+
+Light zones may also expose retained scene-registry metadata on `{zoneBaseTopic}/scenes` when the room EDN defines `:global :light-scenes`. PxO republishes these scene objects as opaque metadata for operator UIs and other consumers. Only display-oriented keys such as `id`, `label`, and `swatch` are assumed generically; `type` and any additional keys are consumer-defined.
 | `pfx-media` | Video/audio playback | `src/adapters/mirror.js`, `audio.js` | `playVideo`, `playAudioFX`, `stopAudio` |
 | `houdini-clock` | Countdown timer UI | `src/adapters/clock.js` | `show`, `hide`, `setTime` |
 | `system` | System control | `src/adapters/system.js` | `shutdown`, `restart` |

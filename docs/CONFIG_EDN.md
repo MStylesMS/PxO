@@ -190,6 +190,42 @@ Example:
 
 PxO can consume gameplay-driving input topics from multiple producer apps (for example PFx and Pio).
 
+### Light Scene Registry Metadata
+
+Room configs may define a global light scene registry under `:global :light-scenes`.
+
+Example:
+
+```clojure
+:global {
+  :light-scenes {
+    :red {:id "red" :label "Red" :swatch "#FF0000"}
+    :disco {:id "disco" :label "Disco" :swatch "rainbow" :type "dynamic" :speed_ms 120}
+    :uvGreen {:id "uvGreen" :label "UV Green" :swatch "#39ff14" :type "custom" :r 0 :g 180 :b 0 :uv 255}
+  }
+}
+```
+
+Behavior:
+
+- PxO publishes this registry retained to each light zone's `{baseTopic}/scenes` topic on startup, reconnect, and config refresh.
+- PxO treats each scene object as opaque metadata and publishes it as-is.
+- PxO does not validate or interpret optional scene keys beyond transporting the object.
+- Operator UIs typically use `id`, `label`, and `swatch`; devices may use additional keys.
+
+Required minimum fields for UI compatibility:
+
+- `:id` - stable scene identifier used by `scene` / `setColorScene`
+- `:label` - human-readable label for operator display
+- `:swatch` - preview token or color value used by operator UI
+
+Optional free-form fields:
+
+- `:type` - advisory scene class such as `"static"`, `"dynamic"`, `"custom"`, or any other consumer-defined value
+- Any other keys needed by a consumer, such as `:r`, `:g`, `:b`, `:w`, `:uv`, `:speed_ms`, `:pattern`, or device-specific flags
+
+Consumers are responsible for knowing what to do with optional fields. Unknown keys are allowed and do not need to be pre-declared in PxO.
+
 To keep trigger rules maintainable, define named input sources in `:inputs` and reference them from trigger rules.
 
 ```clojure

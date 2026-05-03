@@ -873,6 +873,49 @@ async function main() {
     }
   }
 
+  /**
+   * Publish light scenes to each light zone's /scenes subtopic (retained).
+   * Scenes are defined in cfg.global['light-scenes'] and published per zone
+   * so the operator Web UI can load available scenes dynamically.
+   */
+  function publishLightScenes() {
+    try {
+      const globalScenes = cfg?.global?.['light-scenes'] || {};
+      if (Object.keys(globalScenes).length === 0) {
+        log.debug('No global light-scenes defined; skipping light scenes publish');
+        return;
+      }
+
+      const zoneNames = sm.zones ? sm.zones.getZoneNames() : [];
+      zoneNames.forEach(zoneName => {
+        const adapter = sm.zones.getZone(zoneName);
+        if (!adapter || adapter.zoneType !== 'pfx-lights') {
+          return; // Skip non-light zones
+        }
+
+        const sceneIds = adapter.zoneConfig?.scenes || Object.keys(globalScenes);
+        const scenesToPublish = sceneIds.map(sceneId => globalScenes[sceneId]).filter(Boolean);
+
+        if (scenesToPublish.length === 0) {
+          log.debug(`No scenes defined for light zone '${zoneName}'`);
+          return;
+        }
+
+        const payload = {
+          zone: zoneName,
+          scenes: scenesToPublish,
+          ts: Date.now()
+        };
+
+        const sceneTopic = `${adapter.zoneBaseTopic}/scenes`;
+        mqtt.publish(sceneTopic, payload, { retain: true });
+        log.debug(`Published ${scenesToPublish.length} scenes to ${sceneTopic}`);
+      });
+    } catch (e) {
+      log.warn('publishLightScenes failed', e.message);
+    }
+  }
+
   const chatToPlayerTopic = iniConfig.global?.chat_to_player || null;
   const chatFromPlayerTopic = iniConfig.global?.chat_from_player || null;
   const chatLoggingEnabled = !!(chatToPlayerTopic && chatFromPlayerTopic);
@@ -991,6 +1034,7 @@ async function main() {
         } else if (cmdKey === 'getconfig' || cmdKey === 'config') {
           log.info('Publishing full configuration');
           publishUiConfig();
+          publishLightScenes();
           sm.publishEvent('command_processed', { command: payload.command, topic });
           if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
             gameplayLogger.commandApplied(commandName, payload, topic, { source: 'ui-helper' });
@@ -1173,12 +1217,14 @@ async function main() {
   // Initialize trigger subscriptions
   initializeTriggers();
 
-  // Publish hints registry on startup and after broker reconnect
+  // Publish hints registry, UI config, and light scenes on startup and after broker reconnect
   publishHintsRegistry();
   publishUiConfig();
+  publishLightScenes();
   mqtt.on('connected', () => {
     publishHintsRegistry();
     publishUiConfig();
+    publishLightScenes();
     initializeTriggers(); // Re-subscribe to triggers after reconnect
   });
 

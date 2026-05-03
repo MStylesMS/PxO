@@ -29,6 +29,7 @@ Each zone follows this pattern:
 {baseTopic}/events      # Zone discrete events (published by zone)
 {baseTopic}/state       # Zone state + health/status (published by zone)
 {baseTopic}/warnings    # Zone error messages (published by zone)
+{baseTopic}/scenes      # Retained zone metadata for operator scene registries (optional)
 ```
 
 **Example**:
@@ -38,6 +39,7 @@ paradox/game/lights/events     → Lights device publishes discrete events here
 paradox/game/lights/state      → Lights device publishes state here
 paradox/game/lights/state      → Lights device also publishes health here
 paradox/game/lights/warnings   → Lights device publishes errors here
+paradox/game/lights/scenes     → PxO publishes retained light scene registry here
 ```
 
 ### Game Control Topics
@@ -184,6 +186,30 @@ Published **retained** to `{baseTopic}/schema` at startup. Describes all support
   ]
 }
 ```
+
+### Light Scenes Registry Message
+
+Published **retained** to `{baseTopic}/lights/scenes` (or more generally `{zoneBaseTopic}/scenes`) for light zones that define `:global :light-scenes` in EDN. This topic is intended for operator UIs and other consumers that need a registry of scene ids and display metadata.
+
+```json
+{
+  "zone": "lights",
+  "scenes": [
+    { "id": "red", "label": "Red", "swatch": "#FF0000" },
+    { "id": "disco", "label": "Disco", "swatch": "rainbow", "type": "dynamic", "speed_ms": 120 },
+    { "id": "uvGreen", "label": "UV Green", "swatch": "#39ff14", "type": "custom", "r": 0, "g": 180, "b": 0, "uv": 255 }
+  ],
+  "ts": 1760000000000
+}
+```
+
+Semantics:
+
+- PxO publishes scene objects as opaque metadata from EDN.
+- PxO does not require a fixed schema for optional scene keys.
+- Consumers should rely on `id`, `label`, and `swatch` for generic UI behavior.
+- `type` is advisory and may be `static`, `dynamic`, `custom`, or any consumer-defined value.
+- Additional keys are consumer-defined and may describe colors, timing, animation modes, or device-specific parameters.
 
 ---
 
@@ -513,6 +539,8 @@ Zone adapters transform these into zone-specific formats.
 
 **Parameters**:
 - `name`: Scene name (`red`, `green`, `blue`, `white`, `dim`, `off`, etc.)
+
+Scene names are commonly listed in the retained `{baseTopic}/scenes` registry for operator UIs, but the command contract remains the same regardless of whether a registry is published.
 
 **Set Color (RGB)**:
 ```json
