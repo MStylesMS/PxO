@@ -63,6 +63,8 @@ class GameStateMachine extends EventEmitter {
     this._idleLoopTimer = null;
     // Phase-scoped schedule registrations: { phaseKey: [ {entry, _idx, at, key} ] }
     this._phaseSchedules = new Map();
+    // Prevent duplicate end-media cue execution in a single closing phase.
+    this._closingOutcomeMediaFired = new Set();
 
     // --- PHASE ENGINE PROPERTIES ---
     this.phases = {}; // loaded from :phases config (map, not array)
@@ -1105,6 +1107,7 @@ class GameStateMachine extends EventEmitter {
     // Cleanup from previous phase
     this.stopUnifiedTimer();
     this.clearAllPhaseSchedules();
+    this._closingOutcomeMediaFired.clear();
 
     // Setup for new phase
     this.currentPhase = phaseName;
@@ -2042,11 +2045,25 @@ class GameStateMachine extends EventEmitter {
 
     // Handle unified fire command (v2.3.0+)
     if (entry.fire) {
-      log.info(`Firing '${entry.fire}' at ${atLabel}s${contextSuffix}`);
-      this.fireByName(entry.fire).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
-      firedActions.push({ type: 'fire', value: entry.fire });
-      primaryLogged = true;
-      actionsTriggered = true;
+      if (this._isClosingPhase(this.state) && (entry.fire === 'win-video' || entry.fire === 'fail-video')) {
+        const onceKey = `${this.state}:${entry.fire}`;
+        if (this._closingOutcomeMediaFired.has(onceKey)) {
+          log.warn(`Skipping duplicate closing media cue '${entry.fire}' in phase '${this.state}'`);
+        } else {
+          this._closingOutcomeMediaFired.add(onceKey);
+          log.info(`Firing '${entry.fire}' at ${atLabel}s${contextSuffix}`);
+          this.fireByName(entry.fire).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
+          firedActions.push({ type: 'fire', value: entry.fire });
+          primaryLogged = true;
+          actionsTriggered = true;
+        }
+      } else {
+        log.info(`Firing '${entry.fire}' at ${atLabel}s${contextSuffix}`);
+        this.fireByName(entry.fire).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
+        firedActions.push({ type: 'fire', value: entry.fire });
+        primaryLogged = true;
+        actionsTriggered = true;
+      }
     }
 
     // Handle cue execution - backwards compatibility
@@ -2609,6 +2626,7 @@ class GameStateMachine extends EventEmitter {
 
     this.stopUnifiedTimer();
     if (this.clearAllPhaseSchedules) this.clearAllPhaseSchedules();
+    this._closingOutcomeMediaFired.clear();
     this.changeState('resetting', { reason: 'reset_sequence_initiated', gameMode });
     this.publishEvent('resetting');
 

@@ -536,6 +536,7 @@ async function main() {
 
   log.info(`Connecting to MQTT broker: ${cfg.global.mqtt.broker}`);
   const mqtt = new MqttClient(cfg.global.mqtt.broker).connect();
+  let shuttingDown = false;
 
   // Derive UI topics using shared helper (preserves prior defaults and shapes)
   const uiTopics = getUiTopics(cfg);
@@ -1229,6 +1230,9 @@ async function main() {
   });
 
   mqtt.on('disconnected', () => {
+    if (shuttingDown) {
+      return;
+    }
     sm.publishWarning('mqtt_disconnected', {
       message: 'MQTT broker disconnected',
       broker: cfg.global?.mqtt?.broker
@@ -1261,12 +1265,14 @@ async function main() {
 
   process.on('SIGINT', () => {
     log.info('SIGINT, cleaning up and exiting');
+    shuttingDown = true;
     if (gameplayLogger) gameplayLogger.endSession({ reason: 'sigint' });
     mqtt.disconnect();
     setTimeout(() => process.exit(0), 100);
   });
   process.on('SIGTERM', () => {
     log.info('SIGTERM, cleaning up and exiting');
+    shuttingDown = true;
     if (gameplayLogger) gameplayLogger.endSession({ reason: 'sigterm' });
     mqtt.disconnect();
     setTimeout(() => process.exit(0), 100);

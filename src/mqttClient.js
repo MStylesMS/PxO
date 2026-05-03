@@ -85,12 +85,16 @@ class MqttClient extends EventEmitter {
   }
 
   publish(topic, payloadObj, opts = {}) {
-    if (!this.client) throw new Error('MQTT not connected');
+    if (!this.client) {
+      log.warn('Skipping publish while MQTT is disconnected:', topic);
+      return false;
+    }
     const data = typeof payloadObj === 'string' ? payloadObj : JSON.stringify(payloadObj);
     const options = { qos: 0, retain: false, ...opts };
     this.client.publish(topic, data, options, (err) => {
       if (err) log.error('Publish error to', topic, err.message);
     });
+    return true;
   }
 }
 
