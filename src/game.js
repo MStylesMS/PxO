@@ -889,7 +889,7 @@ async function main() {
       const zoneNames = sm.zones ? sm.zones.getZoneNames() : [];
       zoneNames.forEach(zoneName => {
         const adapter = sm.zones.getZone(zoneName);
-        if (!adapter || adapter.zoneType !== 'pfx-lights') {
+        if (!adapter || adapter.zoneType !== 'mqtt-lights') {
           return; // Skip non-light zones
         }
 

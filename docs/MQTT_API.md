@@ -527,7 +527,7 @@ Zone adapters transform these into zone-specific formats.
 
 ## Zone-Specific Commands
 
-### PFX Lights Zone (`pfx-lights`)
+### Lights Zone (`mqtt-lights`)
 
 **Set Scene**:
 ```json
@@ -652,7 +652,7 @@ mosquitto_pub -h localhost -t 'paradox/game/mirror/commands' \
   -m '{"command":"enableBrowser","url":"http://localhost/clock/index.html"}'
 ```
 
-### Clock Zone (`pfx-clock`)
+### Clock Zone (`pxc-clock`)
 
 **Show Clock**:
 ```json

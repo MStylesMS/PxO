@@ -334,9 +334,9 @@ Define zone adapters and MQTT topics:
 - `:baseTopic`: MQTT base topic
 
 **Zone Types**:
-- `pfx-lights` — Lighting control (ParadoxFX)
+- `mqtt-lights` — Lighting control (generic MQTT; works with PFx, ESP8266, PxB)
 - `pfx-media` — Video/audio playback (ParadoxFX)
-- `pfx-clock` — Countdown timer UI (PxC/PFx clock surface)
+- `pxc-clock` — Countdown timer UI (PxC clock surface)
 - `mqtt` — Generic MQTT passthrough zone (`{baseTopic}/commands`, `{baseTopic}/events`)
 
 ---
@@ -783,7 +783,7 @@ Variables are expanded at runtime from context (hint parameters, sequence parame
 {
   ;; Zone definitions
   :zones {
-    :lights {:type "pfx-lights" :baseTopic "paradox/game/lights"}
+    :lights {:type "mqtt-lights" :baseTopic "paradox/game/lights"}
     :mirror {:type "pfx-media" :baseTopic "paradox/game/mirror"}
     :audio {:type "pfx-media" :baseTopic "paradox/game/audio"}
     :clock {:type "houdini-clock" :baseTopic "paradox/game/clock"}

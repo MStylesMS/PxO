@@ -2675,7 +2675,7 @@ class GameStateMachine extends EventEmitter {
       return 'clock';
     }
 
-    const clockZones = this.zones.getZonesByType('pfx-clock');
+    const clockZones = this.zones.getZonesByType('pxc-clock');
     if (Array.isArray(clockZones) && clockZones.length > 0) {
       return clockZones[0].zoneName;
     }

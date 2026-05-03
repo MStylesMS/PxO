@@ -251,7 +251,7 @@ clock = paradox/game/clock
 system = paradox/game/system
 
 # Zone-specific settings
-lights.adapter = pfx-lights
+lights.adapter = mqtt-lights
 mirror.adapter = pfx-media
 audio.adapter = pfx-media
 clock.adapter = houdini-clock
@@ -271,7 +271,7 @@ Per-zone configuration sections:
 ```ini
 [zones.lights]
 base_topic = paradox/game/lights
-adapter = pfx-lights
+adapter = mqtt-lights
 enabled = true
 timeout = 10000
 
@@ -369,7 +369,7 @@ clock = paradox/game/clock
 system = paradox/game/system
 
 [zones.lights]
-adapter = pfx-lights
+adapter = mqtt-lights
 enabled = true
 timeout = 10000
 

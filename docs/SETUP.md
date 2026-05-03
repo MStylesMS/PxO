@@ -88,7 +88,7 @@ default_mode = demo
 ```clojure
 {
   :zones {
-    :lights {:type "pfx-lights" :baseTopic "paradox/game/lights"}
+    :lights {:type "mqtt-lights" :baseTopic "paradox/game/lights"}
     :mirror {:type "pfx-media" :baseTopic "paradox/game/mirror"}
   }
   
@@ -707,7 +707,7 @@ mosquitto_sub -h localhost -p 1883 -t 'paradox/game/lights/#' -v
 ; In game.edn, check zone definition
 :zones {
   :lights {
-    :type "pfx-lights"
+    :type "mqtt-lights"
     :baseTopic "paradox/game/lights"  ; Must match adapter topic
   }
 }

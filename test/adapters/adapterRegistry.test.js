@@ -39,10 +39,10 @@ describe('AdapterRegistry', () => {
             expect(adapter.zoneBaseTopic).toBe('paradox/houdini/mirror');
         });
 
-        test('should initialize pfx-lights zones correctly', () => {
+        test('should initialize mqtt-lights zones correctly', () => {
             const zonesConfig = {
                 'study-lights': {
-                    'type': 'pfx-lights',
+                    'type': 'mqtt-lights',
                     'base-topic': 'paradox/houdini/study-lights'
                 }
             };
@@ -52,13 +52,13 @@ describe('AdapterRegistry', () => {
             const adapter = registry.getZone('study-lights');
             expect(adapter).toBeInstanceOf(LightsAdapter);
             expect(adapter.zoneName).toBe('study-lights');
-            expect(adapter.zoneType).toBe('pfx-lights');
+            expect(adapter.zoneType).toBe('mqtt-lights');
         });
 
-        test('should initialize pfx-clock zones correctly', () => {
+        test('should initialize pxc-clock zones correctly', () => {
             const zonesConfig = {
                 'clock': {
-                    'type': 'pfx-clock',
+                    'type': 'pxc-clock',
                     'base-topic': 'paradox/houdini/clock'
                 }
             };
@@ -68,15 +68,15 @@ describe('AdapterRegistry', () => {
             const adapter = registry.getZone('clock');
             expect(adapter).toBeInstanceOf(PxcAdapter);
             expect(adapter.zoneName).toBe('clock');
-            expect(adapter.zoneType).toBe('pfx-clock');
+            expect(adapter.zoneType).toBe('pxc-clock');
         });
 
         test('should handle multiple zones of different types', () => {
             const zonesConfig = {
                 'mirror': { 'type': 'pfx-media', 'base-topic': 'mirror' },
                 'picture': { 'type': 'pfx-media', 'base-topic': 'picture' },
-                'lights': { 'type': 'pfx-lights', 'base-topic': 'lights' },
-                'clock': { 'type': 'pfx-clock', 'base-topic': 'clock' }
+                'lights': { 'type': 'mqtt-lights', 'base-topic': 'lights' },
+                'clock': { 'type': 'pxc-clock', 'base-topic': 'clock' }
             };
 
             registry = new AdapterRegistry(mockMqtt, zonesConfig);
@@ -148,8 +148,8 @@ describe('AdapterRegistry', () => {
         beforeEach(() => {
             const zonesConfig = {
                 'mirror': { 'type': 'pfx-media', 'base-topic': 'mirror' },
-                'lights': { 'type': 'pfx-lights', 'base-topic': 'lights' },
-                'clock': { 'type': 'pfx-clock', 'base-topic': 'clock' }
+                'lights': { 'type': 'mqtt-lights', 'base-topic': 'lights' },
+                'clock': { 'type': 'pxc-clock', 'base-topic': 'clock' }
             };
             registry = new AdapterRegistry(mockMqtt, zonesConfig);
         });
@@ -190,11 +190,11 @@ describe('AdapterRegistry', () => {
             expect(mediaZones).toHaveLength(1);
             expect(mediaZones[0].zoneName).toBe('mirror');
 
-            const lightZones = registry.getZonesByType('pfx-lights');
+            const lightZones = registry.getZonesByType('mqtt-lights');
             expect(lightZones).toHaveLength(1);
             expect(lightZones[0].zoneName).toBe('lights');
 
-            const clockZones = registry.getZonesByType('pfx-clock');
+            const clockZones = registry.getZonesByType('pxc-clock');
             expect(clockZones).toHaveLength(1);
             expect(clockZones[0].zoneName).toBe('clock');
         });
