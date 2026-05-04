@@ -1494,12 +1494,49 @@ class GameStateMachine extends EventEmitter {
 
     if (resolved) {
       log.debug(`fireByName: '${name}' resolved as SEQUENCE (blocking)`);
-      await this.fireSequenceByName(name, fireContext);
+      const runtimeContext = {};
+      if (typeof this.remaining === 'number') {
+        runtimeContext.remaining = this.remaining;
+        runtimeContext.gameTime = secondsToMMSS(this.remaining);
+      }
+      if (typeof this.resetRemaining === 'number') {
+        runtimeContext.resetRemaining = this.resetRemaining;
+        runtimeContext.resetTime = secondsToMMSS(this.resetRemaining);
+      }
+      try {
+        const activeGameMode = this.gameType || this.currentGameMode;
+        const phases = activeGameMode ? this._getPhasesForMode(activeGameMode) : null;
+        const gameplayPhase = phases && phases.gameplay;
+        if (gameplayPhase) {
+          const gameplayDuration = this.calculatePhaseDuration(gameplayPhase, 'gameplay');
+          if (Number.isFinite(gameplayDuration) && gameplayDuration >= 0) {
+            runtimeContext.gameplayDuration = gameplayDuration;
+            runtimeContext.selectedGameTime = secondsToMMSS(gameplayDuration);
+          }
+        }
+      } catch (_) { /* ignore */ }
+      runtimeContext.gameState = this.state;
+      await this.fireSequenceByName(name, { ...runtimeContext, ...fireContext });
       return;
     }
 
     // Not found in either - log warning
     log.warn(`fireByName: '${name}' not found in cues or sequences`);
+  }
+
+  _buildFireContext(action = {}) {
+    const fireContext = {};
+    const excludedKeys = new Set([
+      'fire', 'fireCue', 'fire-cue', 'fire-seq', 'hint', 'wait', 'zone', 'zones',
+      'command', 'at', 'step', '_comment', 'comment', 'description'
+    ]);
+
+    Object.entries(action).forEach(([key, value]) => {
+      if (excludedKeys.has(key)) return;
+      if (value !== undefined) fireContext[key] = value;
+    });
+
+    return fireContext;
   }
 
   // --- No legacy method aliases ---
@@ -1515,8 +1552,9 @@ class GameStateMachine extends EventEmitter {
   processScheduleEntry(entry, context) {
     // Handle unified fire command (v2.3.0+)
     if (entry.fire) {
+      const fireContext = this._buildFireContext(entry);
       // Don't await - schedules are truly fire-and-forget
-      this.fireByName(entry.fire).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
+      this.fireByName(entry.fire, fireContext).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
     }
 
     // Handle cue execution (fire-and-forget from schedule perspective) - backwards compatibility
@@ -1698,7 +1736,7 @@ class GameStateMachine extends EventEmitter {
       try {
         // Handle unified fire command (v2.3.0+)
         if (cmd.fire) {
-          this.fireByName(cmd.fire);
+          this.fireByName(cmd.fire, this._buildFireContext(cmd));
           return;
         }
 
@@ -2045,6 +2083,7 @@ class GameStateMachine extends EventEmitter {
 
     // Handle unified fire command (v2.3.0+)
     if (entry.fire) {
+      const fireContext = this._buildFireContext(entry);
       if (this._isClosingPhase(this.state) && (entry.fire === 'win-video' || entry.fire === 'fail-video')) {
         const onceKey = `${this.state}:${entry.fire}`;
         if (this._closingOutcomeMediaFired.has(onceKey)) {
@@ -2052,14 +2091,14 @@ class GameStateMachine extends EventEmitter {
         } else {
           this._closingOutcomeMediaFired.add(onceKey);
           log.info(`Firing '${entry.fire}' at ${atLabel}s${contextSuffix}`);
-          this.fireByName(entry.fire).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
+          this.fireByName(entry.fire, fireContext).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
           firedActions.push({ type: 'fire', value: entry.fire });
           primaryLogged = true;
           actionsTriggered = true;
         }
       } else {
         log.info(`Firing '${entry.fire}' at ${atLabel}s${contextSuffix}`);
-        this.fireByName(entry.fire).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
+        this.fireByName(entry.fire, fireContext).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
         firedActions.push({ type: 'fire', value: entry.fire });
         primaryLogged = true;
         actionsTriggered = true;
