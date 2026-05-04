@@ -243,7 +243,7 @@ A **zone** represents a controllable entity or group of entities:
 Each zone has:
 - **Zone Adapter**: Code that transforms commands to MQTT messages
 - **Base Topic**: MQTT topic prefix for the zone
-- **Type**: Adapter type (`pfx-lights`, `pfx-media`, `houdini-clock`, etc.)
+- **Type**: Adapter type (`mqtt-lights`, `pfx-media`, `pxc-clock`, etc.)
 
 ### MQTT Topic Structure
 
@@ -273,7 +273,9 @@ Topics:
 
 | Zone Type | Purpose | Adapter | Example Commands |
 |-----------|---------|---------|------------------|
-| `pfx-lights` | Lighting control | `src/adapters/lights.js` | `scene`, `setColor`, `setBrightness` |
+| `mqtt-lights` | Lighting control | `src/adapters/lights.js` | `scene`, `setColor`, `setBrightness` |
+
+Light zones may also expose retained scene-registry metadata on `{zoneBaseTopic}/scenes` when the room EDN defines `:global :light-scenes`. PxO republishes these scene objects as opaque metadata for operator UIs and other consumers. Only display-oriented keys such as `id`, `label`, and `swatch` are assumed generically; `type` and any additional keys are consumer-defined.
 | `pfx-media` | Video/audio playback | `src/adapters/mirror.js`, `audio.js` | `playVideo`, `playAudioFX`, `stopAudio` |
 | `houdini-clock` | Countdown timer UI | `src/adapters/clock.js` | `show`, `hide`, `setTime` |
 | `system` | System control | `src/adapters/system.js` | `shutdown`, `restart` |
@@ -345,7 +347,7 @@ this.mqtt.subscribe(`${zoneConfig.baseTopic}/state`);
 {
   ;; Zone definitions
   :zones {
-    :lights {:type "pfx-lights" :baseTopic "paradox/game/lights"}
+    :lights {:type "mqtt-lights" :baseTopic "paradox/game/lights"}
     :mirror {:type "pfx-media" :baseTopic "paradox/game/mirror"}
     :audio {:type "pfx-media" :baseTopic "paradox/game/audio"}
     :clock {:type "houdini-clock" :baseTopic "paradox/game/clock"}

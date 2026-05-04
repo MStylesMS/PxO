@@ -34,7 +34,7 @@ Create `demo-game.edn`:
 {
   :zones {
     :lights {
-      :type "pfx-lights"
+      :type "mqtt-lights"
       :baseTopic "paradox/game/lights"
     }
     :mirror {
@@ -359,7 +359,7 @@ Sequences execute timeline-based actions:
 ```clojure
 {
   :zones {
-    :lights {:type "pfx-lights" :baseTopic "paradox/game/lights"}
+    :lights {:type "mqtt-lights" :baseTopic "paradox/game/lights"}
     :mirror {:type "pfx-media" :baseTopic "paradox/game/mirror"}
     :audio {:type "pfx-media" :baseTopic "paradox/game/audio"}
     :clock {:type "houdini-clock" :baseTopic "paradox/game/clock"}

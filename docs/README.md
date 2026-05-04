@@ -59,7 +59,7 @@ Create a simple game configuration (`example-game.edn`):
 ```clojure
 {
   :zones {
-    :lights {:type "pfx-lights" :baseTopic "paradox/game/lights"}
+    :lights {:type "mqtt-lights" :baseTopic "paradox/game/lights"}
     :display {:type "pfx-media" :baseTopic "paradox/game/display"}
     :audio {:type "pfx-media" :baseTopic "paradox/game/audio"}
   }
@@ -162,7 +162,7 @@ Each zone is an independent adapter that communicates via MQTT:
 
 | Zone Type | Purpose | Example Topics |
 | ----------- | --------- | ---------------- |
-| `pfx-lights` | Lighting control | `paradox/game/lights/commands` |
+| `mqtt-lights` | Lighting control | `paradox/game/lights/commands` |
 | `pfx-media` | Video/audio playback | `paradox/game/display/commands` |
 | `houdini-clock` | Countdown timer UI | `paradox/game/clock/commands` |
 | `system` | System commands | `paradox/game/system/commands` |

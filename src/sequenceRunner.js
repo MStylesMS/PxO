@@ -1,4 +1,5 @@
 const log = require('./logger');
+const { secondsToMMSS } = require('./util');
 const {
     getCommandsTopic,
     publishExecuteHint,
@@ -640,9 +641,50 @@ class SequenceRunner {
         }
     }
 
+    buildRuntimeContext(context = {}) {
+        const remaining = this.stateMachine && typeof this.stateMachine.remaining === 'number'
+            ? this.stateMachine.remaining
+            : undefined;
+        const resetRemaining = this.stateMachine && typeof this.stateMachine.resetRemaining === 'number'
+            ? this.stateMachine.resetRemaining
+            : undefined;
+        const derived = {};
+        const activeGameMode = context.gameMode
+            || (this.stateMachine && (this.stateMachine.gameType || this.stateMachine.currentGameMode));
+
+        if (remaining !== undefined) {
+            derived.remaining = remaining;
+            derived.gameTime = secondsToMMSS(remaining);
+        }
+        if (resetRemaining !== undefined) {
+            derived.resetRemaining = resetRemaining;
+            derived.resetTime = secondsToMMSS(resetRemaining);
+        }
+        if (this.stateMachine && typeof this.stateMachine.state === 'string') {
+            derived.gameState = this.stateMachine.state;
+        }
+
+        if (this.stateMachine && activeGameMode) {
+            try {
+                const phases = this.stateMachine._getPhasesForMode(activeGameMode);
+                const gameplayPhase = phases && phases.gameplay;
+                if (gameplayPhase) {
+                    const gameplayDuration = this.stateMachine.calculatePhaseDuration(gameplayPhase, 'gameplay');
+                    if (Number.isFinite(gameplayDuration) && gameplayDuration >= 0) {
+                        derived.gameplayDuration = gameplayDuration;
+                        derived.selectedGameTime = secondsToMMSS(gameplayDuration);
+                    }
+                }
+            } catch (_) { /* ignore */ }
+        }
+
+        return { ...derived, ...context };
+    }
+
     async runControlSequence(name, context = {}) {
-        const seqDef = this.resolveSequence(name, context.gameMode);
-        return await this.runSequenceDef(name, seqDef, context, true);
+        const runtimeContext = this.buildRuntimeContext(context);
+        const seqDef = this.resolveSequence(name, runtimeContext.gameMode);
+        return await this.runSequenceDef(name, seqDef, runtimeContext, true);
     }
 
     // NEW: Run sequence by name (blocking execution with timing)

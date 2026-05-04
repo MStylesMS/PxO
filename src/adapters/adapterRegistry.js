@@ -21,8 +21,8 @@ class AdapterRegistry {
 
         // Register supported adapter types
         this.registerAdapterType('pfx-media', PfxAdapter);
-        this.registerAdapterType('pfx-lights', LightsAdapter);
-        this.registerAdapterType('pfx-clock', PxcAdapter);
+        this.registerAdapterType('mqtt-lights', LightsAdapter);
+        this.registerAdapterType('pxc-clock', PxcAdapter);
         this.registerAdapterType('mqtt', GenericMqttAdapter);
         this.initializeZones(zonesConfig);
     }
@@ -221,13 +221,13 @@ class AdapterRegistry {
                 adapter = new AdapterClass(this.mqtt, topicsArg);
                 break;
 
-            case 'pfx-lights':
+            case 'mqtt-lights':
                 // LightsAdapter expects { lights: { baseTopic } }
                 topicsArg = { lights: { baseTopic } };
                 adapter = new AdapterClass(this.mqtt, topicsArg);
                 break;
 
-            case 'pfx-clock':
+            case 'pxc-clock':
                 // PxcAdapter expects { clock: { baseTopic } } and can accept extra options
                 topicsArg = { clock: { baseTopic } };
                 adapter = new AdapterClass(this.mqtt, topicsArg, {

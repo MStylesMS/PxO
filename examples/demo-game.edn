@@ -31,7 +31,7 @@
     ;; Zone definitions (device control)
     :zones {
       :lights {
-        :type "pfx-lights"
+        :type "mqtt-lights"
         :baseTopic "paradox/demo/lights"
       }
       :mirror {
@@ -43,7 +43,7 @@
         :baseTopic "paradox/demo/audio"
       }
       :clock {
-        :type "pfx-clock"
+        :type "pxc-clock"
         :baseTopic "paradox/demo/clock"
       }
     }
