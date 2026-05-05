@@ -11,10 +11,12 @@
     "validate": "node tools/validate-config.js",
     "validate:edn": "node tools/validate-edn.js",
     "validate:ini": "node tools/validate-ini.js",
-    "test": "node test/run-tests.js",
-    "test:unified": "node test/run-unified.js",
-    "test:contract": "node test/command-contract.test.js",
-    "test:scheduler": "node test/scheduler.test.js",
+    "test": "jest --runInBand",
+    "test:unit": "jest --runInBand --testPathIgnorePatterns=/test/integration/",
+    "test:integration": "jest --runInBand --runTestsByPath test/integration/hints.integration.test.js test/integration-template-expansion.test.js",
+    "test:unified": "jest --runInBand --runTestsByPath test/unified-phases.test.js",
+    "test:contract": "jest --runInBand --runTestsByPath test/command-contract.test.js",
+    "test:scheduler": "jest --runInBand --runTestsByPath test/scheduler.test.js",
     "test:e2e": "node test/e2e-playAudioFX-smoke.js"
   },
   "keywords": [

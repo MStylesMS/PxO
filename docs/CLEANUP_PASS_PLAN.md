@@ -17,8 +17,16 @@ This plan is intentionally phased so each step can be reviewed and shipped safel
 ## Working Assumptions
 
 - The documentation cleanup goal includes consolidating temporary planning notes, removing stale references, reducing overlap between docs, and adding any missing durable documentation needed by future contributors.
-- This pass is for PxO first. Follow-on passes can be planned for PFx, PxB, PxC, and room repos after the PxO scope is reviewed.
+- This pass is centered on PxO, but it may include coordinated cleanup in PFx and PxB where their code or docs intersect directly with PxO behavior.
 - No public contract changes should be made during this pass without an explicit doc update and approval.
+
+## Approved Decisions
+
+- This cleanup pass may touch PFx and PxB where they intersect with PxO.
+- Completed PR documents and out-of-date planning material should be moved to `docs/archive/` during the documentation phase.
+- Open PR documents may remain in place for now, but they should be updated if the underlying work has already landed.
+- Jest is the canonical test runner for this repo going forward.
+- No compatibility layers have been pre-designated as untouchable.
 
 ## Current Observations
 
@@ -51,8 +59,8 @@ Objective: make the default validation path representative of the real suite.
 
 Planned work:
 
-- Replace or fix `test/run-tests.js` so nested tests are discovered consistently.
-- Decide whether to keep the custom runner for fast local checks or retire it in favor of Jest as the primary entry point.
+- Standardize the repo on Jest as the primary test entry point.
+- Replace `test/run-tests.js` as the default path so nested tests are discovered consistently.
 - Add a clear testing document covering default, focused, contract, integration, and validation commands.
 - Audit the current suite for obvious blind spots around adapter behavior, sequence resolution, config validation, and runtime-only flows.
 - Add targeted tests before refactoring high-risk code paths.
@@ -142,7 +150,8 @@ Objective: make the durable docs easier to trust and easier to navigate.
 Planned work:
 
 - Review the docs folder and classify documents as durable reference, active proposal, or parking-lot material.
-- Move transient proposal/checklist material into a clearly marked area or archive if it is no longer active.
+- Move completed PR documents and stale planning material into `docs/archive/`.
+- Keep open PR documents in place for now, but refresh them when implementation has already moved past the document.
 - Add a missing testing/developer workflow document if needed.
 - Reconcile README claims with the actual docs tree and command behavior.
 - Tighten cross-links between `README.md`, `docs/README.md`, `docs/SPEC.md`, `docs/CONFIG_EDN.md`, `docs/MQTT_API.md`, and setup material.
@@ -178,9 +187,8 @@ Acceptance criteria:
 - More consistent adapter execution behavior.
 - Cleaned and reorganized documentation set, including a dedicated testing/workflow doc if warranted.
 
-## Open Review Questions
+## Immediate Next Steps
 
-1. Should this cleanup pass stay strictly within PxO, or should we include any coordinated doc updates in PFx/PxB where contracts intersect?
-2. Do you want transient PR and parking-lot docs archived, moved, or retained in place but re-labeled?
-3. Should the testing pass standardize on Jest as the canonical runner, or do you want to preserve the lightweight custom runner for fast local checks?
-4. Are there any compatibility layers you already know must remain untouched for existing room packages?
+1. Switch the default test path to Jest and document the supported test commands.
+2. Use the stronger test baseline to drive compatibility cleanup in PxO, with PFx and PxB adjustments only where the contracts intersect.
+3. Archive stale documentation in `docs/archive/` during Phase 5 and update any open PR documents that no longer match the code.

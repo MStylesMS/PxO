@@ -182,6 +182,7 @@ Each zone is an independent adapter that communicates via MQTT:
 - **[MQTT API Reference](docs/MQTT_API.md)** — Complete MQTT topic and message format documentation
 - **[EDN Configuration Guide](docs/CONFIG_EDN.md)** — Game configuration with EDN format
 - **[INI Configuration Guide](docs/CONFIG_INI.md)** — System settings with INI format
+- **[Testing Guide](docs/TESTING.md)** — Jest entry points, focused runs, and validation workflow
 - **[Setup Instructions](docs/SETUP.md)** — Installation and deployment guide
 - **[User Guide](docs/USER_GUIDE.md)** — Tutorial: building your first game
 - **[AI Agent Instructions](docs/AI_AGENT_INSTRUCTIONS.md)** — Development guidelines for AI coding agents
@@ -197,13 +198,23 @@ Each zone is an independent adapter that communicates via MQTT:
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run the full Jest suite
 npm test
 
-# Run specific test suites
+# Run unit-oriented suites only
+npm run test:unit
+
+# Run integration smoke suites
+npm run test:integration
+
+# Run specific focused suites
+npm run test:unified     # Unified phase/sequence behavior
 npm run test:contract    # Command contract tests
 npm run test:scheduler   # Timer and sequence tests
 npm run test:e2e         # End-to-end smoke tests
+
+# Run a focused file with Jest
+npm test -- --runTestsByPath test/discovery.test.js
 
 # Validate config file
 npm run validate -- /path/to/game.edn

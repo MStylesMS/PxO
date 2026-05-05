@@ -147,6 +147,7 @@ ready → intro → gameplay → paused/solved/failed → sleeping
 - 💻 **[CLI Reference](docs/CLI.md)** — Command line options and usage
 - ⚙️ **[EDN Configuration](docs/CONFIG_EDN.md)** — EDN config reference
 - 🛠️ **[INI Configuration](docs/CONFIG_INI.md)** — System settings reference
+- 🧪 **[Testing Guide](docs/TESTING.md)** — Jest entry points, focused runs, and validation workflow
 - 🚀 **[Setup & Deployment](docs/SETUP.md)** — Installation and systemd services
 - 🤖 **[AI Agent Instructions](docs/AI_AGENT_INSTRUCTIONS_PXO.md)** — Development patterns
 
@@ -286,10 +287,22 @@ See [MQTT_API.md](docs/MQTT_API.md) for complete API reference.
 ## Testing
 
 ```bash
-# Monitor MQTT topics
+# Run the full Jest suite
+npm test
+
+# Run unit-oriented suites only
+npm run test:unit
+
+# Run integration smoke suites
+npm run test:integration
+
+# Run a focused file
+npm test -- --runTestsByPath test/discovery.test.js
+
+# Monitor MQTT topics during manual testing
 mosquitto_sub -h localhost -t 'paradox/game/#' -v
 
-# Test game flow
+# Manual game-flow probe
 node src/game.js --config examples/demo-game.edn --mode demo
 ```
 

@@ -94,6 +94,18 @@ function formatSessionLogTimestamp(tsMs = Date.now()) {
   return `${yyyy}-${mm}-${dd}_${hh}-${mi}-${ss}`;
 }
 
+function parseCliArgs(rawArgs = process.argv.slice(2)) {
+  return minimist(rawArgs, {
+    alias: {
+      c: 'check',
+      validate: 'check',
+      'game-log-path': 'game_log_path'
+    },
+    boolean: ['check', 'validate'],
+    string: ['config', 'edn', 'game_log_path', 'game-log-path']
+  });
+}
+
 function getConfiguredGameplayDurationSeconds(cfg, mode) {
   const game = cfg?.game?.[mode];
   if (!game) return 0;
@@ -405,15 +417,8 @@ function doesTriggerConditionMatch(payload, condition = {}) {
   return true;
 }
 
-async function main() {
-  // Parse command line arguments
-  const argv = minimist(process.argv.slice(2), {
-    alias: {
-      c: 'check'
-    },
-    boolean: ['check'],
-    string: ['game_log_path']
-  });
+async function main(rawArgs = process.argv.slice(2)) {
+  const argv = parseCliArgs(rawArgs);
 
   if (argv.check) {
     const { validateEdnFile } = require('../tools/validate-edn');
@@ -1281,6 +1286,7 @@ async function main() {
 
 module.exports = Object.assign(module.exports || {}, {
   main,
+  parseCliArgs,
   _publishMqttMetadata,
   normalizeTriggerStrictMode,
   buildInputSourceMap,

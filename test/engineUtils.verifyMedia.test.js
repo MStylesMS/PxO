@@ -1,34 +1,36 @@
-const assert = (cond, msg) => { if (!cond) throw new Error(msg); };
-const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-
 const { buildVerifyMediaOptions, VERIFY_MEDIA_TIMEOUT_MS } = require('../src/engineUtils');
 
-(function run() {
-    // Defaults image when file is png
-    const imageOptions = buildVerifyMediaOptions({ file: 'still.PNG' });
-    assert(imageOptions.image === 'still.PNG', 'PNG file should map to image');
-    assert(!imageOptions.video && imageOptions.background === undefined, 'PNG file should not set video/background');
+describe('buildVerifyMediaOptions', () => {
+    test('infers media types from filenames and preserves overrides', () => {
+        const imageOptions = buildVerifyMediaOptions({ file: 'still.PNG' });
+        expect(imageOptions.image).toBe('still.PNG');
+        expect(imageOptions.video).toBeUndefined();
+        expect(imageOptions.background).toBeUndefined();
 
-    // Defaults video when file is mp4
-    const videoOptions = buildVerifyMediaOptions({ file: 'intro_short.mp4' });
-    assert(videoOptions.video === 'intro_short.mp4', 'MP4 file should map to video');
-    assert(!videoOptions.image && videoOptions.background === undefined, 'MP4 file should not set image/background');
+        const videoOptions = buildVerifyMediaOptions({ file: 'intro_short.mp4' });
+        expect(videoOptions.video).toBe('intro_short.mp4');
+        expect(videoOptions.image).toBeUndefined();
+        expect(videoOptions.background).toBeUndefined();
 
-    // Defaults background when file is mp3
-    const bgOptions = buildVerifyMediaOptions({ file: 'music.mp3' });
-    assert(bgOptions.background === 'music.mp3', 'MP3 file should map to background');
-    assert(!bgOptions.image && !bgOptions.video, 'MP3 should not set image/video');
+        const bgOptions = buildVerifyMediaOptions({ file: 'music.mp3' });
+        expect(bgOptions.background).toBe('music.mp3');
+        expect(bgOptions.image).toBeUndefined();
+        expect(bgOptions.video).toBeUndefined();
 
-    // Respects explicit overrides
-    const overrideOptions = buildVerifyMediaOptions({ file: 'intro_short.mp4', image: 'poster.png' });
-    assert(overrideOptions.image === 'poster.png', 'Explicit image should take precedence');
-    assert(!overrideOptions.video, 'Explicit image should prevent inferred video');
+        const overrideOptions = buildVerifyMediaOptions({ file: 'intro_short.mp4', image: 'poster.png' });
+        expect(overrideOptions.image).toBe('poster.png');
+        expect(overrideOptions.video).toBeUndefined();
+    });
 
-    // Accepts dashed volume keys and default timeout injection from callers
-    const complex = buildVerifyMediaOptions({ file: 'black_screen.png', 'zone-volume': 55, timeout: VERIFY_MEDIA_TIMEOUT_MS });
-    assert(complex.image === 'black_screen.png', 'PNG file should map to image even with dashed keys');
-    assert(complex.zoneVolume === 55, 'zone-volume should normalize to zoneVolume');
-    assert(complex.timeout === VERIFY_MEDIA_TIMEOUT_MS, 'timeout should pass through');
+    test('normalizes dashed keys and preserves timeout', () => {
+        const complex = buildVerifyMediaOptions({
+            file: 'black_screen.png',
+            'zone-volume': 55,
+            timeout: VERIFY_MEDIA_TIMEOUT_MS
+        });
 
-    console.log('engineUtils.verifyImage.test.js PASS');
-})();
+        expect(complex.image).toBe('black_screen.png');
+        expect(complex.zoneVolume).toBe(55);
+        expect(complex.timeout).toBe(VERIFY_MEDIA_TIMEOUT_MS);
+    });
+});

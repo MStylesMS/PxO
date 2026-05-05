@@ -123,7 +123,7 @@ Behavior:
 - Path must be writable; PxO creates the directory if missing.
 - If path is invalid/unwritable, startup fails (hard fail).
 
-#### `--check`, `-c`
+#### `--check`, `-c`, `--validate`
 
 Validate EDN configuration and exit without starting the game runtime.
 
@@ -135,6 +135,9 @@ node src/game.js --check
 
 # Check a specific EDN file
 node src/game.js -c --edn /path/to/game.edn
+
+# Validate using the longer alias
+node src/game.js --validate --edn /path/to/game.edn
 ```
 
 **Exit code**:

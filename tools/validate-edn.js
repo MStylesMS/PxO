@@ -532,7 +532,7 @@ function validateZoneFormat(legacyConfig, issues) {
   const zones = legacyConfig && legacyConfig.global && legacyConfig.global.mqtt && legacyConfig.global.mqtt.zones;
   if (!zones) return;
 
-  const supportedTypes = new Set(['pfx-media', 'pfx-lights', 'pfx-clock']);
+  const supportedTypes = new Set(['pfx-media', 'mqtt-lights', 'pxc-clock', 'mqtt']);
 
   Object.entries(zones).forEach(([zoneName, zoneConfig]) => {
     const contextRoot = `global.mqtt.zones.${zoneName}`;
@@ -548,7 +548,7 @@ function validateZoneFormat(legacyConfig, issues) {
       addIssue(
         issues,
         'error',
-        `Zone '${zoneName}' has unsupported type '${zoneConfig.type}'. Supported types: pfx-media, pfx-lights, pfx-clock`,
+        `Zone '${zoneName}' has unsupported type '${zoneConfig.type}'. Supported types: pfx-media, mqtt-lights, pxc-clock, mqtt`,
         `${contextRoot}.type`
       );
     }
