@@ -2558,7 +2558,7 @@ class GameStateMachine extends EventEmitter {
     if (this.state !== 'gameplay') return false;
 
     // Check concurrency (allow pause during other sequences for safety)
-    if (this._runningSequence && !['start-sequence', 'intro-sequence'].includes(this._runningSequence)) {
+    if (this._runningSequence && !['gameplay-start-sequence', 'intro-sequence', 'intro-to-gameplay-sequence'].includes(this._runningSequence)) {
       log.warn(`Pause sequence rejected: ${this._runningSequence} running (not pausable)`);
       this.publishEvent('sequence_rejected_busy', {
         requested: 'pause-sequence',

@@ -2,7 +2,6 @@ const log = require('./logger');
 const { secondsToMMSS } = require('./util');
 const {
     getCommandsTopic,
-    publishExecuteHint,
     stopAllAcrossZones,
     VERIFY_BROWSER_TIMEOUT_MS,
     VERIFY_MEDIA_TIMEOUT_MS,
@@ -28,7 +27,6 @@ class SequenceRunner {
         this.maxDepthDefault = (cfg.global?.settings?.['sequence-max-depth']) || 3;
         // Cache events topic (may not exist early; recompute lazily if missing)
         this._eventsTopic = cfg.global?.mqtt?.['game-topic'] ? `${cfg.global.mqtt['game-topic']}/events` : null;
-        // Cache commands topic for publishing playHint as executeHint
         this._commandsTopic = cfg.global?.mqtt?.['game-topic'] ? `${cfg.global.mqtt['game-topic']}/commands` : null;
     }
 
@@ -72,36 +70,20 @@ class SequenceRunner {
         return obj;
     }
 
-    // Map legacy sequence names to new semantic names
-    mapLegacySequenceName(name) {
-        const legacyMappings = {
-            'start-sequence': 'gameplay-start-sequence',
-            'halt-sequence': 'software-halt-sequence',
-            'shutdown-sequence': 'software-shutdown-sequence',
-            'reboot-sequence': 'software-restart-sequence',
-            'sleep-sequence': 'props-sleep-sequence',
-            'wake-sequence': 'props-wake-sequence'
-            // Removed solve-sequence and fail-sequence mappings - no longer supported
-        };
-        return legacyMappings[name] || name;
-    }
-
     getSequenceLookupNames(name) {
         if (!name) {
             return {
-                mapped: name,
                 normalized: name,
                 base: name,
                 variants: []
             };
         }
 
-        const mapped = this.mapLegacySequenceName(name);
-        const normalized = this.normalizeName(mapped || name);
+        const normalized = this.normalizeName(name);
         const base = String(normalized).replace(/-sequence$/, '');
-        const variants = [...new Set([name, mapped, normalized, base, `${base}-sequence`].filter(Boolean))];
+        const variants = [...new Set([name, normalized, base, `${base}-sequence`].filter(Boolean))];
 
-        return { mapped, normalized, base, variants };
+        return { normalized, base, variants };
     }
 
     lookupSequenceInRoot(root, variants, convert = (seqDef) => seqDef) {
@@ -746,8 +728,6 @@ class SequenceRunner {
                 case 'verifyImage':
                     if (!step.file) warnings.push(`Sequence ${name}[${idx}]: verifyImage requires :file`);
                     break;
-                case 'playHint':
-                    break;
                 default:
                     warnings.push(`Sequence ${name}[${idx}]: unknown action '${command}' (will be ignored)`);
             }
@@ -980,20 +960,6 @@ class SequenceRunner {
                 return;
             }
 
-            case 'playHint': {
-                // Publish executeHint on the game commands topic using the canonical id field.
-                const hintId = step.id;
-                if (!hintId) {
-                    const msg = 'playHint step missing required id';
-                    log.warn(`SequenceRunner: ${msg}`);
-                    this.publishEvent('sequence_step_validation_failed', { action: 'playHint', error: 'missing_hint_id' });
-                    return;
-                }
-                const res = publishExecuteHint(this.mqtt, this.cfg, hintId, 'sequenceRunner');
-                if (res.ok) this.publishEvent('hint_command_published', { id: hintId });
-                else this.publishEvent('sequence_step_failed', { action: 'playHint', error: res.error || 'publish_failed' });
-                return;
-            }
             case 'publish':
             case 'mqtt': {
                 const topic = step.topic;

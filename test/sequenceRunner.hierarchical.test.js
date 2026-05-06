@@ -48,27 +48,23 @@ describe('SequenceRunner hierarchical sequences', () => {
         });
     });
 
-    test('maps legacy lifecycle names to canonical sequence names', () => {
-        expect(runner.mapLegacySequenceName('start-sequence')).toBe('gameplay-start-sequence');
-        expect(runner.mapLegacySequenceName('halt-sequence')).toBe('software-halt-sequence');
-        expect(runner.mapLegacySequenceName('custom-sequence')).toBe('custom-sequence');
-    });
-
-    test('resolves hierarchical and legacy fallback sequences through both lookup paths', () => {
+    test('resolves canonical hierarchical and legacy-location fallback sequences through both lookup paths', () => {
         expect(runner.resolveSequence('reset-sequence')).toEqual(
             expect.objectContaining({ description: 'System reset sequence' })
         );
-        expect(runner.resolveSequence('start-sequence')).toEqual(
+        expect(runner.resolveSequence('gameplay-start-sequence')).toEqual(
             expect.objectContaining({ description: 'Gameplay start sequence' })
         );
         expect(runner.resolveSequence('solved')).toEqual(
             expect.objectContaining({ description: 'Solved sequence' })
         );
         expect(runner.resolveSequence('solve-sequence')).toBeUndefined();
+        expect(runner.resolveSequence('start-sequence')).toBeUndefined();
 
-        expect(runner.resolveSequenceNew('start-sequence')).toEqual([
+        expect(runner.resolveSequenceNew('gameplay-start-sequence')).toEqual([
             { zone: 'mirror', command: 'playVideo', file: 'intro.mp4' }
         ]);
+        expect(runner.resolveSequenceNew('start-sequence')).toBeUndefined();
         expect(runner.resolveSequenceNew('legacy-custom')).toEqual([
             { zone: 'mirror', command: 'setImage', file: 'legacy.png' }
         ]);

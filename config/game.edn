@@ -122,22 +122,24 @@
                    }
 
            ;; Optional global named triggers for quick references and testing
-           :triggers {:door-switch-unlock {:description "Door switch activation trigger"
+           :triggers {:door-switch-unlock {:description "Example trigger that fires a cue when the door switch activates"
                                            :topic "paradox/escape/sensors/door_switch"
                                            :condition {:state "activated"}
-                                           :actions []}
-                      :puzzle-solved-win {:description "Main puzzle solved trigger"
+                                           :actions [{:fire :unlock-door-lights}]}
+                      :puzzle-solved-win {:description "Example trigger that fires a named sequence when the main puzzle reports solved"
                                           :topic "paradox/escape/puzzles/main_puzzle"
                                           :condition {:status "solved"}
-                                          :actions []}
-                      :emergency-reset {:description "Emergency reset button trigger"
+                                          :actions [{:fire :show-clock-seq}]}
+                      :emergency-reset {:description "Example trigger that fires a named hint when the emergency button is pressed"
                                         :topic "paradox/escape/emergency"
                                         :condition {:button "pressed"}
-                                        :actions []}
-                      :keypad-correct-code {:description "Correct keypad code entered"
+                                        :actions [{:fire :humphrey-close}]}
+                      :keypad-correct-code {:description "Example trigger mixing cue, sequence, and hint actions in order"
                                             :topic "paradox/escape/keypad/main"
                                             :condition {:code "1234" :status "entered"}
-                                            :actions []}
+                                            :actions [{:fire :unlock-door-lights}
+                                                      {:fire :show-clock-seq}
+                                                      {:fire :look-everywhere}]}
 
                       ;; End of triggers
                       }

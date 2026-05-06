@@ -31,11 +31,21 @@ This plan is intentionally phased so each step can be reviewed and shipped safel
 
 ## Current Observations
 
-- The default test runner in `test/run-tests.js` only discovers top-level `test/*.test.js` files, so nested suites are easy to miss.
-- The repo has strong functional docs, but the docs folder also contains temporary PR-oriented and parking-lot documents that should be separated from durable product documentation.
-- There is visible transitional compatibility code across `src/stateMachine.js`, `src/sequenceRunner.js`, `src/modular-config-adapter.js`, and `src/game.js`, which likely contains the highest concentration of dead branches, duplication, and maintenance cost.
-- Adapter behavior is not fully normalized across the registry and individual adapter implementations.
-- Some documentation references appear stale or incomplete relative to the current docs tree.
+- The Jest baseline is now in place for `npm test`, `npm run test:unit`, and focused slice runs, and the supported commands are documented in `docs/TESTING.md`.
+- Named dispatch has been simplified around `:fire` for cues, sequences, and hints, and trigger `:actions` now use the same executable action vocabulary instead of legacy typed trigger-only syntax.
+- Schedules are now enforced as phase-only containers in runtime, validation, tests, and docs; nested schedules were intentionally deferred to a proposal document instead of being partially implemented.
+- The remaining cleanup pressure is concentrated in oversized orchestrator modules and adapter/registry normalization rather than in the EDN execution contract.
+- The docs folder still contains proposal and planning material that should be triaged into durable reference, active proposal, and archived history.
+
+## Status Snapshot
+
+- Completed: Jest is the default test runner, the test matrix is documented, and focused regression tests were added for trigger execution and config validation.
+- Completed: legacy named-dispatch aliases were removed in favor of the clean `:fire` contract for cues, sequences, and hints.
+- Completed: trigger actions were migrated to shared executable syntax, active room EDN files were updated, and the docs were aligned to the new contract.
+- Completed: schedules are now consistently treated as phase-only, with direct schedule execution rejected in runtime and validation.
+- In progress: broader orchestrator cleanup still needs to reduce duplication and complexity in `src/game.js`, `src/stateMachine.js`, and related helpers.
+- In progress: documentation cleanup still needs a final archive pass for stale planning material and proposal docs that no longer reflect open work.
+- Not started: adapter/registry normalization remains the largest untouched engineering cleanup slice.
 
 ## Goals
 
@@ -50,19 +60,18 @@ This plan is intentionally phased so each step can be reviewed and shipped safel
 - Rewriting the engine architecture in one pass.
 - Changing the MQTT contract, zone command envelope, or EDN schema unless separately approved.
 - Large-scale stylistic churn with no maintenance benefit.
-- Replacing stable, working compatibility behavior without first proving it is unused or redundant.
+- Reintroducing compatibility shims for removed pre-release syntax that the clean-build release no longer supports.
 
 ## Workstreams
 
 ### 1. Test Harness And Coverage Baseline
 
+Status: substantially complete
+
 Objective: make the default validation path representative of the real suite.
 
 Planned work:
 
-- Standardize the repo on Jest as the primary test entry point.
-- Replace `test/run-tests.js` as the default path so nested tests are discovered consistently.
-- Add a clear testing document covering default, focused, contract, integration, and validation commands.
 - Audit the current suite for obvious blind spots around adapter behavior, sequence resolution, config validation, and runtime-only flows.
 - Add targeted tests before refactoring high-risk code paths.
 
@@ -73,6 +82,8 @@ Acceptance criteria:
 - High-risk refactor targets have behavior-locking tests before cleanup lands.
 
 ### 2. Compatibility Surface Audit
+
+Status: partially complete
 
 Objective: identify and remove pre-release compatibility paths that are now dead weight.
 
@@ -86,7 +97,7 @@ Primary files:
 
 Planned work:
 
-- Inventory each legacy fallback and remove it unless it is still part of the intended release baseline.
+- Continue inventorying remaining legacy fallbacks outside the already-cleaned named-dispatch and trigger paths.
 - Use the in-house games and focused tests to validate migrated behavior instead of preserving compatibility shims.
 - Consolidate repeated normalization and fallback logic into shared helpers where it improves clarity.
 - Replace comment-only deprecations with removal.
@@ -97,6 +108,8 @@ Acceptance criteria:
 - Remaining supported behavior matches the intended release baseline and is covered by tests.
 
 ### 3. Adapter And Command Execution Cleanup
+
+Status: not started
 
 Objective: make command execution consistent across adapters and registry layers.
 
@@ -121,6 +134,8 @@ Acceptance criteria:
 
 ### 4. Core Orchestrator Refactor For Local Clarity
 
+Status: in progress
+
 Objective: reduce complexity in oversized modules without destabilizing behavior.
 
 Primary files:
@@ -134,6 +149,7 @@ Planned work:
 
 - Extract tightly related helper functions from long classes or modules where ownership is currently mixed.
 - Consolidate repeated publish/log/guard patterns in `src/game.js`.
+- Consolidate the remaining named-dispatch normalization and command-routing seams that still straddle `src/game.js`, `src/stateMachine.js`, and `src/sequenceRunner.js`.
 - Review large methods for smaller seams that can be tested independently.
 - Remove stale comments that describe previous implementations rather than current behavior.
 
@@ -145,6 +161,8 @@ Acceptance criteria:
 
 ### 5. Documentation Cleanup And Information Architecture
 
+Status: in progress
+
 Objective: make the durable docs easier to trust and easier to navigate.
 
 Planned work:
@@ -152,7 +170,6 @@ Planned work:
 - Review the docs folder and classify documents as durable reference, active proposal, or parking-lot material.
 - Move completed PR documents and stale planning material into `docs/archive/`.
 - Keep open PR documents in place for now, but refresh them when implementation has already moved past the document.
-- Add a missing testing/developer workflow document if needed.
 - Reconcile README claims with the actual docs tree and command behavior.
 - Tighten cross-links between `README.md`, `docs/README.md`, `docs/SPEC.md`, `docs/CONFIG_EDN.md`, `docs/MQTT_API.md`, and setup material.
 - Remove stale references to documents that no longer exist.
@@ -165,11 +182,10 @@ Acceptance criteria:
 
 ## Proposed Execution Order
 
-1. Lock down the testing baseline and document the real test matrix.
-2. Audit and classify compatibility code before deleting or consolidating it.
-3. Refactor adapter execution and command normalization with tests in place.
-4. Clean up core orchestrator duplication and oversized local control paths.
-5. Finish with documentation consolidation and final consistency checks.
+1. Finish the remaining compatibility audit outside the already-cleaned `:fire` and trigger execution paths.
+2. Refactor adapter execution and command normalization with focused tests in place.
+3. Clean up the remaining oversized orchestrator control paths in `src/game.js`, `src/stateMachine.js`, and `src/sequenceRunner.js`.
+4. Finish with documentation consolidation, archive triage, and final consistency checks.
 
 ## Validation Strategy
 
@@ -189,6 +205,6 @@ Acceptance criteria:
 
 ## Immediate Next Steps
 
-1. Switch the default test path to Jest and document the supported test commands.
-2. Use the stronger test baseline to drive compatibility cleanup in PxO, with PFx and PxB adjustments only where the contracts intersect.
-3. Archive stale documentation in `docs/archive/` during Phase 5 and update any open PR documents that no longer match the code.
+1. Finish the compatibility audit in the remaining runtime paths, especially `src/modular-config-adapter.js`, `src/template-expander.js`, and any leftover normalization branches in `src/stateMachine.js` and `src/sequenceRunner.js`.
+2. Start the adapter/registry cleanup with behavior-locking tests around command normalization, capability checks, and error handling.
+3. Do a docs triage pass to move completed proposal material into `docs/archive/` and update any still-open PR docs so they match the code that now exists.
