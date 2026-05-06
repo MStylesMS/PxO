@@ -98,7 +98,8 @@ describe('trigger source routing helpers', () => {
 
     expect(doesTriggerConditionMatch(payload, { event: 'opened' })).toBe(true);
     expect(doesTriggerConditionMatch(payload, { 'input_event.event': 'open' })).toBe(true);
-    expect(doesTriggerConditionMatch(payload, { input: '0' })).toBe(true);
+    expect(doesTriggerConditionMatch(payload, { 'input_event.input': '0' })).toBe(true);
+    expect(doesTriggerConditionMatch(payload, { input: '0' })).toBe(false);
     expect(doesTriggerConditionMatch(payload, { event: ['closed', 'opened'] })).toBe(true);
     expect(doesTriggerConditionMatch(payload, { event: 'closed' })).toBe(false);
   });

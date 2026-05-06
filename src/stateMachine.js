@@ -1859,14 +1859,6 @@ class GameStateMachine extends EventEmitter {
       }
     }
 
-    // Fallback: check old structure for backward compatibility
-    // Map phase names: 'game' -> 'gameplay' 
-    const phaseKey = phase === 'game' ? 'gameplay' : phase;
-    if (gameConfig[phaseKey] && gameConfig[phaseKey].duration !== undefined) {
-      const n = Number(gameConfig[phaseKey].duration);
-      if (Number.isFinite(n) && n > 0) return Math.round(n);
-    }
-
     return 0; // default fallback (no duration configured)
   }
 

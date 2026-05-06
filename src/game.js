@@ -395,11 +395,6 @@ function doesTriggerConditionMatch(payload, condition = {}) {
       actualValue = getValueByPath(payload, key);
     }
 
-    // Backward-compatible convenience: if key is flat and absent, probe common nested input event envelope.
-    if (actualValue === undefined && payload && payload.input_event && typeof payload.input_event === 'object') {
-      actualValue = payload.input_event[key];
-    }
-
     if (!conditionEntryMatches(actualValue, expectedValue, key)) {
       return false;
     }

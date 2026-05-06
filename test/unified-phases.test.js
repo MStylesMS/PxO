@@ -84,6 +84,29 @@ describe('Unified Sequence and Schedule System', () => {
         assert(schedDuration === 42, 'expected schedule phase duration from schedule definition');
     });
 
+    test('getPhaseDuration only reads canonical durations map', () => {
+        const localCfg = {
+            global: { mqtt: { 'game-topic': 'game' }, settings: {} },
+            game: {
+                test: {
+                    durations: { gameplay: 60 },
+                    gameplay: { duration: 999 }
+                },
+                legacyOnly: {
+                    gameplay: { duration: 999 }
+                }
+            }
+        };
+
+        const sm = new StateMachine({ cfg: localCfg, mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { }, pause: () => { }, resume: () => { }, setTime: () => { } }, lights: { scene: () => { } }, media: {} });
+
+        sm.gameType = 'test';
+        assert(sm.getPhaseDuration('gameplay') === 60, 'expected canonical durations map to be used');
+
+        sm.gameType = 'legacyOnly';
+        assert(sm.getPhaseDuration('gameplay') === 0, 'expected legacy per-phase duration fallback to be ignored');
+    });
+
     test('validatePhaseStructure flags forbidden sequence/schedule combinations and missing duration', () => {
         const sm = new StateMachine({ cfg, mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { }, pause: () => { }, resume: () => { }, setTime: () => { } }, lights: { scene: () => { } }, media: {} });
         sm.sequenceRunner.resolveSequence = () => ({ sequence: [{ fire: 'x' }] });
