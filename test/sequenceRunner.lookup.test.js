@@ -9,18 +9,16 @@ describe('SequenceRunner lookup helpers', () => {
             'software-halt-sequence': {
               sequence: [{ wait: 1 }]
             }
+          },
+          misc: {
+            'legacy-custom-sequence': {
+              sequence: [{ wait: 3 }]
+            }
           }
         },
         'command-sequences': {
           'gameplay-start-sequence': {
             sequence: [{ wait: 2 }]
-          }
-        },
-        sequences: {
-          'game-actions': {
-            'legacy-custom-sequence': {
-              sequence: [{ wait: 3 }]
-            }
           }
         }
       }

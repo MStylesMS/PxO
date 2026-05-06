@@ -15,9 +15,9 @@ describe('template expander', () => {
         }
       },
       global: { settings: {} },
-      games: {
+      'game-modes': {
         'hc-60': {
-          game: {
+          gameplay: {
             schedule: [
               { at: 2700, template: 'countdown_block', params: { cue: '45min', video_duration: 24 } },
               { at: 0, end: 'fail' }
@@ -28,7 +28,7 @@ describe('template expander', () => {
     };
 
     const expanded = expandTemplates(modular);
-    const sched = expanded.games['hc-60'].game.schedule;
+  const sched = expanded['game-modes']['hc-60'].gameplay.schedule;
 
     expect(sched).toHaveLength(4);
     expect(sched.map(e => e.at)).toEqual([0, 2695, 2700, 2704]);
@@ -37,13 +37,13 @@ describe('template expander', () => {
   });
 
   test('throws useful errors for missing templates, params, and negative times', () => {
-    expect(() => expandTemplates({ templates: {}, games: { g1: { game: { schedule: [{ at: 10, template: 'nope', params: {} }] } } } }))
+    expect(() => expandTemplates({ templates: {}, 'game-modes': { g1: { gameplay: { schedule: [{ at: 10, template: 'nope', params: {} }] } } } }))
       .toThrow("Template 'nope' not found");
 
-    expect(() => expandTemplates({ templates: { t1: { params: ['x'], steps: [{ offset: 0, value: ':$x' }] } }, games: { g1: { game: { schedule: [{ at: 5, template: 't1', params: {} }] } } } }))
+    expect(() => expandTemplates({ templates: { t1: { params: ['x'], steps: [{ offset: 0, value: ':$x' }] } }, 'game-modes': { g1: { gameplay: { schedule: [{ at: 5, template: 't1', params: {} }] } } } }))
       .toThrow("Missing required param 'x'");
 
-    expect(() => expandTemplates({ templates: { t1: { params: ['x'], steps: [{ offset: -10, value: ':$x' }] } }, games: { g1: { game: { schedule: [{ at: 5, template: 't1', params: { x: 1 } }] } } } }))
+    expect(() => expandTemplates({ templates: { t1: { params: ['x'], steps: [{ offset: -10, value: ':$x' }] } }, 'game-modes': { g1: { gameplay: { schedule: [{ at: 5, template: 't1', params: { x: 1 } }] } } } }))
       .toThrow(/became negative/);
   });
 
@@ -58,11 +58,11 @@ describe('template expander', () => {
           ]
         }
       },
-      games: { g1: { game: { schedule: [{ at: 10, template: 'block', params: { dur: 3 } }] } } }
+      'game-modes': { g1: { gameplay: { schedule: [{ at: 10, template: 'block', params: { dur: 3 } }] } } }
     };
 
     const expanded = expandTemplates(modular);
-    const sched = expanded.games.g1.game.schedule;
+    const sched = expanded['game-modes'].g1.gameplay.schedule;
 
     expect(sched).toEqual(expect.arrayContaining([
       expect.objectContaining({ note: 'pre', at: 9 }),

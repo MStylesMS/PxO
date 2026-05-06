@@ -25,20 +25,18 @@ describe('SequenceRunner hierarchical sequences', () => {
                                 description: 'Solved sequence',
                                 sequence: [{ zone: 'lights', command: 'allOn' }]
                             }
+                        },
+                        misc: {
+                            'legacy-custom-sequence': {
+                                description: 'Canonical custom sequence',
+                                sequence: [{ zone: 'mirror', command: 'setImage', file: 'legacy.png' }]
+                            }
                         }
                     },
                     'command-sequences': {
                         'gameplay-start-sequence': {
                             description: 'Gameplay start sequence',
                             sequence: [{ zone: 'mirror', command: 'playVideo', file: 'intro.mp4' }]
-                        }
-                    },
-                    sequences: {
-                        'game-actions': {
-                            'legacy-custom-sequence': {
-                                description: 'Legacy custom fallback',
-                                sequence: [{ zone: 'mirror', command: 'setImage', file: 'legacy.png' }]
-                            }
                         }
                     }
                 }
@@ -48,7 +46,7 @@ describe('SequenceRunner hierarchical sequences', () => {
         });
     });
 
-    test('resolves canonical hierarchical and legacy-location fallback sequences through both lookup paths', () => {
+    test('resolves canonical hierarchical sequences through both lookup paths', () => {
         expect(runner.resolveSequence('reset-sequence')).toEqual(
             expect.objectContaining({ description: 'System reset sequence' })
         );

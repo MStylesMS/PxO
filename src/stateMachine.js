@@ -70,7 +70,7 @@ class GameStateMachine extends EventEmitter {
     this.phases = {}; // loaded from :phases config (map, not array)
     this.currentPhase = null; // current phase name (string)
     this.currentPhaseConfig = null; // current phase definition object
-    this.globalSequences = {}; // loaded from :global :sequences for reference resolution
+    this.globalSequences = {}; // flattened from canonical runtime sequence registries for reference resolution
     this.gameplayLogger = null;
   }
 
@@ -579,11 +579,6 @@ class GameStateMachine extends EventEmitter {
     return false;
   }
 
-  // Helper to stop all media across all zones via adapters (delegates to utils)
-  stopAllMediaAcrossZones() { // legacy wrapper retained for minimal change surface
-    stopAllAcrossZones(this.zones);
-  }
-
   // --- PHASE ENGINE METHODS ---
 
   /**
@@ -644,12 +639,9 @@ class GameStateMachine extends EventEmitter {
    * Loads global sequences from the configuration.
    */
   loadGlobalSequences() {
-    // Support both legacy :global :sequences and new promoted keys :system-sequences and :command-sequences
-    // Merge and flatten available locations into a single lookup map for reference resolution.
-    const legacySeqs = this.cfg.global?.sequences || {};
+    // Merge and flatten canonical runtime sequence registries into a single lookup map.
     const systemSeqs = this.cfg.global?.['system-sequences'] || {};
-    // command-sequences are the new location for game action sequences (previously under game-actions inside sequences)
-    const commandSeqs = this.cfg.global?.['command-sequences'] || (legacySeqs['game-actions'] || {});
+    const commandSeqs = this.cfg.global?.['command-sequences'] || {};
 
     const collectSeqs = (src) => {
       const out = {};
@@ -684,12 +676,11 @@ class GameStateMachine extends EventEmitter {
       return out;
     };
 
-    const flatLegacy = collectSeqs(legacySeqs);
     const flatSystem = collectSeqs(systemSeqs);
     const flatCommand = collectSeqs(commandSeqs);
 
-    // Combine with precedence: legacy (explicit global.sequences) -> system -> command
-    this.globalSequences = { ...flatLegacy, ...flatSystem, ...flatCommand };
+    // Command sequences override any same-named entries from the broader system registry.
+    this.globalSequences = { ...flatSystem, ...flatCommand };
 
     log.info(`[PhaseEngine] Loaded ${Object.keys(this.globalSequences).length} global sequences.`);
   }
@@ -1639,13 +1630,10 @@ class GameStateMachine extends EventEmitter {
     }
 
     // Enhanced validation of core control sequence categories
-    // New EDN layout exposes sequences either as top-level maps
-    // (:system-sequences, :command-sequences) or legacy nested under
-    // :global :sequences {:system {} :game-actions {}}. Support both.
+    // Runtime validation operates on the canonical transformed sequence registries.
     const missingCategories = [];
     const validationIssues = [];
 
-    const legacySeqs = this.cfg.global?.sequences || {};
     const topSystemSeqs = this.cfg.global?.['system-sequences'] || {};
     const topCommandSeqs = this.cfg.global?.['command-sequences'] || {};
 
@@ -1673,8 +1661,8 @@ class GameStateMachine extends EventEmitter {
       });
     };
 
-    // Validate 'system' category: prefer top-level system-sequences, fall back to legacy.global.sequences.system
-    let systemMap = Object.keys(topSystemSeqs).length ? topSystemSeqs : (legacySeqs.system || {});
+    // Validate the canonical system registry.
+    let systemMap = topSystemSeqs;
     if (!systemMap || Object.keys(systemMap).length === 0) {
       log.warn(`Required sequence category missing at startup: system`);
       this.publishEvent('sequence_missing_core', { category: 'system' });
@@ -1683,8 +1671,8 @@ class GameStateMachine extends EventEmitter {
       validateSeqMap(systemMap, 'system');
     }
 
-    // Validate 'game-actions' / command sequences: prefer top-level command-sequences, fall back to legacy.global.sequences.game-actions
-    let gameActionsMap = Object.keys(topCommandSeqs).length ? topCommandSeqs : (legacySeqs['game-actions'] || {});
+    // Validate the canonical command sequence registry.
+    let gameActionsMap = topCommandSeqs;
     if (!gameActionsMap || Object.keys(gameActionsMap).length === 0) {
       log.warn(`Required sequence category missing at startup: game-actions`);
       this.publishEvent('sequence_missing_core', { category: 'game-actions' });
@@ -2255,7 +2243,7 @@ class GameStateMachine extends EventEmitter {
           }
 
           // Always hard-stop media as fallback/safety behavior.
-          this.stopAllMediaAcrossZones();
+          stopAllAcrossZones(this.zones);
           this.publishEvent('all_stopped');
           return true;
         }
@@ -2854,7 +2842,7 @@ class GameStateMachine extends EventEmitter {
     this.clearAllPhaseSchedules();
 
     // Immediate hard cleanup first.
-    this.stopAllMediaAcrossZones();
+    stopAllAcrossZones(this.zones);
 
     const emergencyResult = await this.sequenceRunner.runControlSequence('emergency-stop-sequence', {
       gameMode: this.gameType,
@@ -2873,7 +2861,7 @@ class GameStateMachine extends EventEmitter {
     if (!resetOk) {
       this.stopUnifiedTimer();
       this.clearAllPhaseSchedules();
-      this.stopAllMediaAcrossZones();
+      stopAllAcrossZones(this.zones);
       this.changeState('ready', { reason: 'emergency_stop_fallback_ready' });
       this.publishState();
     }
@@ -2928,7 +2916,7 @@ class GameStateMachine extends EventEmitter {
   gracefulHalt() {
     try {
       // Stop all media across zones first
-      this.stopAllMediaAcrossZones();
+      stopAllAcrossZones(this.zones);
     } catch (_) { }
 
     // No direct adapter calls; sequences/config should manage clock/lights behavior if needed

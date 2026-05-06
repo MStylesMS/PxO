@@ -71,20 +71,6 @@ function validateConfig(cfg) {
   // Basic structural validation
   if (!cfg.global || !cfg.global.mqtt || !cfg.global.mqtt.broker) throw new Error('Config.global.mqtt.broker required');
   if (!cfg.global.mqtt['game-topic']) throw new Error('Config.global.mqtt.game-topic required');
-
-  // Provide legacy topics tree if missing for backward compatibility tests
-  if (!cfg.global.mqtt.topics) {
-    const base = cfg.global.mqtt['game-topic'];
-    cfg.global.mqtt.topics = {
-      ui: { base_topic: base },
-      clock: { base_topic: `${base}/clock` },
-      fx: {
-        mirror: { base_topic: `${base}/mirror` },
-        picture: { base_topic: `${base}/picture` },
-        audio: { base_topic: `${base}/audio` }
-      }
-    };
-  }
   if (!cfg.game) throw new Error('Config.game required');
 
   // Check for prohibited sections from old format

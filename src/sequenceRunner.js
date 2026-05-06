@@ -9,8 +9,8 @@ const {
 
 /**
  * Sequence Runner (Phase 1 - PR_MQTT_PURGE)
- * Executes control (lifecycle) sequences defined under cfg.global.control-sequences
- * with optional per-mode overrides (future extension) at cfg.game[mode].sequences.
+ * Executes named control and gameplay sequences from the canonical runtime registries
+ * with optional per-mode overrides at cfg.game[mode].sequences.
  *
  * Goals Phase 1:
  *  - Provide runControlSequence(name, ctx) returning { ok, durationEstimate, error }
@@ -123,11 +123,6 @@ class SequenceRunner {
             if (perModeHit) return perModeHit;
         }
 
-        // 2) Global direct sequences (legacy :global :sequences)
-        const globalSeqRoot = this.cfg.global?.sequences;
-        const directGlobal = tryLookupIn(globalSeqRoot);
-        if (directGlobal) return directGlobal;
-
         // 3) Top-level system-sequences (may be flat map or grouped map)
         const systemSeqs = this.cfg.global?.['system-sequences'];
         const directSystem = tryLookupIn(systemSeqs);
@@ -141,15 +136,11 @@ class SequenceRunner {
             }
         }
 
-        // 4) Command-sequences (new name replacing game-actions)
+            // 2) Command-sequences (new name replacing game-actions)
         const cmdSeqRoot = this.cfg.global?.['command-sequences'];
         const cmdHit = tryLookupIn(cmdSeqRoot);
         if (cmdHit) return cmdHit;
 
-        // 5) Legacy nested game-actions fallback
-        const legacyGameActions = this.cfg.global?.sequences?.['game-actions'];
-        const legacyCmdHit = tryLookupIn(legacyGameActions);
-        if (legacyCmdHit) return legacyCmdHit;
 
         return undefined;
     }
@@ -412,8 +403,8 @@ class SequenceRunner {
         const systemSeq = searchInCategory('system');
         if (systemSeq) return systemSeq;
 
-        // Try command-sequences (new name; replaces 'game-actions') or legacy nested game-actions
-        // Priority: explicit top-level 'command-sequences' -> hierarchical 'system-sequences' group 'game-actions' -> legacy nested under global.sequences
+        // Try command-sequences (new name; replaces 'game-actions')
+        // Priority: explicit top-level 'command-sequences' -> hierarchical 'system-sequences' group 'game-actions'
         const cmdSeqsRoot = globalRoot['command-sequences'] || {};
         const cmdHit = this.lookupSequenceInRoot(cmdSeqsRoot, variants);
         if (cmdHit) return cmdHit;
@@ -421,28 +412,18 @@ class SequenceRunner {
         const gameActionSeq = searchInCategory('game-actions');
         if (gameActionSeq) return gameActionSeq;
 
-        // Legacy nested: global.sequences.game-actions[name]
-        const legacyGameActions = globalRoot.sequences && globalRoot.sequences['game-actions'] ? globalRoot.sequences['game-actions'] : {};
-        const legacyHit = this.lookupSequenceInRoot(legacyGameActions, variants);
-        if (legacyHit) return legacyHit;
+        if (systemSeqs && typeof systemSeqs === 'object') {
+            for (const group of Object.values(systemSeqs)) {
+                const nested = this.lookupSequenceInRoot(group, variants);
+                if (nested) return nested;
+            }
+        }
 
         // LEGACY FALLBACK: Direct system-sequences access (old flat structure)
         const systemDirect = this.lookupSequenceInRoot(systemSeqs, variants);
         if (systemDirect) return systemDirect;
 
-        // LEGACY FALLBACK: Old global sequences location
-        const globalSeqs = globalRoot.sequences || {};
-        const directGlobal = this.lookupSequenceInRoot(globalSeqs, variants);
-        if (directGlobal) return directGlobal;
-
-        // LEGACY FALLBACK: Primary global location (spec original)
-        const direct = this.lookupSequenceInRoot(globalRoot['control-sequences'], variants);
-        if (direct) return direct;
-
-        // LEGACY FALLBACK: Nested under old system-sequences structure  
-        const controlGroup = systemSeqs['control-sequences'] || {};
-        const fromControlGroup = this.lookupSequenceInRoot(controlGroup, variants);
-        if (fromControlGroup) return fromControlGroup; return undefined;
+        return undefined;
     }
 
     resolveCue(name, gameMode) {
@@ -768,14 +749,12 @@ class SequenceRunner {
         const depth = stack.length;
         if (!seqDef) {
             // Provide helpful guidance about where to define sequences
-            const globalSeqs = Object.keys(this.cfg.global?.sequences || {});
             const systemSeqs = Object.keys(this.cfg.global?.['system-sequences'] || {}).join(', ');
             const commandSeqs = Object.keys(this.cfg.global?.['command-sequences'] || {}).join(', ');
             const gameModeSeqs = gameMode && this.cfg.game?.[gameMode]?.sequences ?
                 Object.keys(this.cfg.game[gameMode].sequences) : [];
 
             let suggestion = `Check sequence definitions in:`;
-            if (globalSeqs.length > 0) suggestion += ` :global :sequences [${globalSeqs.join(', ')}]`;
             if (systemSeqs) suggestion += ` :system-sequences [${systemSeqs}]`;
             if (commandSeqs) suggestion += ` :command-sequences [${commandSeqs}]`;
             if (gameModeSeqs.length > 0) suggestion += ` game-mode sequences [${gameModeSeqs.join(', ')}]`;

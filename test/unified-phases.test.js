@@ -12,7 +12,7 @@ describe('Unified Sequence and Schedule System', () => {
 
     test('resolves global sequence reference', () => {
         const config = {
-            global: { mqtt: { 'game-topic': 'game' }, sequences: { 'test-sequence': { sequence: [{ step: 1, command: 'showBrowser' }] } } },
+            global: { mqtt: { 'game-topic': 'game' }, 'system-sequences': { 'test-sequence': { sequence: [{ step: 1, command: 'showBrowser' }] } } },
             game: {}
         };
         const sm = new StateMachine({ cfg: config, mqtt: { publish: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { } }, lights: { scene: () => { } } });

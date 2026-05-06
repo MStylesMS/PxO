@@ -18,8 +18,8 @@ function isInt(n) { return Number.isInteger(n); }
  *       steps: [ { offset: -5, fire_cue: ':$cue' }, ... ]
  *     }
  *   },
- *   games: {
- *     hc_60: { game: { schedule: [ { at: 2700, template: 'countdown_block', params: { cue: '45min', video_duration: 24 } } ]}}
+ *   game-modes: {
+ *     hc_60: { gameplay: { schedule: [ { at: 2700, template: 'countdown_block', params: { cue: '45min', video_duration: 24 } } ]}}
  *   }
  * }
  * NOTE: Key naming after naive EDN parse preserves hyphenated names as-is.
@@ -40,13 +40,10 @@ function expandTemplates(modular) {
     return String(name).replace(/^:/,'').replace(/^[.]/,'');
   }
 
-  // Support both new 'game-modes' with 'gameplay' and legacy 'games' with 'game'
-  const gameEntries = root['game-modes']
-    ? Object.entries(root['game-modes']).map(([k,v]) => ({ key: k, def: v, kind: 'new' }))
-    : Object.entries(root.games || {}).map(([k,v]) => ({ key: k, def: v, kind: 'legacy' }));
+  const gameEntries = Object.entries(root['game-modes'] || {});
 
-  gameEntries.forEach(({ key: gameKey, def: gameDef, kind }) => {
-    const sched = kind === 'new' ? gameDef?.gameplay?.schedule : gameDef?.game?.schedule;
+  gameEntries.forEach(([gameKey, gameDef]) => {
+    const sched = gameDef?.gameplay?.schedule;
     if (!Array.isArray(sched) || sched.length === 0) return;
     let expanded = [];
     sched.forEach(entry => {
@@ -173,8 +170,7 @@ function expandTemplates(modular) {
         }
       }
     });
-  if (kind === 'new') gameDef.gameplay.schedule = expanded;
-  else gameDef.game.schedule = expanded;
+    gameDef.gameplay.schedule = expanded;
   });
 
   if (totalInvocations > 0) {

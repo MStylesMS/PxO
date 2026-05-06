@@ -43,7 +43,7 @@ describe('ModularConfigAdapter hierarchical sequences', () => {
         };
     }
 
-    test('promotes legacy global.sequences into the runtime shape expected by PxO', () => {
+    test('promotes input global.sequences into canonical runtime sequence registries only', () => {
         const runtimeConfig = ModularConfigAdapter.transform(createConfig());
 
         expect(runtimeConfig.global['system-sequences']).toEqual({
@@ -66,6 +66,7 @@ describe('ModularConfigAdapter hierarchical sequences', () => {
                 sequence: [{ zone: 'picture', command: 'playVideo', file: 'intro.mp4' }]
             }
         });
+        expect(runtimeConfig.global.sequences).toBeUndefined();
         expect(runtimeConfig.global.actions).toBeUndefined();
         expect(runtimeConfig.game.demo.shortLabel).toBe('Demo');
         expect(runtimeConfig.game.demo.durations.game).toBeUndefined();

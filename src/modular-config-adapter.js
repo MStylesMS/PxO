@@ -238,7 +238,6 @@ class ModularConfigAdapter {
         'system-sequences': modular.global['system-sequences'] || modular.global.sequences || {},
         'additional-phases': modular.global['additional-phases'] || {},
         'command-sequences': modular.global['command-sequences'] || (modular.global.sequences && modular.global.sequences['game-actions']) || {},
-        sequences: modular.global.sequences || {},
         inputs: inputSources,
         triggers: {
           escapeRoomRules: triggerRules
