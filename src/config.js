@@ -98,7 +98,7 @@ function validateConfig(cfg) {
 
   // Color scenes validation removed - now hardcoded in UI
 
-  // Validate new zone format if present (supports both legacy and new formats during transition)
+  // Validate the runtime zone registry if present.
   if (cfg.global.mqtt.zones) {
     validateZoneFormat(cfg.global.mqtt.zones);
   }
@@ -124,7 +124,7 @@ function validateConfig(cfg) {
 }
 
 function validateZoneFormat(zones) {
-  const supportedTypes = ['pfx-media', 'mqtt-lights', 'pxc-clock', 'mqtt'];
+  const supportedTypes = ['pfx-media', 'mqtt-lights', 'pxc-clock', 'mqtt', 'mqtt-raw'];
 
   Object.entries(zones).forEach(([zoneName, zoneConfig]) => {
     if (!zoneConfig || typeof zoneConfig !== 'object') {

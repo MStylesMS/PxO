@@ -1,5 +1,5 @@
 // Modular Configuration Adapter
-// Transforms the new modular building-block configuration format to the legacy format expected by existing game code
+// Transforms modular EDN input into the runtime configuration consumed by the game engine.
 
 // Supports EDN game configuration input.
 
@@ -12,7 +12,7 @@ class ModularConfigAdapter {
    * Load configuration from EDN file.
    * @param {string} format - must be 'edn'
    * @param {string} configPath - Path to config file
-   * @returns {Object} Legacy format configuration
+  * @returns {Object} Runtime configuration
    */
   static loadConfig(format = 'edn', configPath = null) {
     if (format !== 'edn') {

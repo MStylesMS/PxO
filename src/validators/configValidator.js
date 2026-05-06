@@ -11,6 +11,7 @@
 
 class ConfigValidator {
     constructor() {
+        this.config = null;
         this.errors = [];
         this.warnings = [];
         this.globalHintIds = new Set();
@@ -20,6 +21,7 @@ class ConfigValidator {
      * Main validation entry point
      */
     validate(config) {
+        this.config = config;
         this.errors = [];
         this.warnings = [];
         this.globalHintIds = this.collectHintIds(config?.global?.hints);
@@ -436,9 +438,24 @@ class ConfigValidator {
             return;
         }
 
+        const isMqttRawZoneAction = this.targetsOnlyMqttRawZones(cmd);
+
         // Must have command
-        if (!cmd.command && !cmd.play && !cmd.scene) {
-            this.addError(`Command in ${context} must specify 'command', 'play', or 'scene'`);
+        if (!cmd.command && !isMqttRawZoneAction) {
+            this.addError(`Command in ${context} must specify 'command'`);
+        }
+
+        if (isMqttRawZoneAction) {
+            const payload = cmd.payload !== undefined ? cmd.payload : cmd.message;
+            if (payload === undefined) {
+                this.addError(`mqtt-raw command in ${context} must specify 'payload' or 'message'`);
+            }
+            if (cmd.command !== undefined) {
+                this.addError(`mqtt-raw command in ${context} must not specify 'command'`);
+            }
+            if (cmd.topic !== undefined) {
+                this.addError(`mqtt-raw command in ${context} must not specify 'topic' - use the zone base-topic`);
+            }
         }
 
         // Prohibited timing/blocking keywords in cues
@@ -461,8 +478,7 @@ class ConfigValidator {
             cmd
             && typeof cmd === 'object'
             && (
-                cmd.type === 'mqtt'
-                || cmd.command === 'mqtt'
+                cmd.command === 'mqtt'
                 || cmd.command === 'publish'
                 || cmd.publish
             )
@@ -483,6 +499,19 @@ class ConfigValidator {
         if (payload === undefined) {
             this.addError(`Raw MQTT command in ${context} must specify 'payload' or 'message'`);
         }
+    }
+
+    getConfiguredZone(zoneName) {
+        return this.config?.global?.mqtt?.zones?.[zoneName] || null;
+    }
+
+    targetsOnlyMqttRawZones(cmd) {
+        const zoneNames = Array.isArray(cmd?.zones)
+            ? cmd.zones
+            : (cmd?.zone ? [cmd.zone] : []);
+
+        return zoneNames.length > 0
+            && zoneNames.every(zoneName => this.getConfiguredZone(zoneName)?.type === 'mqtt-raw');
     }
 
     /**
@@ -563,7 +592,7 @@ class ConfigValidator {
         const stepTypes = this.getStepDiscriminators(step);
 
         if (stepTypes.length === 0) {
-            this.addError(`Sequence step in ${context} must have a valid discriminator (zone+command, fire, wait)`);
+            this.addError(`Sequence step in ${context} must have a valid discriminator (zone action, fire, wait)`);
         } else if (stepTypes.length > 1) {
             this.addError(`Sequence step in ${context} has multiple discriminators: ${stepTypes.join(', ')}`);
         }
@@ -771,8 +800,6 @@ class ConfigValidator {
         const cueStyleAction = Boolean(
             action.zone
             || action.zones
-            || action.play
-            || action.scene
             || ((action.command || action.publish) && (action.zone || action.zones))
         );
 
@@ -1023,8 +1050,8 @@ class ConfigValidator {
         if (step.hint !== undefined) discriminators.push('hint (PROHIBITED)');
         if (step['fire-cue']) discriminators.push('fire-cue (PROHIBITED)');
         if (step['fire-seq']) discriminators.push('fire-seq (PROHIBITED)');
-        if (step.zone && step.command) discriminators.push('zone+command');
-        if (step.zones && step.command) discriminators.push('zones+command');
+        if (step.zone && (step.command || this.targetsOnlyMqttRawZones(step))) discriminators.push('zone-action');
+        if (step.zones && (step.command || this.targetsOnlyMqttRawZones(step))) discriminators.push('zones-action');
 
         return discriminators;
     }
@@ -1041,7 +1068,7 @@ class ConfigValidator {
         if (command.playHint !== undefined || command['play-hint'] !== undefined) discriminators.push('play-hint (PROHIBITED)');
         if (command['fire-cue']) discriminators.push('fire-cue (PROHIBITED)');
         if (command['fire-seq']) discriminators.push('fire-seq (PROHIBITED)');
-        if ((command.zone || command.zones) && (command.command || command.play || command.scene)) discriminators.push('zone-action');
+        if ((command.zone || command.zones) && (command.command || this.targetsOnlyMqttRawZones(command))) discriminators.push('zone-action');
         if (command.commands) discriminators.push('commands');
         if (command.end) discriminators.push('end');
 
@@ -1059,7 +1086,7 @@ class ConfigValidator {
 
         if (action.fire) discriminators.push('fire');
         if (this.isRawMqttCommand(action)) discriminators.push('raw-mqtt');
-        if ((action.zone || action.zones) && (action.command || action.play || action.scene)) discriminators.push('zone-action');
+        if ((action.zone || action.zones) && (action.command || this.targetsOnlyMqttRawZones(action))) discriminators.push('zone-action');
         if (action.end) discriminators.push('end');
 
         if (action.type !== undefined) discriminators.push('type (PROHIBITED)');

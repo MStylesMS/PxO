@@ -264,6 +264,7 @@ Trigger action rules:
 - Each action entry uses the shared executable action syntax:
   - `{:fire "name"}` to dispatch a named cue, sequence, or hint
   - `{:zone "mirror" :command "setImage" :file "spell.png"}` for inline zone actions
+  - `{:zone "door-lock" :payload "1"}` for payload-only actions targeting an `mqtt-raw` zone
   - `{:command "publish" :topic "paradox/test" :payload {...}}` for raw MQTT publish actions
   - `{:end "win"}` or `{:end "fail"}` for phase-ending actions
 - Legacy typed trigger actions such as `{:type :cue ...}` and `{:type :game ...}` are no longer supported.
@@ -350,6 +351,22 @@ Define zone adapters and MQTT topics:
 - `pfx-media` — Video/audio playback (ParadoxFX)
 - `pxc-clock` — Countdown timer UI (PxC clock surface)
 - `mqtt` — Generic MQTT passthrough zone (`{baseTopic}/commands`, `{baseTopic}/events`)
+- `mqtt-raw` — Raw MQTT payload zone (publishes `:payload`/`:message` directly to `:baseTopic`)
+
+Example raw device zones:
+
+```clojure
+:zones {
+  :suitcase {:type "mqtt" :baseTopic "paradox/agent22/suitcase"}
+  :door-lock {:type "mqtt-raw" :baseTopic "paradox/agent22/door-lock"}
+}
+
+:cues {
+  :unlock-door {:zone "door-lock" :payload "1"}
+  :lock-door   {:zone "door-lock" :payload "0"}
+  :arm-case    {:zone "suitcase" :command "arm" :code "1234"}
+}
+```
 
 ---
 

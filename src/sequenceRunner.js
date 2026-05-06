@@ -260,7 +260,7 @@ class SequenceRunner {
             return;
         }
 
-        const command = resolvedStep.command || resolvedStep.type;
+        const command = resolvedStep.command;
 
         if (command === 'publish' || command === 'mqtt') {
             const topic = resolvedStep.topic;
@@ -328,11 +328,13 @@ class SequenceRunner {
 
         // Handle direct zone commands
         if (resolvedStep.zone || resolvedStep.zones) {
-            if (!command) {
+            const zones = resolvedStep.zones || [resolvedStep.zone];
+            const isMqttRawZoneAction = zones.length > 0
+                && zones.every(zoneName => this.zones?.getZone(zoneName)?.zoneType === 'mqtt-raw');
+            if (!command && !isMqttRawZoneAction) {
                 log.warn(`Zone step ${index} missing command/type:`, resolvedStep);
                 return;
             }
-            const zones = resolvedStep.zones || [resolvedStep.zone];
             const { zone, zones: zonesField, ...options } = resolvedStep;
             delete options.command;
             delete options.type;
@@ -609,7 +611,7 @@ class SequenceRunner {
                 return;
             }
 
-            const command = step.command || step.type;
+            const command = step.command;
 
             // :fire and :wait steps are valid without a 'command' field
             if (step.fire || step.wait !== undefined) {
@@ -617,7 +619,7 @@ class SequenceRunner {
             }
 
             if (!command || typeof command !== 'string') {
-                errors.push(`Sequence ${name}[${idx}]: missing or invalid 'command' (or 'type') field`);
+                errors.push(`Sequence ${name}[${idx}]: missing or invalid 'command' field`);
                 return;
             }
 
@@ -819,7 +821,7 @@ class SequenceRunner {
     }
 
     async executeStep(step, ctx) {
-        const action = step.command || step.type;
+        const action = step.command;
         switch (action) {
             // Use zone-based actions or sequences only
             case 'log':

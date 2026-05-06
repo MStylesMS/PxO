@@ -1172,38 +1172,16 @@ class GameStateMachine extends EventEmitter {
 
   // Dispatcher for individual cue actions with zone-based routing
   async executeCueAction(action, cueKey) {
-    const { zone, zones, play, scene, volume } = action;
-    const command = action.command || action.type;
+    const { zone, zones } = action;
+    const command = action.command;
+    const isRawMqtt = action.publish || command === 'mqtt' || command === 'publish';
 
     // Determine target zones: single zone or array of zones
     const targetZones = zones ? (Array.isArray(zones) ? zones : [zones]) : (zone ? [zone] : []);
+    const isMqttRawZoneAction = !isRawMqtt && this.isMqttRawZoneSelection(targetZones);
 
     try {
-      if (play) {
-        const resolvedPlay = this.resolveMediaFields(play, ['file', 'video', 'speech', 'fx', 'background', 'image'], `cue:${cueKey}.play`);
-        // Route media commands to appropriate zone adapter(s)
-        if (targetZones.length > 0) {
-          for (const zoneName of targetZones) {
-            let adapter = null;
-            try { adapter = this.zones.validateZone(zoneName); } catch (_) { adapter = null; }
-            // Prefer 'file' key; support legacy 'video' as alias
-            if (adapter) {
-              if (resolvedPlay.file || resolvedPlay.video) adapter.playVideo(resolvedPlay.file || resolvedPlay.video, { volumeAdjust: volume });
-              if (resolvedPlay.speech) adapter.playSpeech(resolvedPlay.speech, { volumeAdjust: volume });
-              if (resolvedPlay.fx) adapter.playAudioFX(resolvedPlay.fx, { volumeAdjust: volume });
-              if (resolvedPlay.background) {
-                const loop = (action.loop !== undefined) ? !!action.loop : true;
-                adapter.playBackground(resolvedPlay.background, loop, { volumeAdjust: volume });
-              }
-              // Prefer 'file' key; support legacy 'image' as alias
-              if (resolvedPlay.file || resolvedPlay.image) adapter.setImage(resolvedPlay.file || resolvedPlay.image);
-            }
-          }
-        } else {
-          log.warn(`Play action in cue ${cueKey} missing required 'zone' or 'zones' field`);
-        }
-      } else if (command) {
-        if (command === 'mqtt' || command === 'publish') {
+      if (isRawMqtt) {
           try {
             const topic = action.topic;
             const payload = (action.payload !== undefined) ? action.payload : action.message;
@@ -1217,7 +1195,26 @@ class GameStateMachine extends EventEmitter {
             log.warn(`Failed raw MQTT publish in cue ${cueKey}:`, error.message);
           }
           return;
+      }
+
+      if (isMqttRawZoneAction) {
+        const options = {};
+        if (action.payload !== undefined) options.payload = action.payload;
+        if (action.message !== undefined) options.message = action.message;
+        if (action.qos !== undefined) options.qos = action.qos;
+        if (action.retain !== undefined) options.retain = action.retain;
+
+        for (const zoneName of targetZones) {
+          try {
+            await this.zones.execute(zoneName, undefined, options);
+          } catch (error) {
+            log.warn(`Failed to execute mqtt-raw payload on zone '${zoneName}' in cue ${cueKey}:`, error.message);
+          }
         }
+        return;
+      }
+
+      if (command) {
 
         // Route commands to appropriate zone adapter(s)
         log.debug(`executeCueAction: command='${command}', targetZones=[${targetZones.join(', ')}], cueKey='${cueKey}'`);
@@ -1286,16 +1283,6 @@ class GameStateMachine extends EventEmitter {
         } else {
           log.warn(`Command '${command}' specified but no target zones found in cue ${cueKey}`);
         }
-      } else if (scene && targetZones.length > 0) {
-        // Handle scene commands on target zones
-        for (const zoneName of targetZones) {
-          try {
-            const adapter = this.zones.validateZone(zoneName);
-            adapter.setScene(scene);
-          } catch (error) {
-            log.warn(`Failed to execute scene '${scene}' on zone '${zoneName}' in cue ${cueKey}:`, error.message);
-          }
-        }
       } else if (action.publish) {
         // Handle raw MQTT publish commands (no zone targeting required)
         try {
@@ -1344,7 +1331,7 @@ class GameStateMachine extends EventEmitter {
     }
 
     // NEW: Handle single command object 
-    if (cue.zone || cue.zones || cue.command || cue.play || cue.scene) {
+    if (cue.zone || cue.zones || cue.command || cue.publish) {
       // Direct command object - execute and await (blocking for commands like verifyImage)
       try {
         await this.executeCueAction(cue, cueName);
@@ -1513,6 +1500,12 @@ class GameStateMachine extends EventEmitter {
   // Simple adapter getter for tests
   getAdapter(zoneName) {
     try { return this.zones?.getZone(zoneName) || null; } catch (_) { return null; }
+  }
+
+  isMqttRawZoneSelection(zoneNames = []) {
+    return Array.isArray(zoneNames)
+      && zoneNames.length > 0
+      && zoneNames.every(zoneName => this.getAdapter(zoneName)?.zoneType === 'mqtt-raw');
   }
 
   // Process a schedule entry with the new three-tier model

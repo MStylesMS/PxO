@@ -466,8 +466,6 @@ async function executeTriggerAction(action, triggerName, { sm, log: logger = log
   const zoneAction = Boolean(
     action.zone
     || action.zones
-    || action.play
-    || action.scene
     || ((action.command || action.publish) && (action.zone || action.zones))
   );
 

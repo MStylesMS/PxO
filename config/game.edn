@@ -100,12 +100,12 @@
                   ;; ==========
 
                   ;; Trigger response cues (converted from old trigger-cues format to proper three-tier syntax)
-                  :unlock-door {:type "mqtt" :topic "paradox/escape/actuators/main_door" :payload {:command "unlock"} :description "Raw MQTT unlock main door"}
-                  :unlock-door-lights {:zone "lights" :command "scene" :scene "green" :description "Green lights for door unlock"}
-                  :win-game {:type "mqtt" :topic "paradox/houdini/game" :payload {:command "win"} :description "Trigger game win via MQTT"}
-                  :reset-game {:type "mqtt" :topic "paradox/houdini/game" :payload {:command "reset"} :description "Reset game state via MQTT"}
-                  :secret-door {:type "mqtt" :topic "paradox/escape/doors/secret" :payload {:action "open"} :description "Open secret door via raw MQTT"}
-                  :secret-door-audio {:zone "mirror" :command "play" :file "Huge_Braam.mp3" :volume 110 :description "Audio effect for secret door (converted from fire-cue)"}
+                  :unlock-door {:command "publish" :topic "paradox/escape/actuators/main_door" :payload {:command "unlock"} :description "Raw MQTT unlock main door"}
+                  :unlock-door-lights {:zone "lights" :command "scene" :name "green" :description "Green lights for door unlock"}
+                  :win-game {:command "publish" :topic "paradox/houdini/game" :payload {:command "win"} :description "Trigger game win via MQTT"}
+                  :reset-game {:command "publish" :topic "paradox/houdini/game" :payload {:command "reset"} :description "Reset game state via MQTT"}
+                  :secret-door {:command "publish" :topic "paradox/escape/doors/secret" :payload {:action "open"} :description "Open secret door via raw MQTT"}
+                  :secret-door-audio {:zone "mirror" :command "playAudioFX" :file "Huge_Braam.mp3" :volume 110 :description "Audio effect for secret door"}
                   :secret-door-hint {:zone "clock" :command "hint" :text "Secret door opened!" :description "Hint for secret door"}};; End of cues
 
            ;; Hint definitions - reusable across games
@@ -305,13 +305,13 @@
 
                                :pause-sequence {:description "Pause side effects" ;; When game is paused, stop gameplay timer before executing
                                                 :timeline [{:at 0 :zone "mirror" :command "hideBrowser"}
-                                                           {:at 0 :type "mqtt" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"pause\"}"}
-                                                           {:at 0 :type "mqtt" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"fadeOut\",\"duration\":1}"}]}
+                                                           {:at 0 :command "publish" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"pause\"}"}
+                                                           {:at 0 :command "publish" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"fadeOut\",\"duration\":1}"}]}
 
                                :resume-sequence {:description "Resume side effects" ;; When game is resumed, restart gameplay timer timer after executing
                                                  :timeline [{:at 0 :zone "mirror" :command "showBrowser"}
-                                                            {:at 0 :type "mqtt" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"resume\"}"}
-                                                            {:at 1 :type "mqtt" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"fadeIn\",\"duration\":1}"}]}
+                                                            {:at 0 :command "publish" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"resume\"}"}
+                                                            {:at 1 :command "publish" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"fadeIn\",\"duration\":1}"}]}
 
                                :gameplay-end-sequence {} ;; When game timer runs out, execute before proceeding to solved/failed
 

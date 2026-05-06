@@ -18,6 +18,10 @@ describe('command contract', () => {
       throw new Error('EDN config contains lowercase playAudioFx variant');
     }
 
+    if (/\:command\s+"play"\b/.test(ednText)) {
+      throw new Error('EDN config contains legacy command "play"; use playAudioFX, playBackground, playSpeech, or playVideo');
+    }
+
     const adapterPath = path.join(root, 'src', 'adapters', 'pfx.js');
     const adapterSrc = fs.readFileSync(adapterPath, 'utf8');
     assert(adapterSrc.includes("command: 'playAudioFX'"), 'Adapter missing playAudioFX command');

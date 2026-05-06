@@ -2,6 +2,7 @@ const PfxAdapter = require('./pfx');
 const LightsAdapter = require('./lights');
 const PxcAdapter = require('./pxc');
 const GenericMqttAdapter = require('./genericMqtt');
+const GenericMqttRawAdapter = require('./genericMqttRaw');
 const log = require('../logger');
 
 /**
@@ -24,6 +25,7 @@ class AdapterRegistry {
         this.registerAdapterType('mqtt-lights', LightsAdapter);
         this.registerAdapterType('pxc-clock', PxcAdapter);
         this.registerAdapterType('mqtt', GenericMqttAdapter);
+        this.registerAdapterType('mqtt-raw', GenericMqttRawAdapter);
         this.initializeZones(zonesConfig);
     }
 
@@ -184,6 +186,12 @@ class AdapterRegistry {
 
             case 'mqtt':
                 // GenericMqttAdapter expects { baseTopic }
+                topicsArg = { baseTopic };
+                adapter = new AdapterClass(this.mqtt, topicsArg);
+                break;
+
+            case 'mqtt-raw':
+                // GenericMqttRawAdapter publishes directly to { baseTopic }
                 topicsArg = { baseTopic };
                 adapter = new AdapterClass(this.mqtt, topicsArg);
                 break;
