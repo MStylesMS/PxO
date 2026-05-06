@@ -1406,8 +1406,8 @@ class GameStateMachine extends EventEmitter {
     }
 
     if (resolved && Array.isArray(resolved.sequence)) {
-      log.info(`Executing legacy style resolved sequence '${seqName}' (array format)`);
-      try { await this.sequenceRunner.runControlSequence(seqName, { gameMode: this.gameType, ...(sequenceContext || {}) }); } catch (e) { log.warn(`runControlSequence failed for ${seqName}: ${e.message}`); }
+      log.info(`Executing resolved object sequence '${seqName}' (${resolved.sequence.length} steps)`);
+      try { await this.sequenceRunner.runSequenceDefNew(seqName, resolved, { gameMode: this.gameType, ...(sequenceContext || {}) }); } catch (e) { log.warn(`runSequenceDefNew failed for ${seqName}: ${e.message}`); }
       return;
     }
 

@@ -330,7 +330,7 @@ class SequenceRunner {
         if (resolvedStep.zone || resolvedStep.zones) {
             const zones = resolvedStep.zones || [resolvedStep.zone];
             const isMqttRawZoneAction = zones.length > 0
-                && zones.every(zoneName => this.zones?.getZone(zoneName)?.zoneType === 'mqtt-raw');
+                && zones.every(zoneName => this.zones?.getZone?.(zoneName)?.zoneType === 'mqtt-raw');
             if (!command && !isMqttRawZoneAction) {
                 log.warn(`Zone step ${index} missing command/type:`, resolvedStep);
                 return;
@@ -346,15 +346,6 @@ class SequenceRunner {
                     log.warn(`Zone command failed on ${zoneName}: ${error.message}`);
                 }
             }
-            return;
-        }
-
-        // Handle legacy :step format (warn and process)
-        if (resolvedStep.step !== undefined) {
-            log.warn(`DEPRECATED: Step ${index} uses :step numbering - remove :step and use array order`);
-            // Remove step number and process the rest
-            const { step: stepNum, ...cleanStep } = resolvedStep;
-            await this.executeSequenceStep(cleanStep, context, index);
             return;
         }
 
@@ -779,22 +770,23 @@ class SequenceRunner {
 
         let elapsed = 0; // logical elapsed based on waits
 
-        for (const step of (seqDef.sequence || [])) {
+        for (const [stepIndex, step] of (seqDef.sequence || []).entries()) {
+            const sequenceStepId = stepIndex;
             // Cut-off logic if override present
             if (override !== undefined) {
                 // predicted elapsed after executing this step (wait adds duration, others ~0)
                 const add = (step.command === 'wait' && typeof step.duration === 'number') ? step.duration : 0;
                 if ((elapsed + add) > override) {
-                    log.warn(`SequenceRunner: skipping step ${step.step || '?'} in ${name} beyond override duration (${override}s)`);
-                    this.publishEvent('sequence_step_skipped_over_duration', { name, step: step.step, action: step.command, elapsed, override });
+                    log.warn(`SequenceRunner: skipping step ${sequenceStepId} in ${name} beyond override duration (${override}s)`);
+                    this.publishEvent('sequence_step_skipped_over_duration', { name, step: sequenceStepId, action: step.command, elapsed, override });
                     continue;
                 }
             }
             try {
-                this.publishEvent('sequence_step_start', { name, step: step.step, action: step.command });
+                this.publishEvent('sequence_step_start', { name, step: sequenceStepId, action: step.command });
                 // Preserve original context variables (like hintText) while adding stack tracking
-                const stepContext = { ...context, gameMode, _stack: newStack };
-                await this.executeSequenceStep(step, stepContext, step.step || 'legacy');
+                const stepContext = { ...context, gameMode, _stack: newStack, stepIndex: sequenceStepId };
+                await this.executeSequenceStep(step, stepContext, sequenceStepId);
                 // Track logical time for explicit wait steps
                 if (step.command === 'wait' && typeof step.duration === 'number') {
                     elapsed += step.duration;
@@ -808,12 +800,12 @@ class SequenceRunner {
                         elapsed += waitDuration;
                     }
                 }
-                this.publishEvent('sequence_step_complete', { name, step: step.step, action: step.command });
+                this.publishEvent('sequence_step_complete', { name, step: sequenceStepId, action: step.command });
             } catch (e) {
-                log.error(`SequenceRunner: step failed in ${name} step=${step.step || '?'} action=${step.command}: ${e.message}`);
-                this.publishEvent('sequence_step_failed', { name, step: step.step, action: step.command, error: e.message });
-                this.publishEvent('sequence_failed', { name, error: 'step_failed', step: step.step, action: step.command });
-                return { ok: false, error: 'step_failed', step: step.step, action: step.command };
+                log.error(`SequenceRunner: step failed in ${name} step=${sequenceStepId} action=${step.command}: ${e.message}`);
+                this.publishEvent('sequence_step_failed', { name, step: sequenceStepId, action: step.command, error: e.message });
+                this.publishEvent('sequence_failed', { name, error: 'step_failed', step: sequenceStepId, action: step.command });
+                return { ok: false, error: 'step_failed', step: sequenceStepId, action: step.command };
             }
         }
         this.publishEvent('sequence_complete', { name, estimate: durationEstimate, override });
@@ -830,7 +822,7 @@ class SequenceRunner {
                     const msg = step.message || step.msg || step.text;
                     log.info(`[SEQ LOG] ${msg}`);
                 } else {
-                    log.info(`[SEQ LOG] step ${step.step || ''}`);
+                    log.info(`[SEQ LOG] step ${ctx?.stepIndex ?? ''}`);
                 }
                 return;
             case 'wait':

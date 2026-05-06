@@ -12,7 +12,7 @@ describe('Unified Sequence and Schedule System', () => {
 
     test('resolves global sequence reference', () => {
         const config = {
-            global: { mqtt: { 'game-topic': 'game' }, 'system-sequences': { 'test-sequence': { sequence: [{ step: 1, command: 'showBrowser' }] } } },
+            global: { mqtt: { 'game-topic': 'game' }, 'system-sequences': { 'test-sequence': { sequence: [{ command: 'showBrowser' }] } } },
             game: {}
         };
         const sm = new StateMachine({ cfg: config, mqtt: { publish: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { } }, lights: { scene: () => { } } });
@@ -22,13 +22,13 @@ describe('Unified Sequence and Schedule System', () => {
     });
 
     test('handles inline sequence array', () => {
-        const inline = [{ step: 1, command: 'showBrowser' }];
+        const inline = [{ command: 'showBrowser' }];
         const resolved = stateMachine.sequenceRunner.resolveSequence(inline, null);
         assert(Array.isArray(resolved.sequence) && resolved.sequence.length === 1, 'inline resolution failed');
     });
 
     test('executes step with wait property', async () => {
-        const seqDef = { sequence: [{ step: 1, command: 'fadeInClock', duration: 0.01, wait: true }] };
+        const seqDef = { sequence: [{ command: 'fadeInClock', duration: 0.01, wait: true }] };
         const res = await stateMachine.sequenceRunner.runInlineSequence('inline-test', seqDef, {});
         assert(res.ok === true, 'sequence did not complete successfully');
     });
