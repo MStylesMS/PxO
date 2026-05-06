@@ -1364,22 +1364,32 @@ class GameStateMachine extends EventEmitter {
   }
 
   /**
+   * Resolve a named sequence using the active runtime lookup order.
+   * Returns either the canonical new-format result or the older wrapped shape.
+   */
+  resolveNamedSequence(name) {
+    if (!name) return null;
+
+    try {
+      const resolved = this.sequenceRunner.resolveSequenceNew(name, this.gameType);
+      if (resolved) return resolved;
+    } catch (_) { /* ignore */ }
+
+    try {
+      return this.sequenceRunner.resolveSequence(name, this.gameType);
+    } catch (_) { /* ignore */ }
+
+    return null;
+  }
+
+  /**
    * Fire a sequence by name - supports global sequence lookup with three-tier model
    * @param {string} seqName - Name of the sequence to fire
    * @returns {Promise} Promise that resolves when sequence completes
    */
   async fireSequenceByName(seqName, sequenceContext = {}) {
     if (!seqName) return;
-    // Try new-format resolver first (order / namespace agnostic)
-    let resolved = null;
-    try {
-      resolved = this.sequenceRunner.resolveSequenceNew(seqName, this.gameType);
-    } catch (_) { /* ignore */ }
-
-    // Fallback to legacy / multi-namespace resolver
-    if (!resolved) {
-      try { resolved = this.sequenceRunner.resolveSequence(seqName, this.gameType); } catch (_) { /* ignore */ }
-    }
+    const resolved = this.resolveNamedSequence(seqName);
 
     if (!resolved) {
       // Delegate to sequenceRunner's own missing-sequence handling for consistent messaging
@@ -1388,9 +1398,9 @@ class GameStateMachine extends EventEmitter {
       return;
     }
 
-    // If resolver returned array or object with timeline/sequence we normalize behavior similar to runSequenceDefNew
+    // Normalize the resolver output into the appropriate execution path.
     if (Array.isArray(resolved)) {
-      // Treat as simple step array (vector). Pass raw array to runner (Fix A) instead of wrapping.
+      // Treat as a simple step array and pass it straight to the runner.
       log.info(`Executing resolved vector sequence '${seqName}' (${resolved.length} steps)`);
       await this.sequenceRunner.runSequenceDefNew(seqName, resolved, { gameMode: this.gameType, ...(sequenceContext || {}) });
       return;
@@ -1443,17 +1453,8 @@ class GameStateMachine extends EventEmitter {
       return; // Fire-and-forget
     }
 
-    // Check if this is a sequence (try multiple namespaces)
-    let resolved = null;
-    try {
-      resolved = this.sequenceRunner.resolveSequenceNew(name, this.gameType);
-    } catch (_) { /* ignore */ }
-
-    if (!resolved) {
-      try {
-        resolved = this.sequenceRunner.resolveSequence(name, this.gameType);
-      } catch (_) { /* ignore */ }
-    }
+    // Check if this is a sequence using the active resolver order.
+    const resolved = this.resolveNamedSequence(name);
 
     if (resolved) {
       if (Array.isArray(resolved.schedule)) {

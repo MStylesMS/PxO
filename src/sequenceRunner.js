@@ -98,7 +98,7 @@ class SequenceRunner {
         return undefined;
     }
 
-    // NEW: Resolve sequence from new :sequences section
+    // Resolve sequence from the canonical runtime registries.
     resolveSequenceNew(name, gameMode) {
         if (!name) return undefined;
         const convertSequence = (seqDef) => {
@@ -123,7 +123,7 @@ class SequenceRunner {
             if (perModeHit) return perModeHit;
         }
 
-        // 3) Top-level system-sequences (may be flat map or grouped map)
+        // 2) Top-level system-sequences (may be flat map or grouped map)
         const systemSeqs = this.cfg.global?.['system-sequences'];
         const directSystem = tryLookupIn(systemSeqs);
         if (directSystem) return directSystem;
@@ -136,7 +136,7 @@ class SequenceRunner {
             }
         }
 
-            // 2) Command-sequences (new name replacing game-actions)
+        // 3) Command-sequences (new name replacing game-actions)
         const cmdSeqRoot = this.cfg.global?.['command-sequences'];
         const cmdHit = tryLookupIn(cmdSeqRoot);
         if (cmdHit) return cmdHit;
@@ -145,7 +145,7 @@ class SequenceRunner {
         return undefined;
     }
 
-    // NEW: Run sequence definition with new format support
+    // Run a resolved sequence definition.
     async runSequenceDefNew(name, seqDef, context = {}) {
         const { gameMode } = context;
         const stack = context._stack || [];
@@ -169,7 +169,7 @@ class SequenceRunner {
                 // Vector sequence - execute steps in order
                 await this.executeSequenceSteps(seqDef, newContext);
             } else if (seqDef && Array.isArray(seqDef.sequence)) {
-                // Wrapper object containing a sequence array (Fix B: accept {sequence:[...]})
+                // Wrapper object containing a sequence array.
                 await this.executeSequenceSteps(seqDef.sequence, newContext);
             } else if (seqDef && seqDef.timeline && Array.isArray(seqDef.timeline)) {
                 // Timeline sequence - execute with timing
@@ -186,7 +186,7 @@ class SequenceRunner {
         }
     }
 
-    // NEW: Execute sequence steps (array format)
+    // Execute a sequence step array in order.
     async executeSequenceSteps(steps, context) {
         for (let i = 0; i < steps.length; i++) {
             const step = steps[i];
@@ -368,9 +368,8 @@ class SequenceRunner {
 
         const { variants } = this.getSequenceLookupNames(name);
 
-        // QUICK WIN: If the state machine has already flattened global sequences,
-        // consult that map first for a fast, authoritative lookup. This ensures
-        // validation and runtime checks resolve names regardless of grouping.
+        // If the state machine has already flattened global sequences,
+        // consult that map first for a fast, authoritative lookup.
         if (this.stateMachine && this.stateMachine.globalSequences) {
             const globalSequence = this.lookupSequenceInRoot(this.stateMachine.globalSequences, variants);
             if (globalSequence) return globalSequence;
@@ -383,10 +382,10 @@ class SequenceRunner {
             if (hit) return hit;
         }
 
-        // Primary global sequences (NEW hierarchical structure)
+        // Primary global sequences.
         const globalRoot = this.cfg.global || {};
 
-        // NEW: Search in hierarchical system-sequences structure (mapped from :sequences in EDN)  
+        // Search in hierarchical system-sequences structure.
         const systemSeqs = globalRoot['system-sequences'] || {};
 
         const searchInCategory = (category) => {
@@ -413,7 +412,7 @@ class SequenceRunner {
             }
         }
 
-        // LEGACY FALLBACK: Direct system-sequences access (old flat structure)
+        // Support direct system-sequences lookup when the map is flat.
         const systemDirect = this.lookupSequenceInRoot(systemSeqs, variants);
         if (systemDirect) return systemDirect;
 
@@ -516,10 +515,6 @@ class SequenceRunner {
         if (typeof zonesSpec === 'object') {
             if (Array.isArray(zonesSpec.zones)) return zonesSpec.zones.filter(z => typeof z === 'string');
             if (zonesSpec.zone && typeof zonesSpec.zone === 'string') return [zonesSpec.zone];
-            // legacy fallbacks: allow targets for transitional period (won't be produced once refactor complete)
-            if (Array.isArray(zonesSpec.targets)) {
-                return zonesSpec.targets.map(z => (typeof z === 'string') ? z : (z && z.zone)).filter(Boolean);
-            }
         }
         return [];
     }
@@ -577,11 +572,11 @@ class SequenceRunner {
         return await this.runSequenceDef(name, seqDef, runtimeContext, true);
     }
 
-    // NEW: Run sequence by name (blocking execution with timing)
+    // Run a named sequence through the canonical resolver.
     async runSequence(name, context = {}) {
         const seqDef = this.resolveSequenceNew(name, context.gameMode);
         if (!seqDef) {
-            log.warn(`Sequence '${name}' not found in new format`);
+            log.warn(`Sequence '${name}' not found in the active sequence registries`);
             return { ok: false, error: 'sequence_not_found' };
         }
         return await this.runSequenceDefNew(name, seqDef, context);
@@ -979,7 +974,7 @@ class SequenceRunner {
                 // Generic multi-zone dispatch: if step defines zone(s) with an adapter command name that isn't explicitly handled above
                 const genericZones = this.extractZones(step);
                 if (genericZones.length > 0 && action) {
-                    const { zone, zones, targets, command, type, ...options } = step; // exclude legacy keys
+                    const { zone, zones, command, type, ...options } = step;
                     for (const z of genericZones) {
                         try { await this.zones.execute(z, action, options); } catch (error) { throw new Error(`Zone command '${action}' on '${z}' failed: ${error.message}`); }
                     }

@@ -11,7 +11,8 @@ describe('AdapterRegistry', () => {
         mockMqtt = {
             publish: jest.fn(),
             subscribe: jest.fn(),
-            on: jest.fn()
+            on: jest.fn(),
+            removeListener: jest.fn()
         };
     });
 
