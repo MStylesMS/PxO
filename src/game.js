@@ -460,9 +460,7 @@ async function executeTriggerAction(action, triggerName, { sm, log: logger = log
     return true;
   }
 
-  const rawMqttAction = action.publish
-    || action.command === 'mqtt'
-    || action.command === 'publish';
+  const rawMqttAction = action.publish || action.command === 'publish';
   const zoneAction = Boolean(
     action.zone
     || action.zones

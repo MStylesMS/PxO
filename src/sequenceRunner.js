@@ -262,14 +262,14 @@ class SequenceRunner {
 
         const command = resolvedStep.command;
 
-        if (command === 'publish' || command === 'mqtt') {
+        if (command === 'publish') {
             const topic = resolvedStep.topic;
             const payload = (resolvedStep.payload !== undefined) ? resolvedStep.payload : resolvedStep.message;
             if (!topic) {
-                throw new Error(`Step ${index} mqtt/publish missing required topic`);
+                throw new Error(`Step ${index} publish missing required topic`);
             }
             if (payload === undefined) {
-                throw new Error(`Step ${index} mqtt/publish missing required payload/message`);
+                throw new Error(`Step ${index} publish missing required payload/message`);
             }
             const body = (typeof payload === 'string') ? payload : JSON.stringify(payload);
             this.mqtt.publish(topic, body);

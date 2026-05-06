@@ -1174,7 +1174,7 @@ class GameStateMachine extends EventEmitter {
   async executeCueAction(action, cueKey) {
     const { zone, zones } = action;
     const command = action.command;
-    const isRawMqtt = action.publish || command === 'mqtt' || command === 'publish';
+    const isRawMqtt = action.publish || command === 'publish';
 
     // Determine target zones: single zone or array of zones
     const targetZones = zones ? (Array.isArray(zones) ? zones : [zones]) : (zone ? [zone] : []);

@@ -121,4 +121,38 @@ describe('ConfigValidator sequence steps', () => {
         expect(result.isValid).toBe(false);
         expect(result.errors.join('\n')).toContain("must specify 'command'");
     });
+
+    test('rejects deprecated mqtt alias for raw publish steps', () => {
+        const validator = new ConfigValidator();
+        const result = validator.validate({
+            global: {
+                sequences: {
+                    'demo-seq': [
+                        { command: 'mqtt', topic: 'paradox/test', payload: { ok: true } }
+                    ]
+                }
+            },
+            'game-modes': {
+                demo: {
+                    'short-label': 'Demo',
+                    'game-label': 'Demo Mode',
+                    phases: {
+                        gameplay: {
+                            duration: 60,
+                            sequence: 'demo-seq'
+                        },
+                        abort: {
+                            sequence: 'demo-abort'
+                        },
+                        reset: {
+                            sequence: 'demo-reset'
+                        }
+                    }
+                }
+            }
+        });
+
+        expect(result.isValid).toBe(false);
+        expect(result.errors.join('\n')).toContain('must have a valid discriminator');
+    });
 });

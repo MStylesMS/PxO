@@ -40,6 +40,14 @@ describe('trigger action executor', () => {
     expect(sm.executeCueAction).toHaveBeenNthCalledWith(2, { command: 'publish', topic: 'paradox/test', payload: { ok: true } }, 'trigger:publish-trigger');
   });
 
+  test('rejects deprecated mqtt raw-publish alias', async () => {
+    const result = await executeTriggerAction({ command: 'mqtt', topic: 'paradox/test', payload: { ok: true } }, 'deprecated-trigger', { sm, log: logger });
+
+    expect(result).toBe(false);
+    expect(sm.executeCueAction).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Unsupported trigger action'));
+  });
+
   test('rejects unsupported trigger action shapes', async () => {
     const result = await executeTriggerAction({ schedule: 'not-allowed' }, 'bad-trigger', { sm, log: logger });
 

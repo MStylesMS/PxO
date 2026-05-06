@@ -478,8 +478,7 @@ class ConfigValidator {
             cmd
             && typeof cmd === 'object'
             && (
-                cmd.command === 'mqtt'
-                || cmd.command === 'publish'
+                cmd.command === 'publish'
                 || cmd.publish
             )
         );
