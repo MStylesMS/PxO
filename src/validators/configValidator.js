@@ -61,14 +61,6 @@ class ConfigValidator {
         return new Set(Object.keys(hints).filter(name => typeof name === 'string' && name.length > 0));
     }
 
-    isDeprecatedFireHint(name) {
-        return typeof name === 'string' && this.globalHintIds.has(name);
-    }
-
-    warnDeprecatedFireHint(name, context) {
-        this.addWarning(`Hint '${name}' is triggered via :fire; use :hint instead`, context);
-    }
-
     /**
      * Validate global configuration section
      */
@@ -544,7 +536,7 @@ class ConfigValidator {
         const stepTypes = this.getStepDiscriminators(step);
 
         if (stepTypes.length === 0) {
-            this.addError(`Sequence step in ${context} must have a valid discriminator (zone+command, fire-cue, fire-seq, fire, hint, wait)`);
+            this.addError(`Sequence step in ${context} must have a valid discriminator (zone+command, fire, wait)`);
         } else if (stepTypes.length > 1) {
             this.addError(`Sequence step in ${context} has multiple discriminators: ${stepTypes.join(', ')}`);
         }
@@ -558,26 +550,20 @@ class ConfigValidator {
 
         if (step.fire) {
             if (typeof step.fire !== 'string') {
-                this.addError(`Fire step in ${context} must reference a string cue/sequence name`);
-            } else if (this.isDeprecatedFireHint(step.fire)) {
-                this.warnDeprecatedFireHint(step.fire, context);
+                this.addError(`Fire step in ${context} must reference a string named target`);
             }
         }
 
-        if (step['fire-cue']) {
-            if (typeof step['fire-cue'] !== 'string') {
-                this.addError(`Fire-cue step in ${context} must reference a string cue name`);
-            }
+        if (step.hint !== undefined) {
+            this.addError(`Sequence step in ${context} uses unsupported hint key - use fire`);
         }
 
-        if (step['fire-seq']) {
-            if (typeof step['fire-seq'] !== 'string') {
-                this.addError(`Fire-seq step in ${context} must reference a string sequence name`);
-            }
+        if (step['fire-cue'] !== undefined) {
+            this.addError(`Sequence step in ${context} uses unsupported fire-cue key - use fire`);
         }
 
-        if (step.hint !== undefined && typeof step.hint !== 'string') {
-            this.addError(`Hint step in ${context} must reference a string hint id`);
+        if (step['fire-seq'] !== undefined) {
+            this.addError(`Sequence step in ${context} uses unsupported fire-seq key - use fire`);
         }
 
         if (step.zone || step.zones) {
@@ -706,7 +692,7 @@ class ConfigValidator {
         const discriminators = this.getScheduleDiscriminators(command);
 
         if (discriminators.length === 0) {
-            this.addError(`Schedule entry in ${context} must have a valid discriminator (fire-cue, fire-seq, fire, hint, play-hint, zone+command, end)`);
+            this.addError(`Schedule entry in ${context} must have a valid discriminator (fire, zone+command, end)`);
         } else if (discriminators.length > 1) {
             this.addError(`Schedule entry in ${context} has multiple discriminators: ${discriminators.join(', ')}`);
         }
@@ -717,34 +703,20 @@ class ConfigValidator {
         // Validate command content
         if (command.fire) {
             if (typeof command.fire !== 'string') {
-                this.addError(`Schedule entry ${context} fire must reference a string cue/sequence name`);
-            } else if (this.isDeprecatedFireHint(command.fire)) {
-                this.warnDeprecatedFireHint(command.fire, context);
+                this.addError(`Schedule entry ${context} fire must reference a string named target`);
             }
         }
 
-        if (command['fire-cue']) {
-            if (typeof command['fire-cue'] !== 'string') {
-                this.addError(`Schedule entry ${context} fire-cue must reference a string cue name`);
-            }
+        if (command.hint !== undefined) {
+            this.addError(`Schedule entry ${context} uses unsupported hint key - use fire`);
         }
 
-        if (command['fire-seq']) {
-            if (typeof command['fire-seq'] !== 'string') {
-                this.addError(`Schedule entry ${context} fire-seq must reference a string sequence name`);
-            }
+        if (command.playHint !== undefined) {
+            this.addError(`Schedule entry ${context} uses unsupported playHint key - use fire`);
         }
 
-        if (command.hint !== undefined && typeof command.hint !== 'string') {
-            this.addError(`Schedule entry ${context} hint must reference a string hint id`);
-        }
-
-        if (command.playHint !== undefined && typeof command.playHint !== 'string') {
-            this.addError(`Schedule entry ${context} playHint must reference a string hint id`);
-        }
-
-        if (command['play-hint'] !== undefined && typeof command['play-hint'] !== 'string') {
-            this.addError(`Schedule entry ${context} play-hint must reference a string hint id`);
+        if (command['play-hint'] !== undefined) {
+            this.addError(`Schedule entry ${context} uses unsupported play-hint key - use fire`);
         }
 
         if (command.zone || command.zones) {
@@ -758,9 +730,13 @@ class ConfigValidator {
     validateScheduleProhibitedSyntax(command, context) {
         // Prohibited execution syntax that should generate errors
         const prohibited = [
-            { key: 'cue', replacement: 'fire-cue' },
-            { key: 'sequence', replacement: 'fire-seq' },
-            { key: 'seq', replacement: 'fire-seq' }
+            { key: 'cue', replacement: 'fire' },
+            { key: 'sequence', replacement: 'fire' },
+            { key: 'seq', replacement: 'fire' },
+            { key: 'fireCue', replacement: 'fire' },
+            { key: 'fireSeq', replacement: 'fire' },
+            { key: 'fire-cue', replacement: 'fire' },
+            { key: 'fire-seq', replacement: 'fire' }
         ];
 
         prohibited.forEach(({ key, replacement }) => {
@@ -769,13 +745,9 @@ class ConfigValidator {
             }
         });
 
-        // Warn about deprecated :commands arrays
+        // Reject legacy :commands arrays in schedule entries.
         if (command.commands) {
-            if (Array.isArray(command.commands) && command.commands.length > 1) {
-                this.addWarning(`Schedule entry ${context} has multiple commands - consider creating a sequence`);
-            } else {
-                this.addWarning(`Schedule entry ${context} uses deprecated :commands array - use inline command syntax`);
-            }
+            this.addError(`Schedule entry ${context} uses unsupported :commands array - use inline command syntax or a named sequence`);
         }
     }
 
@@ -796,11 +768,12 @@ class ConfigValidator {
      * Validate name uniqueness within a single scope
      * 
      * IMPORTANT: This validates WITHIN-SCOPE uniqueness only.
-     * - Checks that cues and sequences don't have duplicate names in the SAME scope
+    * - Checks that cues, sequences, and hints don't have duplicate names in the SAME scope
      * - Does NOT check cross-scope (e.g., global vs game-mode) - those are allowed overrides
      * 
      * Example of what this CATCHES (ERROR):
-     *   global.cues.intro + global.sequences.intro = DUPLICATE (same scope)
+    *   global.cues.intro + global.sequences.intro = DUPLICATE (same scope)
+    *   global.hints.intro + global.cues.intro = DUPLICATE (same scope)
      * 
      * Example of what this ALLOWS (valid override):
      *   global.cues.intro + game-modes.hc-demo.cues.intro = OK (different scopes, local wins)
@@ -820,6 +793,11 @@ class ConfigValidator {
             Object.keys(config.cues).forEach(name => {
                 registerName(name, `${context}.cues.${name}`);
             });
+        }
+
+        // Check hint names in this scope.
+        if (config.hints) {
+            this.collectHintNames(config.hints, `${context}.hints`, registerName);
         }
 
         // Check sequence names in this scope (may be nested or flat)
@@ -842,10 +820,31 @@ class ConfigValidator {
             if (locations.length > 1) {
                 this.addError(
                     `Duplicate name '${name}' within ${context} scope found at: ${locations.join(', ')}. ` +
-                    `Cue and sequence names must be unique within the same scope (but can override across scopes).`
+                    `Cue, sequence, and hint names must be unique within the same scope (but can override across scopes).`
                 );
             }
         });
+    }
+
+    collectHintNames(hints, basePath, registerName) {
+        if (!hints) return;
+
+        if (Array.isArray(hints)) {
+            hints.forEach((hint, index) => {
+                if (!hint || typeof hint !== 'object') return;
+                const hintId = typeof hint.id === 'string' ? hint.id : null;
+                if (hintId) {
+                    registerName(hintId, `${basePath}[${index}].id`);
+                }
+            });
+            return;
+        }
+
+        if (typeof hints === 'object') {
+            Object.keys(hints).forEach(name => {
+                registerName(name, `${basePath}.${name}`);
+            });
+        }
     }
 
     /**
@@ -884,10 +883,10 @@ class ConfigValidator {
         const discriminators = [];
 
         if (step.wait !== undefined) discriminators.push('wait');
-        if (step.hint !== undefined) discriminators.push('hint');
         if (step.fire) discriminators.push('fire');
-        if (step['fire-cue']) discriminators.push('fire-cue');
-        if (step['fire-seq']) discriminators.push('fire-seq');
+        if (step.hint !== undefined) discriminators.push('hint (PROHIBITED)');
+        if (step['fire-cue']) discriminators.push('fire-cue (PROHIBITED)');
+        if (step['fire-seq']) discriminators.push('fire-seq (PROHIBITED)');
         if (step.zone && step.command) discriminators.push('zone+command');
         if (step.zones && step.command) discriminators.push('zones+command');
 
@@ -901,10 +900,10 @@ class ConfigValidator {
         const discriminators = [];
 
         if (command.fire) discriminators.push('fire');
-        if (command.hint !== undefined) discriminators.push('hint');
-        if (command.playHint !== undefined || command['play-hint'] !== undefined) discriminators.push('play-hint');
-        if (command['fire-cue']) discriminators.push('fire-cue');
-        if (command['fire-seq']) discriminators.push('fire-seq');
+        if (command.hint !== undefined) discriminators.push('hint (PROHIBITED)');
+        if (command.playHint !== undefined || command['play-hint'] !== undefined) discriminators.push('play-hint (PROHIBITED)');
+        if (command['fire-cue']) discriminators.push('fire-cue (PROHIBITED)');
+        if (command['fire-seq']) discriminators.push('fire-seq (PROHIBITED)');
         if (command.zone && command.command) discriminators.push('zone+command');
         if (command.zones && command.command) discriminators.push('zones+command');
         if (command.commands) discriminators.push('commands');

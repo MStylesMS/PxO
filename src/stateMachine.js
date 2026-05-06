@@ -825,15 +825,14 @@ class GameStateMachine extends EventEmitter {
     // Track all referenced sequences to find unused global sequences
     const referencedGlobalSequences = new Set();
 
-    // Helper to extract :fire-seq references from schedule/sequence arrays
-    const extractFireSeqRefs = (arr) => {
+    // Helper to extract named :fire references that resolve to sequences.
+    const extractFireRefs = (arr) => {
       if (!Array.isArray(arr)) return [];
       const refs = [];
       arr.forEach(entry => {
-        if (entry?.['fire-seq']) refs.push(entry['fire-seq']);
-        if (entry?.fireSeq) refs.push(entry.fireSeq);
+        if (typeof entry?.fire === 'string') refs.push(entry.fire);
         // Recursively check nested sequences
-        if (entry?.sequence) refs.push(...extractFireSeqRefs(entry.sequence));
+        if (entry?.sequence) refs.push(...extractFireRefs(entry.sequence));
       });
       return refs;
     };
@@ -866,8 +865,8 @@ class GameStateMachine extends EventEmitter {
             errors.push(`Game mode '${gameType}' phase '${phaseName}' references missing schedule '${scheduleName}'.`);
           } else {
             if (this.globalSequences[scheduleName]) referencedGlobalSequences.add(scheduleName);
-            const fireSeqRefs = extractFireSeqRefs(resolvedSchedule.schedule || []);
-            fireSeqRefs.forEach(seqName => {
+            const fireRefs = extractFireRefs(resolvedSchedule.schedule || []);
+            fireRefs.forEach(seqName => {
               if (this.globalSequences[seqName]) {
                 referencedGlobalSequences.add(seqName);
               }
@@ -877,11 +876,11 @@ class GameStateMachine extends EventEmitter {
       }
     }
 
-    // Check :fire-seq references inside global sequence definitions
+    // Check named :fire references inside global sequence definitions.
     Object.values(this.globalSequences).forEach(seqDef => {
       const seqArray = seqDef?.sequence || [];
-      const fireSeqRefs = extractFireSeqRefs(seqArray);
-      fireSeqRefs.forEach(seqName => {
+      const fireRefs = extractFireRefs(seqArray);
+      fireRefs.forEach(seqName => {
         if (this.globalSequences[seqName]) {
           referencedGlobalSequences.add(seqName);
         }
@@ -908,7 +907,7 @@ class GameStateMachine extends EventEmitter {
 
     // Don't log sequence reference warnings - too many false positives for:
     // - Library sequences called by other sequences
-    // - Sequences used in :fire commands (not just :fire-seq)
+    // - Sequences used in :fire commands
     // - Reset/solved/failed handler sequences
     // - Indirectly referenced utility sequences
     // Only actual errors (missing sequences) are important.
@@ -1423,26 +1422,18 @@ class GameStateMachine extends EventEmitter {
   }
 
   /**
-   * Fire a cue or sequence by name with automatic type detection
-   * Unified :fire command - checks if name is a cue (fire-and-forget) or sequence (blocking)
-   * Also detects hints with deprecation warning (use :hint directive instead)
+   * Fire a cue, sequence, or hint by name with automatic type detection.
+   * Unified :fire resolves the target by unique name within the active scope.
    * @param {string} name - Name of the cue, sequence, or hint to fire
    * @returns {Promise} Promise that resolves immediately (cues) or when complete (sequences/hints)
    */
   async fireByName(name, fireContext = {}) {
     if (!name) return;
 
-    // Check if this is a hint first (DEPRECATED usage)
+    // Check if this is a hint first.
     const hintCheck = this.lookupHint(name);
     if (hintCheck) {
-      log.warn(`⚠️  DEPRECATED: Hint '${name}' triggered via :fire - use :hint directive instead`);
-      this.publishWarning('deprecated_fire_for_hint', {
-        hint: name,
-        message: 'Using :fire for hints is deprecated. Use :hint directive for clarity.',
-        migration: `Change {:fire :${name}} to {:hint :${name}}`,
-        documentation: 'See docs/CONFIG.md for :hint directive usage'
-      });
-      await this.fireHint(name, 'fire-deprecated');
+      await this.fireHint(name, 'fire', fireContext.text ?? null);
       return;
     }
 
@@ -1497,13 +1488,13 @@ class GameStateMachine extends EventEmitter {
     }
 
     // Not found in either - log warning
-    log.warn(`fireByName: '${name}' not found in cues or sequences`);
+    log.warn(`fireByName: '${name}' not found in cues, sequences, or hints`);
   }
 
   _buildFireContext(action = {}) {
     const fireContext = {};
     const excludedKeys = new Set([
-      'fire', 'fireCue', 'fire-cue', 'fire-seq', 'hint', 'wait', 'zone', 'zones',
+      'fire', 'hint', 'wait', 'zone', 'zones',
       'command', 'at', 'step', '_comment', 'comment', 'description'
     ]);
 
@@ -1533,39 +1524,9 @@ class GameStateMachine extends EventEmitter {
       this.fireByName(entry.fire, fireContext).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
     }
 
-    // Handle cue execution (fire-and-forget from schedule perspective) - backwards compatibility
-    if (entry.fireCue || entry['fire-cue']) {
-      const cueName = entry.fireCue || entry['fire-cue'];
-      // Don't await - schedules are truly fire-and-forget
-      this.fireCueByName(cueName).catch(e => log.warn(`fireCueByName '${cueName}' failed: ${e.message}`));
-    }
-
-    // Handle sequence execution (fire-and-forget from schedule perspective) - backwards compatibility
-    if (entry['fire-seq']) {
-      const seqName = entry['fire-seq'];
-      try {
-        // Don't await - schedules are truly fire-and-forget
-        this.sequenceRunner.runSequence(seqName, { gameMode: this.gameType });
-      } catch (e) {
-        log.warn(`runSequence failed for ${seqName}: ${e.message}`);
-      }
-    }
-
     // Handle inline commands (immediate execution) - NEW
     if (entry.zone || entry.zones) {
       this.executeCueAction(entry, context).catch(e => log.warn(`Inline command failed at ${context}: ${e.message}`));
-    }
-
-    // DEPRECATED: Support legacy commands array with warning
-    if (Array.isArray(entry.commands)) {
-      log.warn(`DEPRECATED: Schedule entry at ${context} uses :commands array - migrate to inline syntax or sequences`);
-      entry.commands.forEach(a => this.executeCueAction(a, context).catch(e => log.warn(`Legacy cmd at ${context}: ${e.message}`)));
-    }
-
-    // Handle hint firing (unchanged)
-    if (entry.playHint || entry['play-hint']) {
-      const hintId = entry.playHint || entry['play-hint'];
-      if (!this.isScheduledHintSuppressed(hintId)) this.fireHint(hintId, 'scheduled');
     }
 
     // Handle game end triggers (unchanged)
@@ -1646,18 +1607,6 @@ class GameStateMachine extends EventEmitter {
         // Handle unified fire command (v2.3.0+)
         if (cmd.fire) {
           this.fireByName(cmd.fire, this._buildFireContext(cmd));
-          return;
-        }
-
-        // Handle fire-cue references (backwards compatibility)
-        if (cmd['fire-cue']) {
-          this.fireCueByName(cmd['fire-cue']);
-          return;
-        }
-
-        // Handle fire-seq references (backwards compatibility)
-        if (cmd['fire-seq']) {
-          this.fireSequenceByName(cmd['fire-seq']);
           return;
         }
 
@@ -1972,24 +1921,6 @@ class GameStateMachine extends EventEmitter {
     let actionsTriggered = false;
     const firedActions = [];
 
-    // Handle :hint directive (v2.3.1+) - Trigger hint system
-    if (entry.hint) {
-      const hintId = entry.hint;
-      const textOverride = entry.text; // Optional text override
-      log.info(`Triggering hint '${hintId}' at ${atLabel}s${contextSuffix}`);
-      firedActions.push({ type: 'hint', value: hintId });
-      try {
-        // Fire hint without awaiting (fire-and-forget for schedule execution)
-        this.fireHint(hintId, 'scheduled', textOverride).catch(e => {
-          log.warn(`Hint trigger failed at ${atLabel}s: ${e.message}`);
-        });
-      } catch (e) {
-        log.warn(`Hint trigger setup failed at ${atLabel}s: ${e.message}`);
-      }
-      primaryLogged = true;
-      actionsTriggered = true;
-    }
-
     // Handle unified fire command (v2.3.0+)
     if (entry.fire) {
       const fireContext = this._buildFireContext(entry);
@@ -2014,54 +1945,10 @@ class GameStateMachine extends EventEmitter {
       }
     }
 
-    // Handle cue execution - backwards compatibility
-    const cueName = entry.fireCue || entry['fire-cue'];
-    if (cueName) {
-      log.info(`Firing cue '${cueName}' at ${atLabel}s${contextSuffix}`);
-      this.fireCueByName(cueName).catch(e => log.warn(`fireCueByName '${cueName}' failed: ${e.message}`));
-      firedActions.push({ type: 'fire-cue', value: cueName });
-      primaryLogged = true;
-      actionsTriggered = true;
-    }
-
-    // Handle sequence execution - backwards compatibility
-    const seqName = entry.fireSeq || entry['fire-seq'];
-    if (seqName) {
-      log.info(`Firing sequence '${seqName}' at ${atLabel}s${contextSuffix}`);
-      try {
-        this.sequenceRunner.runSequence(seqName, { gameMode: this.gameType });
-        firedActions.push({ type: 'fire-seq', value: seqName });
-      } catch (e) {
-        log.warn(`runSequence failed for ${seqName}: ${e.message}`);
-      }
-      primaryLogged = true;
-      actionsTriggered = true;
-    }
-
     if (entry.zone || entry.zones) {
       actionsTriggered = true;
       firedActions.push({ type: 'zone-command' });
       this.executeCueAction(entry, `${phaseLabel}@${atLabel}`).catch(e => log.warn(`Inline command failed at ${phaseLabel}@${atLabel}: ${e.message}`));
-    }
-
-    if (Array.isArray(entry.commands)) {
-      actionsTriggered = true;
-      firedActions.push({ type: 'legacy-commands-array', count: entry.commands.length });
-      log.warn(`DEPRECATED: Schedule entry at ${phaseLabel}@${atLabel} uses :commands array - migrate to inline syntax or sequences`);
-      try { entry.commands.forEach(a => this.executeCueAction(a, `${phaseLabel}@${atLabel}`).catch(e => log.warn(`Legacy cmd at ${phaseLabel}@${atLabel}: ${e.message}`))); } catch (_) { }
-    }
-
-    const hintId = entry.playHint || entry['play-hint'];
-    const shouldCheckSuppression = options.checkHintSuppression !== false;
-    if (hintId) {
-      actionsTriggered = true;
-      firedActions.push({ type: 'play-hint', value: hintId });
-      const suppressed = shouldCheckSuppression && typeof this.isScheduledHintSuppressed === 'function'
-        ? this.isScheduledHintSuppressed(hintId)
-        : false;
-      if (!suppressed) {
-        this.fireHint(hintId, 'scheduled');
-      }
     }
 
     if (entry.end) {
@@ -2319,11 +2206,6 @@ class GameStateMachine extends EventEmitter {
         return this.resetting();
       case 'adjustTime':
         return this.adjustTime((cmd && (cmd.delta ?? cmd.seconds)) || 0);
-      case 'playHint': {
-        const id = cmd && (cmd.id || cmd.value);
-        // Route hint execution via commands topic for consistency
-        return this.fireHint(id, 'command');
-      }
       case 'sendHint': {
         const text = cmd && cmd.text;
         const duration = cmd && (cmd.duration || this.cfg.global.hintDefaultSec || 10);

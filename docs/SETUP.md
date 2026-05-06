@@ -100,7 +100,7 @@ default_mode = demo
     :intro {
       :duration 30
       :timeline [
-        {:at 30 :cue :lights-red}
+        {:at 30 :fire :lights-red}
       ]
     }
   }
@@ -728,9 +728,9 @@ LOG_LEVEL=debug node src/game.js
   :intro {
     :duration 30  ; Total duration
     :timeline [
-      {:at 30 :cue :lights-red}  ; T=0 (30-30)
-      {:at 25 :cue :lights-green}  ; T=5 (30-25)
-      {:at 5 :cue :lights-blue}  ; T=25 (30-5)
+      {:at 30 :fire :lights-red}  ; T=0 (30-30)
+      {:at 25 :fire :lights-green}  ; T=5 (30-25)
+      {:at 5 :fire :lights-blue}  ; T=25 (30-5)
     ]
   }
 }

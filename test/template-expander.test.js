@@ -8,9 +8,9 @@ describe('template expander', () => {
         countdown_block: {
           params: ['cue', 'video_duration'],
           steps: [
-            { offset: -5, 'fire-cue': ':$cue', note: 'prep' },
-            { offset: 0, 'fire-cue': ':$cue', note: 'play' },
-            { offset: 4, 'fire-cue': ':show-clock', note: 'return clock' }
+            { offset: -5, fire: ':$cue', note: 'prep' },
+            { offset: 0, fire: ':$cue', note: 'play' },
+            { offset: 4, fire: ':show-clock', note: 'return clock' }
           ]
         }
       },
@@ -32,7 +32,7 @@ describe('template expander', () => {
 
     expect(sched).toHaveLength(4);
     expect(sched.map(e => e.at)).toEqual([0, 2695, 2700, 2704]);
-    expect(sched.find(e => e.note === 'play')?.['fire-cue']).toBe('45min');
+    expect(sched.find(e => e.note === 'play')?.fire).toBe('45min');
     expect(sched.find(e => e._fromTemplate)?._fromTemplate.name).toBe('countdown_block');
   });
 

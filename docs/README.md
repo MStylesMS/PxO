@@ -73,9 +73,9 @@ Create a simple game configuration (`example-game.edn`):
     :intro {
       :duration 30
       :timeline [
-        {:at 30 :cue :lights-red}
+        {:at 30 :fire :lights-red}
         {:at 25 :zone "audio" :command "playAudioFX" :file "intro-music.mp3"}
-        {:at 5 :cue :lights-green}
+        {:at 5 :fire :lights-green}
       ]
     }
   }
@@ -147,7 +147,7 @@ This separates software process controls from OS power controls and prop/adapter
   :intro {
     :duration 30
     :timeline [
-      {:at 30 :cue :lights-red}
+      {:at 30 :fire :lights-red}
       {:at 25 :zone "audio" :command "playAudioFX" :file "music.mp3"}
     ]
   }

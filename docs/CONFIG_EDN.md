@@ -466,7 +466,7 @@ Timeline-based execution with explicit duration:
     :duration 45
     :timeline [
       ; Execute at T-45 seconds (start)
-      {:at 45 :cue :lights-red}
+      {:at 45 :fire :lights-red}
       
       ; Execute at T-40 seconds
       {:at 40 :zone "mirror" :command "playVideo" :file :intro-video}
@@ -479,14 +479,14 @@ Timeline-based execution with explicit duration:
       {:at 5 :zone "mirror" :command "showBrowser"}
       
       ; Execute at T-3 seconds (near end)
-      {:at 3 :cue :lights-green}
+      {:at 3 :fire :lights-green}
     ]
   }
   
   :gameplay-sequence {
     :duration 3600
     :timeline [
-      {:at 3600 :cue :lights-green}
+      {:at 3600 :fire :lights-green}
       {:at 3300 :zone "audio" :command "playAudioFX" :file "ambient.mp3" :loop true}
       ; ... more steps
     ]
@@ -502,7 +502,7 @@ Timeline-based execution with explicit duration:
 
 **1. Cue Execution**:
 ```clojure
-{:at 30 :cue :cue-name}
+{:at 30 :fire :cue-name}
 ```
 
 **2. Direct Command**:
@@ -517,7 +517,7 @@ Timeline-based execution with explicit duration:
 
 **4. Sub-Sequence**:
 ```clojure
-{:at 15 :fire-seq :other-sequence}
+{:at 15 :fire :other-sequence}
 ```
 
 **5. Browser Verification (Blocking)**:
@@ -720,7 +720,7 @@ Game-mode hint list behavior (`game-modes.<mode>.hints`):
 Notes:
 - `action` hints are reserved for a future feature. Current runtime behavior is warning-only (`hint_action_not_implemented`) and no action is executed.
 - Action hint syntax (future): `:my-action-hint {:type "action" :sequence "some-sequence" :text "Optional UI text"}`
-- Invoke hint definitions with `:hint`, not `:fire`. Example: `{:at 50 :hint :picture-cymbal-fx}`. PxO still accepts `:fire` for backward compatibility, but validation and runtime logs warn so configs can be migrated safely.
+- Use `:fire` for named cues, sequences, and hints. Example: `{:at 50 :fire :picture-cymbal-fx}`. Keep names unique within a scope so resolution stays unambiguous.
 - Text and sequence hints resolve only from `:command-sequences` (no fallback to `:system-sequences`).
 - Sequence hints may provide template values either directly on the hint or under `:parameters {}`.
 - Reserved built-ins for template substitution are `text` and `duration`.
@@ -808,10 +808,10 @@ Variables are expanded at runtime from context (hint parameters, sequence parame
     :intro {
       :duration 30
       :timeline [
-        {:at 30 :cue :lights-red}
+        {:at 30 :fire :lights-red}
         {:at 25 :zone "mirror" :command "playVideo" :file :intro-video}
-        {:at 5 :cue :show-clock}
-        {:at 3 :cue :lights-green}
+        {:at 5 :fire :show-clock}
+        {:at 3 :fire :lights-green}
       ]
     }
   }
@@ -854,6 +854,7 @@ Common validation errors:
 - Timeline steps without `:at` field
 - Duplicate hint names within same map scope
 - Invalid keyword references
+- Named dispatch must use `:fire` rather than `:cue`, `:hint`, `:play-hint`, or `:fire-seq`
 
 ---
 
@@ -878,13 +879,13 @@ Common validation errors:
     :duration 45
     :timeline [
       ; Phase 1: Lights dim (T=0)
-      {:at 45 :cue :lights-dim}
+      {:at 45 :fire :lights-dim}
       
       ; Phase 2: Intro video starts (T=5)
       {:at 40 :zone "mirror" :command "playVideo" :file :intro-video}
       
       ; Phase 3: Show clock UI (T=40)
-      {:at 5 :cue :show-clock}
+      {:at 5 :fire :show-clock}
     ]
   }
 }
@@ -898,8 +899,8 @@ Common validation errors:
   :stop-all [{:zones ["mirror" "audio"] :command "stopAudio"}]
 }
 :sequences {
-  :intro {:timeline [{:at 10 :cue :stop-all}]}
-  :gameplay {:timeline [{:at 5 :cue :stop-all}]}
+  :intro {:timeline [{:at 10 :fire :stop-all}]}
+  :gameplay {:timeline [{:at 5 :fire :stop-all}]}
 }
 
 ; Avoid (duplicated)

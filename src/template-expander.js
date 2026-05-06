@@ -22,7 +22,7 @@ function isInt(n) { return Number.isInteger(n); }
  *     hc_60: { game: { schedule: [ { at: 2700, template: 'countdown_block', params: { cue: '45min', video_duration: 24 } } ]}}
  *   }
  * }
- * NOTE: Key naming after naive EDN parse will have hyphenated names preserved as-is (e.g. 'fire-cue').
+ * NOTE: Key naming after naive EDN parse preserves hyphenated names as-is.
  */
 function expandTemplates(modular) {
   if (!modular || typeof modular !== 'object') return modular;

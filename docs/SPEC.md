@@ -171,10 +171,10 @@ Sequences (Tier 3: Timeline-Based Execution)
   :sequence-name {
     :duration 30  ; Total duration in seconds
     :timeline [
-      {:at 30 :cue :cue-name}  ; Execute cue at T-30 seconds
+      {:at 30 :fire :cue-name}  ; Execute named cue at T-30 seconds
       {:at 25 :zone "zone" :command "action" ...params}  ; Direct command
       {:at 20 :wait 5}  ; Block for 5 seconds
-      {:at 15 :fire-seq :other-sequence}  ; Execute another sequence
+      {:at 15 :fire :other-sequence}  ; Execute another named sequence
     ]
   }
 }
@@ -186,12 +186,12 @@ Sequences (Tier 3: Timeline-Based Execution)
   :intro-sequence {
     :duration 45
     :timeline [
-      {:at 45 :cue :lights-red}
+      {:at 45 :fire :lights-red}
       {:at 40 :zone "mirror" :command "playVideo" :file "intro.mp4"}
       {:at 40 :zone "audio" :command "playAudioFX" :file "intro-music.mp3" :volume 60}
       {:at 10 :wait 5}  ; Wait 5 seconds for synchronization
       {:at 5 :zone "mirror" :command "showBrowser"}
-      {:at 3 :cue :lights-green}
+      {:at 3 :fire :lights-green}
     ]
   }
 }
@@ -215,7 +215,7 @@ Example:
 - Blocking — caller waits for completion
 - Timeline items execute at specified countdown times (`:at` counts down from `:duration`)
 - `:wait` provides explicit blocking delays
-- Can reference other sequences with `:fire-seq`
+- Can reference cues, sequences, and hints with `:fire`
 - Pause/resume support with timer state preservation
 
 **Timing Model**:
@@ -483,15 +483,13 @@ async function runSequence(sequenceDef, context) {
     }
     
     // Execute step based on type
-    if (step.cue) {
-      await executeCue(step.cue);
+    if (step.fire) {
+      await runByName(step.fire, context);
     } else if (step.zone) {
       await executeCommand(step);
     } else if (step.wait) {
       await sleep(step.wait * 1000);
       elapsed += step.wait;
-    } else if (step['fire-seq']) {
-      await runSequence(sequences[step['fire-seq']], context);
     }
   }
 }
@@ -568,8 +566,8 @@ Hints are triggered via MQTT command:
 
 ```json
 {
-  "command": "deliverHint",
-  "hintId": 1
+  "command": "executeHint",
+  "id": "hint-01"
 }
 ```
 
@@ -615,7 +613,7 @@ Published to: `{baseTopic}/commands`
 | `resumeGame` | none | Resume from pause |
 | `resetGame` | none | Reset to ready state |
 | `solveGame` | none | Mark game as solved (operator override) |
-| `deliverHint` | `hintId` | Deliver specific hint |
+| `executeHint` | `id` | Execute specific hint |
 | `shutdown` | none | Graceful engine shutdown |
 | `reboot` | none | Graceful PxO software restart |
 | `halt` | none | Graceful PxO software halt |

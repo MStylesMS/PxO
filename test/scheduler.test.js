@@ -12,7 +12,7 @@ describe('scheduler smoke tests', () => {
     sm.remaining = 120;
 
     const phaseKey = 'gameplay';
-    const schedule = [{ at: 120, fireCue: 'fade-in-clock' }];
+    const schedule = [{ at: 120, fire: 'fade-in-clock' }];
     let seenFadeIn = false;
     const origFireCue = sm.fireCueByName.bind(sm);
     sm.fireCueByName = (name) => {
@@ -26,7 +26,7 @@ describe('scheduler smoke tests', () => {
   sm.disabledHints.clear();
   sm.disabledHints.set('hint-box2', Date.now());
 
-    const schedule2 = [{ at: 60, 'play-hint': 'hint_box2' }];
+    const schedule2 = [{ at: 60, fire: 'hint_box2' }];
     sm.remaining = 60;
     sm.registerPhaseSchedule(phaseKey, schedule2, 120);
 
@@ -38,8 +38,8 @@ describe('scheduler smoke tests', () => {
     };
 
     schedule2.forEach(item => {
-      if (item.at === sm.remaining && !sm.isScheduledHintSuppressed(item['play-hint'])) {
-        sm.fireHint(item['play-hint'], 'scheduled');
+      if (item.at === sm.remaining && !sm.isScheduledHintSuppressed(item.fire)) {
+        sm.fireHint(item.fire, 'scheduled');
       }
     });
 

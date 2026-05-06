@@ -420,8 +420,8 @@
                                                         {:at 89 :fire :start-music}
                                                         {:at 80 :fire :show-clock-seq}
                                                         {:at 60 :fire :lights-green}
-                                                        {:at 60 :hint :look-everywhere}
-                                                        {:at 50 :hint :picture-cymbal-fx}
+                                                        {:at 60 :fire :look-everywhere}
+                                                        {:at 50 :fire :picture-cymbal-fx}
                                                         {:at 45 :fire :lights-soft-white}
                                                         {:at 30 :fire :hide-clock-seq}]} ;; End of gameplay schedule
 

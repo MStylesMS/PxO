@@ -24,7 +24,7 @@ class SequenceRunner {
         this.cfg = cfg;
         this.zones = zones; // AdapterRegistry
         this.mqtt = mqtt;
-        this.stateMachine = stateMachine; // Reference to state machine for fire-cue/fire-seq execution
+        this.stateMachine = stateMachine; // Reference to state machine for unified fire execution
         this.maxDepthDefault = (cfg.global?.settings?.['sequence-max-depth']) || 3;
         // Cache events topic (may not exist early; recompute lazily if missing)
         this._eventsTopic = cfg.global?.mqtt?.['game-topic'] ? `${cfg.global.mqtt['game-topic']}/events` : null;
@@ -256,26 +256,6 @@ class SequenceRunner {
             return;
         }
 
-        // Handle :hint directive (v2.3.1+) - Trigger hint system
-        if (resolvedStep.hint) {
-            const hintId = resolvedStep.hint;
-            const textOverride = resolvedStep.text; // Optional text override
-            log.info(`Triggering hint: ${hintId}${textOverride ? ' (with override)' : ''}`);
-
-            if (this.stateMachine && this.stateMachine.fireHint) {
-                try {
-                    await this.stateMachine.fireHint(hintId, 'sequence', textOverride);
-                    log.debug(`Hint execution completed: ${hintId}`);
-                } catch (error) {
-                    log.error(`Unexpected error triggering hint '${hintId}': ${error.message}`);
-                    log.warn(`Continuing sequence execution despite hint error`);
-                }
-            } else {
-                log.warn(`Cannot trigger hint '${hintId}' - stateMachine.fireHint not available`);
-            }
-            return;
-        }
-
         // Handle unified :fire command (v2.3.0+)
         if (resolvedStep.fire) {
             const name = resolvedStep.fire;
@@ -285,7 +265,7 @@ class SequenceRunner {
             // uses {:fire <name> ...}. Discriminator and control keys are excluded.
             const fireContext = {};
             const excludedKeys = new Set([
-                'fire', 'fire-cue', 'fire-seq', 'hint', 'wait', 'zone', 'zones',
+                'fire', 'hint', 'wait', 'zone', 'zones',
                 'command', 'at', 'step', '_comment', 'comment', 'description'
             ]);
             Object.entries(resolvedStep).forEach(([key, value]) => {
@@ -303,61 +283,6 @@ class SequenceRunner {
                 }
             } else {
                 log.warn(`Cannot fire '${name}' - stateMachine.fireByName not available`);
-            }
-            return;
-        }
-
-        // Handle :fire-cue (non-blocking cue execution) - backwards compatibility
-        if (resolvedStep['fire-cue']) {
-            const cueName = resolvedStep['fire-cue'];
-            log.info(`Firing cue: ${cueName}`);
-
-            if (this.stateMachine && this.stateMachine.fireCueByName) {
-                try {
-                    // fireCueByName handles missing cues gracefully (logs warning and returns)
-                    // so we don't need to throw errors for missing cues
-                    await this.stateMachine.fireCueByName(cueName);
-                    log.debug(`Cue execution completed: ${cueName}`);
-                } catch (error) {
-                    // Only catch actual execution errors, not missing cue warnings
-                    log.error(`Unexpected error firing cue '${cueName}': ${error.message}`);
-                    // Continue execution - don't fail the whole sequence for cue issues
-                    log.warn(`Continuing sequence execution despite cue error`);
-                }
-            } else {
-                log.warn(`Cannot fire cue '${cueName}' - stateMachine not available`);
-                // Fallback to event publishing for backward compatibility
-                this.publishEvent('fire_cue', { cue: cueName, context: 'sequence' });
-            }
-            return;
-        }
-
-        // Handle :fire-seq (nested sequence execution) - backwards compatibility
-        if (resolvedStep['fire-seq']) {
-            const seqName = resolvedStep['fire-seq'];
-            log.info(`Firing sequence: ${seqName}`);
-
-            if (this.stateMachine && this.stateMachine.fireSequenceByName) {
-                try {
-                    // fireSequenceByName handles missing sequences gracefully (logs warning and returns)
-                    // so we don't need to throw errors for missing sequences
-                    await this.stateMachine.fireSequenceByName(seqName);
-                    log.debug(`Sequence execution completed: ${seqName}`);
-                } catch (error) {
-                    // Only catch actual execution errors, not missing sequence warnings
-                    log.error(`Unexpected error firing sequence '${seqName}': ${error.message}`);
-                    // Continue execution - don't fail the whole sequence for sequence issues
-                    log.warn(`Continuing sequence execution despite nested sequence error`);
-                }
-            } else {
-                log.warn(`Cannot fire sequence '${seqName}' - stateMachine not available`);
-                // Fallback to local sequence execution
-                const result = await this.runSequence(seqName, context);
-                if (!result.ok) {
-                    log.error(`Nested sequence '${seqName}' failed: ${result.error}`);
-                    // For fallback execution, we still continue rather than failing
-                    log.warn(`Continuing sequence execution despite nested sequence failure`);
-                }
             }
             return;
         }
@@ -734,8 +659,8 @@ class SequenceRunner {
 
             const command = step.command || step.type;
 
-            // :fire, :hint, :wait, and template parameter steps are valid without a 'command' field
-            if (step.fire || step.hint || step.wait !== undefined || step.fireCue || step['fire-cue'] || step.fireSeq || step['fire-seq']) {
+            // :fire and :wait steps are valid without a 'command' field
+            if (step.fire || step.wait !== undefined) {
                 return; // Valid directive step - no 'command' required
             }
 
@@ -1056,10 +981,10 @@ class SequenceRunner {
             }
 
             case 'playHint': {
-                // Publish executeHint on the game commands topic, preserving existing command shape
-                const hintId = step.id || step.hint || step.hintId;
+                // Publish executeHint on the game commands topic using the canonical id field.
+                const hintId = step.id;
                 if (!hintId) {
-                    const msg = 'playHint step missing required id/hint/hintId';
+                    const msg = 'playHint step missing required id';
                     log.warn(`SequenceRunner: ${msg}`);
                     this.publishEvent('sequence_step_validation_failed', { action: 'playHint', error: 'missing_hint_id' });
                     return;

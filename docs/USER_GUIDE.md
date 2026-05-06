@@ -177,20 +177,20 @@ Sequences execute timeline-based actions:
       :duration 30
       :timeline [
         ; T=0: Dim lights
-        {:at 30 :cue :lights-dim}
+        {:at 30 :fire :lights-dim}
         
         ; T=3: Start intro video & music
         {:at 27 :zone "mirror" :command "playVideo" :file :intro-video}
         {:at 27 :zone "audio" :command "playAudioFX" :file :intro-music :volume 60}
         
         ; T=10: Lights transition to red
-        {:at 20 :cue :lights-red}
+        {:at 20 :fire :lights-red}
         
         ; T=25: Show countdown clock
-        {:at 5 :cue :show-clock}
+        {:at 5 :fire :show-clock}
         
         ; T=27: Lights green (ready)
-        {:at 3 :cue :lights-green}
+        {:at 3 :fire :lights-green}
       ]
     }
   }
@@ -219,13 +219,13 @@ Sequences execute timeline-based actions:
       :timeline [
         ; T=0: Start countdown
         {:at 300 :zone "clock" :command "startCountdown" :duration 300}
-        {:at 300 :cue :lights-green}
+        {:at 300 :fire :lights-green}
         
         ; T=30: Ambient music starts
         {:at 270 :zone "audio" :command "playAudioFX" :file "ambient.mp3" :loop true :volume 40}
         
         ; T=240 (1 minute left): Warning lights
-        {:at 60 :cue :lights-red}
+        {:at 60 :fire :lights-red}
         {:at 60 :zone "audio" :command "playAudioFX" :file "warning.mp3" :volume 70}
       ]
     }
@@ -246,8 +246,8 @@ Sequences execute timeline-based actions:
     :victory-sequence {
       :duration 15
       :timeline [
-        {:at 15 :cue :stop-all}
-        {:at 15 :cue :victory-celebration}
+        {:at 15 :fire :stop-all}
+        {:at 15 :fire :victory-celebration}
         {:at 10 :zone "clock" :command "showMessage" :text "YOU WIN!" :color "green"}
       ]
     }
@@ -255,8 +255,8 @@ Sequences execute timeline-based actions:
     :failure-sequence {
       :duration 10
       :timeline [
-        {:at 10 :cue :stop-all}
-        {:at 10 :cue :lights-red}
+        {:at 10 :fire :stop-all}
+        {:at 10 :fire :lights-red}
         {:at 10 :zone "mirror" :command "playVideo" :file "failure.mp4"}
         {:at 5 :zone "clock" :command "showMessage" :text "TIME'S UP!" :color "red"}
       ]
@@ -396,12 +396,12 @@ Sequences execute timeline-based actions:
     :intro-sequence {
       :duration 30
       :timeline [
-        {:at 30 :cue :lights-dim}
+        {:at 30 :fire :lights-dim}
         {:at 27 :zone "mirror" :command "playVideo" :file :intro-video}
         {:at 27 :zone "audio" :command "playAudioFX" :file :intro-music :volume 60}
-        {:at 20 :cue :lights-red}
-        {:at 5 :cue :show-clock}
-        {:at 3 :cue :lights-green}
+        {:at 20 :fire :lights-red}
+        {:at 5 :fire :show-clock}
+        {:at 3 :fire :lights-green}
       ]
     }
     
@@ -409,9 +409,9 @@ Sequences execute timeline-based actions:
       :duration 300
       :timeline [
         {:at 300 :zone "clock" :command "startCountdown" :duration 300}
-        {:at 300 :cue :lights-green}
+        {:at 300 :fire :lights-green}
         {:at 270 :zone "audio" :command "playAudioFX" :file "ambient.mp3" :loop true :volume 40}
-        {:at 60 :cue :lights-red}
+        {:at 60 :fire :lights-red}
         {:at 60 :zone "audio" :command "playAudioFX" :file "warning.mp3" :volume 70}
       ]
     }
@@ -419,8 +419,8 @@ Sequences execute timeline-based actions:
     :victory-sequence {
       :duration 15
       :timeline [
-        {:at 15 :cue :stop-all}
-        {:at 15 :cue :victory-celebration}
+        {:at 15 :fire :stop-all}
+        {:at 15 :fire :victory-celebration}
         {:at 10 :zone "clock" :command "showMessage" :text "YOU WIN!" :color "green"}
       ]
     }
@@ -428,8 +428,8 @@ Sequences execute timeline-based actions:
     :failure-sequence {
       :duration 10
       :timeline [
-        {:at 10 :cue :stop-all}
-        {:at 10 :cue :lights-red}
+        {:at 10 :fire :stop-all}
+        {:at 10 :fire :lights-red}
         {:at 10 :zone "mirror" :command "playVideo" :file "failure.mp4"}
         {:at 5 :zone "clock" :command "showMessage" :text "TIME'S UP!" :color "red"}
       ]
@@ -490,11 +490,11 @@ mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
   -m '{"command":"startGame","mode":"demo"}'
 ```
 
-**Deliver Hint**:
+**Execute Hint**:
 
 ```bash
 mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
-  -m '{"command":"deliverHint","hintId":1}'
+  -m '{"command":"executeHint","id":"hint-01"}'
 ```
 
 **Solve Game**:
@@ -607,18 +607,18 @@ Trigger sequences from within sequences:
   :hint-flash-sequence {
     :duration 5
     :timeline [
-      {:at 5 :cue :lights-red}
-      {:at 4 :cue :lights-blue}
-      {:at 3 :cue :lights-red}
-      {:at 2 :cue :lights-blue}
-      {:at 1 :cue :lights-green}
+      {:at 5 :fire :lights-red}
+      {:at 4 :fire :lights-blue}
+      {:at 3 :fire :lights-red}
+      {:at 2 :fire :lights-blue}
+      {:at 1 :fire :lights-green}
     ]
   }
   
   :gameplay-sequence {
     :duration 300
     :timeline [
-      {:at 200 :fire-seq :hint-flash-sequence}  ; Execute sub-sequence
+      {:at 200 :fire :hint-flash-sequence}  ; Execute sub-sequence
     ]
   }
 }
@@ -644,7 +644,7 @@ Use this two-step approach for browser-backed displays (clock, overlays, web UIs
   :prepare-clock-browser {
     :duration 3
     :timeline [
-      {:at 3 :cue :enable-clock-browser}
+      {:at 3 :fire :enable-clock-browser}
       {:at 2 :zone "mirror" :command "verifyBrowser" :url "http://localhost/clock/index.html" :visible false :timeout 15000}
     ]
   }
@@ -664,9 +664,9 @@ Add explicit delays:
   :intro-sequence {
     :duration 30
     :timeline [
-      {:at 30 :cue :lights-red}
+      {:at 30 :fire :lights-red}
       {:at 25 :wait 5}  ; Wait 5 seconds
-      {:at 20 :cue :lights-green}
+      {:at 20 :fire :lights-green}
     ]
   }
 }
@@ -692,8 +692,8 @@ Add explicit delays:
       :intro-sequence {
         :duration 15  ; Shorter for demo
         :timeline [
-          {:at 15 :cue :lights-red}
-          {:at 5 :cue :lights-green}
+          {:at 15 :fire :lights-red}
+          {:at 5 :fire :lights-green}
         ]
       }
     }
@@ -711,7 +711,7 @@ Use `{{variable}}` syntax:
 
 ```clojure
 :cues {
-  :play-hint {
+  :hint-fx-cue {
     :zone "audio"
     :command "playAudioFX"
     :file "media/hints/{{hint-file}}"
@@ -722,7 +722,7 @@ Use `{{variable}}` syntax:
   {
     :id 3
     :type "action"
-    :sequence :play-hint
+    :sequence :hint-fx-cue
     :hint-file "hint-03.mp3"  ; Substituted into {{hint-file}}
   }
 ]
@@ -785,7 +785,7 @@ Create short sequences for testing:
     :intro-duration 10
     :game-duration 30
     :sequences {
-      :intro-sequence {:duration 10 :timeline [{:at 10 :cue :lights-red}]}
+      :intro-sequence {:duration 10 :timeline [{:at 10 :fire :lights-red}]}
     }
   }
 }
@@ -887,7 +887,7 @@ npm run validate -- game.edn
     :duration 45
     :timeline [
       ; Phase 1: Lights dim (T=0)
-      {:at 45 :cue :lights-dim}
+      {:at 45 :fire :lights-dim}
       
       ; Phase 2: Video starts (T=5)
       {:at 40 :zone "mirror" :command "playVideo" :file :intro-video}

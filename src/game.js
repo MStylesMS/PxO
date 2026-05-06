@@ -1017,14 +1017,14 @@ async function main(rawArgs = process.argv.slice(2)) {
           return;
         }
 
-        if (cmdKey === 'listhints' || cmdKey === 'gethints' || cmdKey === 'hints') {
+        if (cmdKey === 'listhints') {
           log.info('Publishing hints registry');
           publishHintsRegistry();
           sm.publishEvent('command_processed', { command: payload.command, topic });
           if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
             gameplayLogger.commandApplied(commandName, payload, topic, { source: 'ui-helper' });
           }
-        } else if (cmdKey === 'getconfig' || cmdKey === 'config') {
+        } else if (cmdKey === 'getconfig') {
           log.info('Publishing full configuration');
           publishUiConfig();
           publishLightScenes();
@@ -1033,14 +1033,14 @@ async function main(rawArgs = process.argv.slice(2)) {
             gameplayLogger.commandApplied(commandName, payload, topic, { source: 'ui-helper' });
           }
         } else if (payload.command === 'executeHint') {
-          const hintId = payload && (payload.id || payload.hintId || payload.hint);
+          const hintId = payload && payload.id;
           if (!hintId) {
             if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
               gameplayLogger.commandRejected(commandName, 'missing_hint_id', payload, topic, { source: 'validation' });
             }
             sm.publishEvent('command_validation_failed', { command: 'executeHint', payload, error: 'missing_hint_id' });
             sm.publishWarning('executeHint_missing_id', {
-              message: 'executeHint command called without required id/hintId/hint parameter',
+              message: 'executeHint command called without required id parameter',
               payload
             });
             return;

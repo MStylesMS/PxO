@@ -362,22 +362,19 @@ mosquitto_pub -h localhost -t 'paradox/game/commands' \
 
 **Response**: Transitions directly to the requested phase when valid.
 
-### Deliver Hint
+### Execute Hint
 
 ```json
 {
-  "command": "deliverHint",
-  "hintId": 1
+  "command": "executeHint",
+  "id": "hint-01"
 }
 ```
 
 **Parameters**:
-- `hintId` (required): Hint ID from configuration
+- `id` (required): Hint ID from configuration
 
 **Response**: Executes hint (text/speech/video/action), publishes event.
-
-Note: The preferred runtime hint command is `executeHint` with one of `id`, `hintId`, or `hint`.
-`deliverHint` remains for compatibility documentation.
 
 ### Shutdown
 
@@ -892,9 +889,9 @@ client.publish("paradox/game/commands",
 client.publish("paradox/game/commands", 
                '{"command":"pauseGame"}')
 
-# Deliver hint
+# Execute hint
 client.publish("paradox/game/commands", 
-               '{"command":"deliverHint","hintId":1}')
+               '{"command":"executeHint","id":"hint-01"}')
 ```
 
 ### Web Dashboard
@@ -943,8 +940,7 @@ client.on('message', (topic, message) => {
 | `fail` / `failGame` | none | Mark failed |
 | `abort` / `abortGame` | none | Immediate abort phase |
 | `triggerPhase` | `phase` | Transition to named phase |
-| `executeHint` | `id` or `hintId` or `hint` | Execute hint by id |
-| `deliverHint` | `hintId` | Deliver hint |
+| `executeHint` | `id` | Execute hint by id |
 | `emergencyStop` / `emergency-stop` | none | Preemptive full cleanup + reset |
 | `shutdown` | none | Shutdown |
 | `reboot` | none | Restart PxO software |
