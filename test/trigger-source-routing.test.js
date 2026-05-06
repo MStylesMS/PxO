@@ -46,7 +46,7 @@ describe('trigger source routing helpers', () => {
       {
         name: 'solve-on-spell-box-open',
         trigger: { source: 'spell-box', condition: { event: 'opened' } },
-        actions: [{ type: 'game', command: 'solve' }]
+        actions: [{ end: 'win' }]
       },
       {
         name: 'unknown-source-with-topic',
@@ -128,7 +128,7 @@ describe('modular trigger transformation', () => {
             source: 'spell-box',
             'when-phase': 'gameplay',
             condition: { event: 'opened' },
-            actions: [{ type: 'game', command: 'solve' }]
+            actions: [{ end: 'win' }]
           }
         },
         sequences: {},

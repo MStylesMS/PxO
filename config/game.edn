@@ -122,10 +122,22 @@
                    }
 
            ;; Optional global named triggers for quick references and testing
-           :triggers {:door-switch-unlock {:description "Door switch activation trigger" :topic "paradox/escape/sensors/door_switch" :condition {:state "activated"}}
-                      :puzzle-solved-win {:description "Main puzzle solved trigger" :topic "paradox/escape/puzzles/main_puzzle" :condition {:status "solved"}}
-                      :emergency-reset {:description "Emergency reset button trigger" :topic "paradox/escape/emergency" :condition {:button "pressed"}}
-                      :keypad-correct-code {:description "Correct keypad code entered" :topic "paradox/escape/keypad/main" :condition {:code "1234" :status "entered"}}
+           :triggers {:door-switch-unlock {:description "Door switch activation trigger"
+                                           :topic "paradox/escape/sensors/door_switch"
+                                           :condition {:state "activated"}
+                                           :actions []}
+                      :puzzle-solved-win {:description "Main puzzle solved trigger"
+                                          :topic "paradox/escape/puzzles/main_puzzle"
+                                          :condition {:status "solved"}
+                                          :actions []}
+                      :emergency-reset {:description "Emergency reset button trigger"
+                                        :topic "paradox/escape/emergency"
+                                        :condition {:button "pressed"}
+                                        :actions []}
+                      :keypad-correct-code {:description "Correct keypad code entered"
+                                            :topic "paradox/escape/keypad/main"
+                                            :condition {:code "1234" :status "entered"}
+                                            :actions []}
 
                       ;; End of triggers
                       }

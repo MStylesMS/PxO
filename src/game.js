@@ -408,6 +408,79 @@ function doesTriggerConditionMatch(payload, condition = {}) {
   return true;
 }
 
+function normalizeTriggerEndCommand(endValue) {
+  const normalized = String(endValue || '').trim().toLowerCase();
+  const aliases = {
+    solve: 'solve',
+    solved: 'solve',
+    sovled: 'solve',
+    win: 'solve',
+    fail: 'fail',
+    failed: 'fail',
+    lose: 'fail',
+    loss: 'fail'
+  };
+
+  return aliases[normalized] || null;
+}
+
+async function executeTriggerAction(action, triggerName, { sm, log: logger = log } = {}) {
+  if (!action || typeof action !== 'object') {
+    logger.warn(`Invalid trigger action in ${triggerName}: expected object`);
+    return false;
+  }
+
+  if (!sm) {
+    throw new Error('executeTriggerAction requires a state machine instance');
+  }
+
+  if (action.fire !== undefined) {
+    if (typeof action.fire !== 'string' || action.fire.trim() === '') {
+      logger.warn(`Trigger ${triggerName} has invalid fire action; expected non-empty string target`);
+      return false;
+    }
+
+    const fireContext = typeof sm._buildFireContext === 'function'
+      ? sm._buildFireContext(action)
+      : {};
+    await sm.fireByName(action.fire, fireContext);
+    logger.info(`Fired trigger action '${action.fire}' for ${triggerName}`);
+    return true;
+  }
+
+  if (action.end !== undefined) {
+    const command = normalizeTriggerEndCommand(action.end);
+    if (!command) {
+      logger.warn(`Trigger ${triggerName} has invalid end action '${action.end}'; use win or fail`);
+      return false;
+    }
+
+    await sm.handleCommand({ command });
+    logger.info(`Executed trigger end '${command}' for ${triggerName}`);
+    return true;
+  }
+
+  const rawMqttAction = action.publish
+    || action.command === 'mqtt'
+    || action.command === 'publish';
+  const zoneAction = Boolean(
+    action.zone
+    || action.zones
+    || action.play
+    || action.scene
+    || ((action.command || action.publish) && (action.zone || action.zones))
+  );
+
+  if (rawMqttAction || zoneAction) {
+    await sm.executeCueAction(action, `trigger:${triggerName}`);
+    logger.info(`Executed trigger cue-style action for ${triggerName}`);
+    return true;
+  }
+
+  logger.warn(`Unsupported trigger action in ${triggerName}; use fire, end, zone/zones action, or raw MQTT publish`);
+  return false;
+}
+
 async function main(rawArgs = process.argv.slice(2)) {
   const argv = parseCliArgs(rawArgs);
 
@@ -758,42 +831,10 @@ async function main(rawArgs = process.argv.slice(2)) {
     // Execute all actions for this trigger
     for (const action of actions) {
       try {
-        await executeAction(action, rule.name);
+        await executeTriggerAction(action, rule.name, { sm, log });
       } catch (error) {
         log.error(`Failed to execute action for trigger ${rule.name}:`, error);
       }
-    }
-  }
-
-  async function executeAction(action, triggerName) {
-    log.debug(`Executing action type: ${action.type} for trigger: ${triggerName}`);
-
-    switch (action.type) {
-      case 'mqtt':
-        mqtt.publish(action.topic, action.payload);
-        log.info(`Published MQTT: ${action.topic}`, action.payload);
-        break;
-
-      case 'game':
-        await sm.handleCommand({ command: action.command });
-        log.info(`Sent game command: ${action.command}`);
-        break;
-
-      // Removed device-specific action types; use generic zone/adapter commands via sequences or state machine
-
-      case 'cue':
-        // Fire a named cue via the state machine's cue dispatcher
-        sm.fireCueByName(action.cue);
-        log.info(`Fired cue: ${action.cue}`);
-        break;
-
-      case 'hint':
-        // Hint trigger actions are not supported via this path; use a 'cue' or 'game' command instead.
-        log.warn(`Unsupported 'hint' action type used in trigger: ${triggerName}. No action taken.`);
-        break;
-
-      default:
-        log.warn(`Unknown action type: ${action.type}`);
     }
   }
 
@@ -1280,6 +1321,8 @@ module.exports = Object.assign(module.exports || {}, {
   buildTriggerRules,
   getRulePhaseConstraint,
   doesTriggerConditionMatch,
+  normalizeTriggerEndCommand,
+  executeTriggerAction,
   conditionEntryMatches,
   normalizeEventToken,
   getValueByPath

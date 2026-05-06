@@ -582,6 +582,12 @@ Execution flow:
   - `sequence`: Resolve only from `global.command-sequences`, substitute `{{field}}` values from direct fields and `parameters` map, then execute sequence
 4. Log hint delivery
 
+Schedule execution remains phase-scoped in the current contract:
+
+- Named schedules are valid phase targets only.
+- Schedules cannot be fired directly from triggers, sequences, or hints.
+- Nested schedules are validation errors; authors should use a named sequence when non-phase logic needs ordered multi-step behavior.
+
 Placeholder policy:
 - Missing placeholders are warning-only and substituted with empty values at runtime.
 - Reserved built-ins are `text` and `duration` (not overridden by `parameters`).

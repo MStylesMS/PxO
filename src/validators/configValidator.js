@@ -69,6 +69,10 @@ class ConfigValidator {
             this.validateGlobalHints(global.hints, global, 'global');
         }
 
+        if (global.triggers) {
+            this.validateTriggers(global.triggers, 'global.triggers');
+        }
+
         // Validate cues
         if (global.cues) {
             this.validateCues(global.cues, 'global');
@@ -420,16 +424,10 @@ class ConfigValidator {
      * Validate individual cue command
      */
     validateCueCommand(cmd, context) {
-        // Raw MQTT commands are allowed without zones
-        if (cmd.type === 'mqtt') {
-            // Validate MQTT command structure
-            if (!cmd.topic) {
-                this.addError(`Raw MQTT command in ${context} must specify 'topic'`);
-            }
-            if (!cmd.payload) {
-                this.addError(`Raw MQTT command in ${context} must specify 'payload'`);
-            }
-            return; // Skip zone validation for MQTT commands
+        // Raw MQTT commands are allowed without zones.
+        if (this.isRawMqttCommand(cmd)) {
+            this.validateRawMqttCommand(cmd, context);
+            return;
         }
 
         // Must have zone or zones for regular commands
@@ -456,6 +454,35 @@ class ConfigValidator {
                 this.addError(`Cue command in ${context} cannot contain '${key}' - use sequences for timing/blocking`);
             }
         });
+    }
+
+    isRawMqttCommand(cmd) {
+        return Boolean(
+            cmd
+            && typeof cmd === 'object'
+            && (
+                cmd.type === 'mqtt'
+                || cmd.command === 'mqtt'
+                || cmd.command === 'publish'
+                || cmd.publish
+            )
+        );
+    }
+
+    validateRawMqttCommand(cmd, context) {
+        const publish = cmd.publish && typeof cmd.publish === 'object' ? cmd.publish : null;
+        const topic = publish ? publish.topic : cmd.topic;
+        const payload = publish
+            ? publish.payload
+            : (cmd.payload !== undefined ? cmd.payload : cmd.message);
+
+        if (!topic || typeof topic !== 'string') {
+            this.addError(`Raw MQTT command in ${context} must specify string 'topic'`);
+        }
+
+        if (payload === undefined) {
+            this.addError(`Raw MQTT command in ${context} must specify 'payload' or 'message'`);
+        }
     }
 
     /**
@@ -653,6 +680,107 @@ class ConfigValidator {
         });
     }
 
+    validateTriggers(triggers, context) {
+        if (Array.isArray(triggers)) {
+            triggers.forEach((rule, index) => {
+                this.validateTriggerRule(rule, `${context}[${index}]`, rule?.name || `trigger-${index}`);
+            });
+            return;
+        }
+
+        if (!triggers || typeof triggers !== 'object') {
+            this.addError(`Triggers in ${context} must be an object or array`);
+            return;
+        }
+
+        if (Array.isArray(triggers.escapeRoomRules)) {
+            triggers.escapeRoomRules.forEach((rule, index) => {
+                this.validateTriggerRule(rule, `${context}.escapeRoomRules[${index}]`, rule?.name || `trigger-${index}`);
+            });
+            return;
+        }
+
+        Object.entries(triggers).forEach(([triggerName, triggerDef]) => {
+            if (triggerName.startsWith('_')) return;
+            this.validateTriggerRule(triggerDef, `${context}.${triggerName}`, triggerName);
+        });
+    }
+
+    validateTriggerRule(rule, context, triggerName) {
+        if (!rule || typeof rule !== 'object') {
+            this.addError(`Trigger '${triggerName}' in ${context} must be an object`);
+            return;
+        }
+
+        const whenPhase = rule['when-phase'] ?? rule.whenPhase ?? rule.trigger?.['when-phase'] ?? rule.trigger?.whenPhase;
+        if (whenPhase !== undefined) {
+            const validWhenPhase = typeof whenPhase === 'string'
+                || (Array.isArray(whenPhase) && whenPhase.every(phase => typeof phase === 'string'));
+            if (!validWhenPhase) {
+                this.addError(`Trigger '${triggerName}' in ${context} must use string or string-array when-phase guard`, `${context}.when-phase`);
+            }
+        }
+
+        if (!Array.isArray(rule.actions)) {
+            this.addError(`Trigger '${triggerName}' in ${context} must define :actions as an array`, `${context}.actions`);
+            return;
+        }
+
+        if (rule.actions.length === 0) {
+            this.addWarning(`Trigger '${triggerName}' in ${context} has no actions`, `${context}.actions`);
+            return;
+        }
+
+        rule.actions.forEach((action, index) => {
+            this.validateTriggerAction(action, `${context}.actions[${index}]`);
+        });
+    }
+
+    validateTriggerAction(action, context) {
+        if (!action || typeof action !== 'object') {
+            this.addError(`Trigger action in ${context} must be an object`);
+            return;
+        }
+
+        const discriminators = this.getTriggerActionDiscriminators(action);
+
+        if (discriminators.length === 0) {
+            this.addError(`Trigger action in ${context} must have a valid discriminator (fire, zone action, raw MQTT, end)`);
+        } else if (discriminators.length > 1) {
+            this.addError(`Trigger action in ${context} has multiple discriminators: ${discriminators.join(', ')}`);
+        }
+
+        this.validateTriggerActionProhibitedSyntax(action, context);
+
+        if (action.fire !== undefined && typeof action.fire !== 'string') {
+            this.addError(`Trigger action ${context} fire must reference a string named target`);
+        }
+
+        if (action.end !== undefined) {
+            const normalized = String(action.end).trim().toLowerCase();
+            const allowed = new Set(['win', 'solve', 'solved', 'sovled', 'fail', 'failed', 'lose', 'loss']);
+            if (!allowed.has(normalized)) {
+                this.addError(`Trigger action ${context} end must be one of: win, solve, fail`);
+            }
+        }
+
+        if (this.isRawMqttCommand(action)) {
+            this.validateRawMqttCommand(action, context);
+        }
+
+        const cueStyleAction = Boolean(
+            action.zone
+            || action.zones
+            || action.play
+            || action.scene
+            || ((action.command || action.publish) && (action.zone || action.zones))
+        );
+
+        if (cueStyleAction) {
+            this.validateCueCommand(action, context);
+        }
+    }
+
     /**
      * Validate schedule entries
      */
@@ -722,6 +850,10 @@ class ConfigValidator {
         if (command.zone || command.zones) {
             this.validateCueCommand(command, context);
         }
+
+        if (this.isRawMqttCommand(command)) {
+            this.validateRawMqttCommand(command, context);
+        }
     }
 
     /**
@@ -744,6 +876,10 @@ class ConfigValidator {
                 this.addError(`Schedule entry ${context}: Use '${replacement}' instead of '${key}' for execution`);
             }
         });
+
+        if (command.schedule !== undefined) {
+            this.addError(`Schedule entry ${context} cannot execute nested schedules - schedules are phase-only`);
+        }
 
         // Reject legacy :commands arrays in schedule entries.
         if (command.commands) {
@@ -900,12 +1036,12 @@ class ConfigValidator {
         const discriminators = [];
 
         if (command.fire) discriminators.push('fire');
+        if (this.isRawMqttCommand(command)) discriminators.push('raw-mqtt');
         if (command.hint !== undefined) discriminators.push('hint (PROHIBITED)');
         if (command.playHint !== undefined || command['play-hint'] !== undefined) discriminators.push('play-hint (PROHIBITED)');
         if (command['fire-cue']) discriminators.push('fire-cue (PROHIBITED)');
         if (command['fire-seq']) discriminators.push('fire-seq (PROHIBITED)');
-        if (command.zone && command.command) discriminators.push('zone+command');
-        if (command.zones && command.command) discriminators.push('zones+command');
+        if ((command.zone || command.zones) && (command.command || command.play || command.scene)) discriminators.push('zone-action');
         if (command.commands) discriminators.push('commands');
         if (command.end) discriminators.push('end');
 
@@ -913,8 +1049,62 @@ class ConfigValidator {
         if (command.cue) discriminators.push('cue (PROHIBITED)');
         if (command.sequence) discriminators.push('sequence (PROHIBITED)');
         if (command.seq) discriminators.push('seq (PROHIBITED)');
+        if (command.schedule !== undefined) discriminators.push('schedule (PROHIBITED)');
 
         return discriminators;
+    }
+
+    getTriggerActionDiscriminators(action) {
+        const discriminators = [];
+
+        if (action.fire) discriminators.push('fire');
+        if (this.isRawMqttCommand(action)) discriminators.push('raw-mqtt');
+        if ((action.zone || action.zones) && (action.command || action.play || action.scene)) discriminators.push('zone-action');
+        if (action.end) discriminators.push('end');
+
+        if (action.type !== undefined) discriminators.push('type (PROHIBITED)');
+        if (action.cue !== undefined) discriminators.push('cue (PROHIBITED)');
+        if (action.sequence !== undefined) discriminators.push('sequence (PROHIBITED)');
+        if (action.seq !== undefined) discriminators.push('seq (PROHIBITED)');
+        if (action.hint !== undefined) discriminators.push('hint (PROHIBITED)');
+        if (action.playHint !== undefined || action['play-hint'] !== undefined) discriminators.push('play-hint (PROHIBITED)');
+        if (action['fire-cue'] !== undefined) discriminators.push('fire-cue (PROHIBITED)');
+        if (action['fire-seq'] !== undefined) discriminators.push('fire-seq (PROHIBITED)');
+        if (action.schedule !== undefined) discriminators.push('schedule (PROHIBITED)');
+        if (action.commands !== undefined) discriminators.push('commands (PROHIBITED)');
+
+        return discriminators;
+    }
+
+    validateTriggerActionProhibitedSyntax(action, context) {
+        const prohibited = [
+            { key: 'cue', replacement: 'fire' },
+            { key: 'sequence', replacement: 'fire' },
+            { key: 'seq', replacement: 'fire' },
+            { key: 'hint', replacement: 'fire' },
+            { key: 'playHint', replacement: 'fire' },
+            { key: 'play-hint', replacement: 'fire' },
+            { key: 'fire-cue', replacement: 'fire' },
+            { key: 'fire-seq', replacement: 'fire' }
+        ];
+
+        prohibited.forEach(({ key, replacement }) => {
+            if (action[key] !== undefined) {
+                this.addError(`Trigger action ${context}: Use '${replacement}' instead of '${key}' for execution`);
+            }
+        });
+
+        if (action.type !== undefined) {
+            this.addError(`Trigger action ${context} uses unsupported legacy 'type' syntax - use fire, end, inline zone actions, or raw MQTT publish`);
+        }
+
+        if (action.schedule !== undefined) {
+            this.addError(`Trigger action ${context} cannot execute schedules directly - schedules are phase-only`);
+        }
+
+        if (action.commands !== undefined) {
+            this.addError(`Trigger action ${context} uses unsupported :commands array - use inline action syntax or fire a named sequence`);
+        }
     }
 
     /**

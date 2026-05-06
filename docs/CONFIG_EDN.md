@@ -77,6 +77,7 @@ PxO now enforces strict phase syntax:
   - Must use `:schedule "name-of-schedule"`
   - Duration is inherited from the named schedule definition (`:duration` or `:seconds` inside that schedule definition)
   - Phase-level `:duration`/`:seconds` is invalid and causes validation errors
+  - Schedules are phase-only containers; they cannot be nested inside triggers, sequences, hints, or other schedules
 - A phase cannot define both `:sequence` and `:schedule`
 
 Valid examples:
@@ -246,16 +247,27 @@ To keep trigger rules maintainable, define named input sources in `:inputs` and 
     :source :front-door
     :condition {:event "open"}
     :when-phase :gameplay
-    :actions [{:type :cue :cue :door-open-cue}]
+    :actions [{:fire "door-open-cue"}]
   }
 
   :gpio-open {
     :source :gpio-door
     :condition {:value "1"}
-    :actions [{:type :game :command "solve"}]
+    :actions [{:end "win"}]
   }
 }
 ```
+
+Trigger action rules:
+
+- `:actions` remains the ordered execution list for a trigger.
+- Each action entry uses the shared executable action syntax:
+  - `{:fire "name"}` to dispatch a named cue, sequence, or hint
+  - `{:zone "mirror" :command "setImage" :file "spell.png"}` for inline zone actions
+  - `{:command "publish" :topic "paradox/test" :payload {...}}` for raw MQTT publish actions
+  - `{:end "win"}` or `{:end "fail"}` for phase-ending actions
+- Legacy typed trigger actions such as `{:type :cue ...}` and `{:type :game ...}` are no longer supported.
+- Schedules are phase-only. Trigger actions cannot use `:schedule`, and `:fire` must not target a named schedule.
 
 Compatibility notes:
 - Existing `:trigger {:topic "..."}` style rules remain supported.

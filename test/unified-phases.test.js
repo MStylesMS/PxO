@@ -58,6 +58,17 @@ describe('Unified Sequence and Schedule System', () => {
         assert(Array.isArray(executedSchedule.schedule), 'expected schedule array');
     });
 
+    test('fireByName does not execute schedule definitions directly', async () => {
+        const sm = new StateMachine({ cfg, mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { }, pause: () => { }, resume: () => { }, setTime: () => { } }, lights: { scene: () => { } }, media: {} });
+        sm.gameType = 'test';
+        sm.sequenceRunner.resolveSequenceNew = () => ({ duration: 5, schedule: [{ at: 5, fire: 'x' }] });
+        sm.fireSequenceByName = jest.fn();
+
+        await sm.fireByName('phase-only-schedule');
+
+        assert(sm.fireSequenceByName.mock.calls.length === 0, 'expected schedule definitions to be rejected by fireByName');
+    });
+
     test('calculatePhaseDuration enforces strict source of duration', () => {
         const sm = new StateMachine({ cfg, mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { }, pause: () => { }, resume: () => { }, setTime: () => { } }, lights: { scene: () => { } }, media: {} });
         sm.gameType = 'test';

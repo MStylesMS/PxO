@@ -1412,6 +1412,11 @@ class GameStateMachine extends EventEmitter {
       return;
     }
 
+    if (resolved && Array.isArray(resolved.schedule)) {
+      log.warn(`fireSequenceByName: '${seqName}' resolves to a schedule and cannot be fired directly; use :schedule on a phase`);
+      return;
+    }
+
     if (resolved && Array.isArray(resolved.sequence)) {
       log.info(`Executing legacy style resolved sequence '${seqName}' (array format)`);
       try { await this.sequenceRunner.runControlSequence(seqName, { gameMode: this.gameType, ...(sequenceContext || {}) }); } catch (e) { log.warn(`runControlSequence failed for ${seqName}: ${e.message}`); }
@@ -1460,6 +1465,11 @@ class GameStateMachine extends EventEmitter {
     }
 
     if (resolved) {
+      if (Array.isArray(resolved.schedule)) {
+        log.warn(`fireByName: '${name}' resolves to a schedule and cannot be fired directly; use :schedule on a phase`);
+        return;
+      }
+
       log.debug(`fireByName: '${name}' resolved as SEQUENCE (blocking)`);
       const runtimeContext = {};
       if (typeof this.remaining === 'number') {

@@ -560,6 +560,7 @@ PxO enforces strict phase definition rules:
   - Use `:schedule "name-of-schedule"`
   - Do not provide phase-level `:duration`/`:seconds`
   - Schedule duration is inherited from the named schedule definition
+  - Schedules are phase-only containers and cannot be nested inside triggers, sequences, hints, or other schedules
 - A phase may define only one of `:sequence` or `:schedule`
 
 Example:
