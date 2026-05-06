@@ -198,5 +198,33 @@ describe('AdapterRegistry', () => {
             expect(clockZones).toHaveLength(1);
             expect(clockZones[0].zoneName).toBe('clock');
         });
+
+        test('should execute commands through the adapter execute contract', async () => {
+            const adapter = registry.getZone('lights');
+            adapter.execute = jest.fn().mockResolvedValue({ ok: true });
+
+            const result = await registry.execute('lights', 'scene', { scene: 'warm' });
+
+            expect(result).toEqual({ ok: true });
+            expect(adapter.execute).toHaveBeenCalledWith(
+                'scene',
+                { scene: 'warm' },
+                expect.objectContaining({ mqtt: mockMqtt })
+            );
+        });
+
+        test('should report false from canExecute when a capability is not advertised', () => {
+            expect(registry.canExecute('lights', 'scene')).toBe(true);
+            expect(registry.canExecute('lights', 'playVideo')).toBe(false);
+        });
+
+        test('should fail clearly if an adapter does not implement execute', async () => {
+            const adapter = registry.getZone('mirror');
+            adapter.execute = undefined;
+
+            await expect(registry.execute('mirror', 'noop', {})).rejects.toThrow(
+                "Adapter type 'pfx-media' does not implement execute()"
+            );
+        });
     });
 });

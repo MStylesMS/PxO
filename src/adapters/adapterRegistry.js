@@ -65,19 +65,12 @@ class AdapterRegistry {
             log.debug(`AdapterRegistry.execute: found adapter type='${adapter.zoneType}' for zone='${zone}'`);
             const context = this.createAdapterContext();
 
-
-
-            // Try adapter's execute method first, fall back to direct method calls
-            let result;
-            if (adapter.execute && typeof adapter.execute === 'function') {
-                log.debug(`AdapterRegistry.execute: calling adapter.execute() for zone='${zone}'`);
-                result = await adapter.execute(commandStr, options, context);
-            } else {
-                // Legacy adapter - map command to direct method calls
-                result = await this._executeLegacyCommand(adapter, commandStr, options);
+            if (!adapter.execute || typeof adapter.execute !== 'function') {
+                throw new Error(`Adapter type '${adapter.zoneType}' does not implement execute()`);
             }
 
-            return result;
+            log.debug(`AdapterRegistry.execute: calling adapter.execute() for zone='${zone}'`);
+            return await adapter.execute(commandStr, options, context);
         } catch (error) {
             log.error('Command failed', { zone, command: commandStr, error: error.message, stack: error.stack });
 
@@ -109,59 +102,10 @@ class AdapterRegistry {
                 return adapter.getCapabilities().includes(commandStr);
             }
 
-            // Fall back to checking if adapter has the method or generic execute
-            if (adapter.execute && typeof adapter.execute === 'function') {
-                return true; // Generic execute method can handle any command
-            }
-
-            // Check for specific method on legacy adapter
-            return typeof adapter[commandStr] === 'function';
+            return adapter.execute && typeof adapter.execute === 'function';
         } catch (error) {
             log.warn('canExecute check failed', { zone, command, error: error.message });
             return false;
-        }
-    }
-
-    /**
-     * Execute command on legacy adapter using direct method calls
-     * @private
-     */
-    async _executeLegacyCommand(adapter, command, options) {
-        // Map commands to adapter methods based on known patterns
-        switch (command) {
-            case 'start':
-                return adapter.start ? adapter.start(options.time) : Promise.resolve();
-            case 'stop':
-                return adapter.stop ? adapter.stop() : Promise.resolve();
-            case 'pause':
-                return adapter.pause ? adapter.pause() : Promise.resolve();
-            case 'resume':
-                return adapter.resume ? adapter.resume(options.time) : Promise.resolve();
-            case 'show':
-                return adapter.show ? adapter.show() : Promise.resolve();
-            case 'hide':
-                return adapter.hide ? adapter.hide() : Promise.resolve();
-            case 'fade-in':
-            case 'fadeIn':
-                return adapter.fadeIn ? adapter.fadeIn(options.duration ?? options.fadeTime) : Promise.resolve();
-            case 'fade-out':
-            case 'fadeOut':
-                return adapter.fadeOut ? adapter.fadeOut(options.duration ?? options.fadeTime) : Promise.resolve();
-            case 'set-time':
-            case 'setTime':
-                return adapter.setTime ? adapter.setTime(options.time || options.mmss) : Promise.resolve();
-            case 'hint':
-                return adapter.hint ? adapter.hint(options.text, options.duration) : Promise.resolve();
-            case 'set-scene':
-            case 'scene':
-                // For lights adapters
-                return adapter.setScene ? adapter.setScene(options.value || options.scene) : Promise.resolve();
-            default:
-                // Try direct method call
-                if (adapter[command] && typeof adapter[command] === 'function') {
-                    return adapter[command](options);
-                }
-                throw new Error(`Unknown command '${command}' for adapter type '${adapter.zoneType}'`);
         }
     }
 

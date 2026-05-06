@@ -366,7 +366,7 @@ class SequenceRunner {
         if (Array.isArray(name)) return { sequence: name };
         if (typeof name === 'object') return name;
 
-        const { normalized, base, variants } = this.getSequenceLookupNames(name);
+        const { variants } = this.getSequenceLookupNames(name);
 
         // QUICK WIN: If the state machine has already flattened global sequences,
         // consult that map first for a fast, authoritative lookup. This ensures
@@ -381,12 +381,6 @@ class SequenceRunner {
         if (perModeRoot && perModeRoot.sequences) {
             const hit = this.lookupSequenceInRoot(perModeRoot.sequences, variants);
             if (hit) return hit;
-        }
-
-        // PRIMARY: If stateMachine provided a flattened globalSequences map, consult it first
-        if (this.stateMachine && this.stateMachine.globalSequences) {
-            const primaryHit = this.lookupSequenceInRoot(this.stateMachine.globalSequences, variants);
-            if (primaryHit) return primaryHit;
         }
 
         // Primary global sequences (NEW hierarchical structure)
