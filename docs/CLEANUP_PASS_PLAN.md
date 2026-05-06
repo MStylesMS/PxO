@@ -2,14 +2,14 @@
 
 ## Purpose
 
-This document defines a focused cleanup pass for PxO to improve maintainability, test reliability, internal design consistency, and documentation quality without changing the external MQTT contract or breaking existing EDN configurations.
+This document defines a focused cleanup pass for PxO to improve maintainability, test reliability, internal design consistency, and documentation quality while preserving the external MQTT contract and intentionally removing pre-release legacy compatibility code before customer release.
 
 This plan is intentionally phased so each step can be reviewed and shipped safely.
 
 ## Constraints
 
 - Preserve the documented MQTT topic structure and command envelope.
-- Preserve EDN backward compatibility unless a change is explicitly approved and documented.
+- Remove legacy EDN/runtime compatibility paths that are no longer needed for the customer release baseline.
 - Prefer cleanup that reduces complexity at the ownership boundary instead of broad rewrites.
 - Update docs in the same change set whenever behavior or supported patterns change.
 - Avoid speculative refactors that do not improve readability, correctness, or testability.
@@ -27,6 +27,7 @@ This plan is intentionally phased so each step can be reviewed and shipped safel
 - Open PR documents may remain in place for now, but they should be updated if the underlying work has already landed.
 - Jest is the canonical test runner for this repo going forward.
 - No compatibility layers have been pre-designated as untouchable.
+- PxO should ship as a clean build for customer release, using the two in-house games as migration and validation targets rather than preserving legacy compatibility shims.
 
 ## Current Observations
 
@@ -73,7 +74,7 @@ Acceptance criteria:
 
 ### 2. Compatibility Surface Audit
 
-Objective: identify which legacy compatibility paths are still required and which are now dead weight.
+Objective: identify and remove pre-release compatibility paths that are now dead weight.
 
 Primary files:
 
@@ -85,16 +86,15 @@ Primary files:
 
 Planned work:
 
-- Inventory each legacy fallback and classify it as required, deprecated-but-supported, or removable.
-- Remove dead branches only when backed by tests or explicit confirmation that the path is obsolete.
+- Inventory each legacy fallback and remove it unless it is still part of the intended release baseline.
+- Use the in-house games and focused tests to validate migrated behavior instead of preserving compatibility shims.
 - Consolidate repeated normalization and fallback logic into shared helpers where it improves clarity.
-- Replace comment-only deprecations with enforceable code paths, warnings, or removal.
+- Replace comment-only deprecations with removal.
 
 Acceptance criteria:
 
-- Legacy support behavior is intentionally documented instead of spread across implicit fallbacks.
-- Removable branches are deleted rather than left commented or half-supported.
-- Remaining compatibility logic is centralized and covered by tests.
+- Removed compatibility branches are deleted rather than left commented or half-supported.
+- Remaining supported behavior matches the intended release baseline and is covered by tests.
 
 ### 3. Adapter And Command Execution Cleanup
 

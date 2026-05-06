@@ -40,7 +40,7 @@ class ModularConfigAdapter {
       throw error;
     }
 
-    // Transform to legacy format
+    // Transform into the current runtime format expected by PxO.
     return this.transform(modular);
   }
 
@@ -48,7 +48,7 @@ class ModularConfigAdapter {
     // Validate root keys
     if (!modular['game-modes']) throw new Error('Modular config missing game-modes section');
 
-    // Helper: build legacy game block for each game mode
+    // Helper: build the runtime game block for each game mode.
     function buildGameModes(games, mediaVideos) {
       const out = {};
       Object.entries(games).forEach(([mode, g]) => {
@@ -104,27 +104,20 @@ class ModularConfigAdapter {
         };
 
         out[mode] = {
-          // UI properties for the control interface
           shortLabel,
           gameLabel,
           hints: g.hints || [],
 
-          // Legacy game properties for the state machine
-          // Prefer an explicit top-level schedule for the mode if present; else gameplay/game scoped schedule
+          // Prefer an explicit top-level schedule for the mode if present; else gameplay/game scoped schedule.
           schedule: (g.schedule) || (gameplay && gameplay.schedule) || [],
           durations: {
-            game: (gameplay && gameplay.duration) || g.game?.duration,
             intro: intro ? { seconds: intro.duration, timerPretext: intro['timer-pretext'] || intro.timerPretext } : undefined,
             solved: solved ? { seconds: solved.duration, timerPretext: solved['timer-pretext'] || solved.timerPretext } : undefined,
-            failed: failed ? { seconds: failed.duration, timerPretext: failed['timer-pretext'] || failed.timerPretext } : undefined,
-            // Legacy mappings for backward compatibility
-            win: (solved || g.win) ? { seconds: (solved || g.win).duration, timerPretext: (solved || g.win)['timer-pretext'] || (solved || g.win).timerPretext } : undefined,
-            fail: (failed || g.fail) ? { seconds: (failed || g.fail).duration, timerPretext: (failed || g.fail)['timer-pretext'] || (failed || g.fail).timerPretext } : undefined
+            failed: failed ? { seconds: failed.duration, timerPretext: failed['timer-pretext'] || failed.timerPretext } : undefined
           },
           media: {
             intro: intro ? mediaVideos[intro.media] || intro.media : undefined
           },
-          setup: g.setup,
           // Preserve per-mode sequence overrides for resolver to find (e.g., start-sequence)
           sequences: g.sequences || undefined,
           // Pass through phase objects for state machine to execute sequences and schedules
@@ -140,12 +133,6 @@ class ModularConfigAdapter {
         };
       });
       return out;
-    }
-
-    function transformStartupSequences(modular) {
-      // Setup sequences are now handled by reset-sequence in unified sequence system
-      // Return empty object to maintain compatibility
-      return {};
     }
 
     // Media catalog removed in refactor. Provide empty map fallback.
@@ -213,7 +200,7 @@ class ModularConfigAdapter {
       || modular.global['trigger-sources']
       || modular.global.triggerSources
       || {};
-    // Build topics required by legacy tests: ui.base_topic, clock.base_topic, fx.<zone>.base_topic
+    // Build derived topics consumed by the runtime and tests.
     const topics = { ...(modular.global.mqtt?.topics || {}) };
     const base = modular.global?.mqtt?.['game-topic'];
     if (!base) {
@@ -229,15 +216,13 @@ class ModularConfigAdapter {
       topics.fx[zone] = topics.fx[zone] || {};
       topics.fx[zone].base_topic = zbase;
     });
-    const legacy = {
+    const runtimeConfig = {
       global: {
-        // Preserve expected camelCase property names but read from raw hyphenated keys
         defaultMode: settings['default-mode'],
         showClockThresholdSec: settings['show-clock-threshold-sec'],
         clockFadeMs: settings['clock-fade-ms'],
         hintDefaultSec: settings['hint-default-sec'],
         gameHeartbeat: settings['game-heartbeat'],
-        // Canonical ms-suffixed form for runtime intervals (kebab-case EDN -> camelCase runtime)
         gameHeartbeatMs: settings['game-heartbeat-ms'],
         introDebounceMs: settings['intro-debounce-ms'],
         timeRemainingPretext: settings['time-remaining-pretext'],
@@ -247,29 +232,14 @@ class ModularConfigAdapter {
           fail: videos.fail_standard || 'fail.mp4',
           win: videos.win_standard || 'win_mm.mp4'
         } : undefined,
-        // Preserve both legacy 'cues' and new 'actions' naming for cue registry
         cues: modular.global.cues,
-        actions: modular.global.actions,
-        // Expose hints registry directly under global for state machine consumption
         hints,
-        setup: transformStartupSequences(modular),
         colorScenes: modular.global.lights?.['color-scenes'] || modular.global.lights?.colorScenes || modular.global.colorScenes || modular.global['color-scenes'],
-        // System sequences for core game operations (Phase 3) - support both old and new structure
-        // The EDN schema has evolved: sequences that used to live under
-        // :global :sequences {:system {}} and :global :sequences {:game-actions {}}
-        // are now promoted to top-level keys :system-sequences and :command-sequences.
-        // Preserve both locations for backward compatibility.
         'system-sequences': modular.global['system-sequences'] || modular.global.sequences || {},
-        // Optional registry of reusable mode opt-in closing phases.
         'additional-phases': modular.global['additional-phases'] || {},
-        // Expose command-sequences for newer EDN layout and fall back to legacy nested game-actions
         'command-sequences': modular.global['command-sequences'] || (modular.global.sequences && modular.global.sequences['game-actions']) || {},
-        // Also expose sequences directly for backward compatibility with code expecting cfg.global.sequences
         sequences: modular.global.sequences || {},
-        // Expose trigger source registry and normalized trigger rules for runtime subscriptions.
         inputs: inputSources,
-        'trigger-sources': modular.global['trigger-sources'] || modular.global.triggerSources || inputSources,
-        triggerSources: modular.global.triggerSources || modular.global['trigger-sources'] || inputSources,
         triggers: {
           escapeRoomRules: triggerRules
         }
@@ -293,19 +263,17 @@ class ModularConfigAdapter {
     }
 
     try {
-      if (legacy.global && legacy.global.mqtt && legacy.global.mqtt.topics) {
+      if (runtimeConfig.global && runtimeConfig.global.mqtt && runtimeConfig.global.mqtt.topics) {
         // Keep underscores intact for base_topic expected by tests; only convert kebab-case keys
-        legacy.global.mqtt.topics = kebabToCamelCase(legacy.global.mqtt.topics);
+        runtimeConfig.global.mqtt.topics = kebabToCamelCase(runtimeConfig.global.mqtt.topics);
       }
     } catch (e) {
       log.warn('MQTT topic transformation failed:', e.message);
     }
 
-    // Legacy alias removed (pruned) to encourage use of cfg.global.mqtt only
-
-    log.debug('[Adapter] Transformed configuration:', JSON.stringify(legacy, null, 2));
-    log.debug('[Adapter] Fail video structure added:', legacy.global.media?.fail);
-    return legacy;
+    log.debug('[Adapter] Transformed configuration:', JSON.stringify(runtimeConfig, null, 2));
+    log.debug('[Adapter] Fail video structure added:', runtimeConfig.global.media?.fail);
+    return runtimeConfig;
   }
 }
 

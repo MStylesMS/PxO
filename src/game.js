@@ -113,12 +113,6 @@ function getConfiguredGameplayDurationSeconds(cfg, mode) {
   const direct = Number(game?.gameplay?.duration);
   if (Number.isFinite(direct) && direct > 0) return Math.round(direct);
 
-  const phaseDuration = Number(game?.durations?.gameplay?.seconds);
-  if (Number.isFinite(phaseDuration) && phaseDuration > 0) return Math.round(phaseDuration);
-
-  const legacyDuration = Number(game?.durations?.game);
-  if (Number.isFinite(legacyDuration) && legacyDuration > 0) return Math.round(legacyDuration);
-
   return 0;
 }
 
@@ -163,10 +157,7 @@ function buildInputSourceMap(cfg) {
     duplicateSources: []
   };
 
-  const candidates = cfg?.global?.inputs
-    || cfg?.global?.['trigger-sources']
-    || cfg?.global?.triggerSources
-    || {};
+  const candidates = cfg?.global?.inputs || {};
 
   if (Array.isArray(candidates)) {
     candidates.forEach((entry, index) => {
@@ -813,13 +804,9 @@ async function main(rawArgs = process.argv.slice(2)) {
       const gameHints = (gameModes?.[mode]?.hints) || [];
       const entries = sm.getCombinedHints(gameHints) || [];
 
-      // Legacy compatibility: minimal list with id/type/label
-      const legacyHints = entries.map(h => ({ id: h.id, type: h.type || 'text', label: (h.displayText || h.id) }));
-
       const payload = {
         mode,
         entries,
-        hints: legacyHints,
         ts: Date.now()
       };
       mqtt.publish(uiTopics.hintsRegistry, payload, { retain: true });

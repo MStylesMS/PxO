@@ -187,6 +187,8 @@ Each zone is an independent adapter that communicates via MQTT:
 - **[User Guide](docs/USER_GUIDE.md)** — Tutorial: building your first game
 - **[AI Agent Instructions](docs/AI_AGENT_INSTRUCTIONS.md)** — Development guidelines for AI coding agents
 
+Historical PR notes, migration sketches, and deferred idea documents live under `archive/` and are not part of the canonical reference set.
+
 ## Requirements
 
 - **Node.js**: >= 18.0.0

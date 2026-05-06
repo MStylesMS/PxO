@@ -1331,11 +1331,9 @@ class GameStateMachine extends EventEmitter {
     // Check game-mode specific cues first (priority override)
     const gameModeCue = this.gameType && this.cfg['game-modes']?.[this.gameType]?.cues?.[cueName];
 
-    // Resolve cue: game-mode override first, then global cues, then legacy fallbacks
+    // Resolve cue: game-mode override first, then global cues
     const cue = gameModeCue
-      || (this.cfg.global?.cues && this.cfg.global.cues[cueName])
-      || (this.cfg.cues && this.cfg.cues[cueName])
-      || (this.cfg.global?.actions && this.cfg.global.actions[cueName]); // Legacy fallback
+      || (this.cfg.global?.cues && this.cfg.global.cues[cueName]);
 
     if (!cue) {
       log.warn(`Cue '${cueName}' not found in configuration`);
@@ -1366,35 +1364,13 @@ class GameStateMachine extends EventEmitter {
       return;
     }
 
-    // LEGACY: Handle timeline-based cues (should be migrated to sequences)
-    if (cue && Array.isArray(cue.timeline) && typeof cue.duration === 'number') {
-      log.warn(`LEGACY: Cue '${cueName}' uses timeline format - should be migrated to sequence`);
-      // Validate cue timeline before scheduling
-      const { errors } = this.validateCueTimeline(cue, cueName) || { errors: [] };
-      if (errors && errors.length) {
-        try { console.error(`[CueValidation] Invalid timeline for '${cueName}': ${errors.join('; ')}`); } catch (_) { }
-        return;
-      }
-      // Schedule timeline actions relative to cue.duration
-      try { await this.scheduleCueTimeline(cue, cueName); } catch (e) { log.warn(`scheduleCueTimeline failed for ${cueName}: ${e.message}`); }
+    // Sequence-style cues remain supported through the shared sequence runner.
+    if (cue && Array.isArray(cue.sequence)) {
+      try { await this.sequenceRunner.runCue(cueName, { gameMode: this.gameType }); } catch (e) { log.warn(`runCue failed for ${cueName}: ${e.message}`); }
       return;
     }
 
-    // LEGACY: Handle old commands/actions array format
-    if (cue && (Array.isArray(cue.commands) || Array.isArray(cue.actions))) {
-      log.warn(`LEGACY: Cue '${cueName}' uses :commands array format - should be migrated to new format`);
-      try {
-        const actions = cue.commands || cue.actions || [];
-        for (const action of actions) {
-          await this.executeCueAction(action, cueName);
-        }
-      } catch (e) { log.warn(`executeCueAction failed for cue ${cueName}: ${e.message}`); }
-      return;
-    }
-
-    // Final fallback to sequence runner (shouldn't happen in new model)
-    log.warn(`FALLBACK: Cue '${cueName}' format not recognized, trying sequence runner`);
-    try { await this.sequenceRunner.runCue(cueName, { gameMode: this.gameType }); } catch (e) { log.warn(`runCue failed for ${cueName}: ${e.message}`); }
+    log.warn(`Cue '${cueName}' has unsupported format; use a direct command object, direct command array, or sequence-style cue.`);
   }
 
   /**
@@ -1629,73 +1605,6 @@ class GameStateMachine extends EventEmitter {
     }
     return false;
   }
-
-
-  // Validate cue timeline per rules in PR_CUE_REFACTOR.md
-  validateCueTimeline(cue, cueKey) {
-    const errors = [];
-    const warnings = [];
-    const { duration, timeline } = cue;
-
-    if (!duration || typeof duration !== 'number' || duration <= 0 || !Number.isInteger(duration)) {
-      errors.push(`duration must be positive integer, got ${duration}`);
-      return { errors, warnings }; // Early return if no duration
-    }
-
-    if (!Array.isArray(timeline)) {
-      errors.push('timeline must be an array');
-      return { errors, warnings };
-    }
-
-    const ats = new Set();
-    let hasZero = false;
-    let hasDuration = false;
-
-    for (let i = 0; i < timeline.length; i++) {
-      const entry = timeline[i];
-      if (!entry || typeof entry !== 'object') {
-        errors.push(`timeline[${i}] must be an object`);
-        continue;
-      }
-      const { at, actions } = entry;
-      if (typeof at !== 'number' || !Number.isInteger(at) || at < 0 || at > duration) {
-        errors.push(`timeline[${i}].at must be integer 0 <= at <= ${duration}, got ${at}`);
-      }
-      if (ats.has(at)) {
-        warnings.push(`timeline[${i}].at ${at} appears multiple times`);
-      }
-      ats.add(at);
-      if (at === 0) hasZero = true;
-      if (at === duration) hasDuration = true;
-      if (!Array.isArray(actions)) {
-        errors.push(`timeline[${i}].actions must be an array`);
-      }
-    }
-
-    if (!hasZero) warnings.push('timeline missing entry at :at 0');
-    if (!hasDuration) warnings.push(`timeline missing entry at :at ${duration}`);
-
-    return { errors, warnings };
-  }
-
-  // Schedule timeline entries with setTimeout
-  scheduleCueTimeline(cue, cueKey) {
-    const { duration, timeline } = cue;
-    // Sort by descending :at for countdown semantics
-    const sortedTimeline = [...timeline].sort((a, b) => b.at - a.at);
-
-    sortedTimeline.forEach(entry => {
-      const delayMs = (duration - entry.at) * 1000;
-      log.info(`Executing timeline action for cue ${cueKey} at ${entry.at}s remaining`);
-      const execute = () => (entry.actions || []).forEach(a => this.executeCueAction(a, cueKey));
-      if (delayMs <= 0) {
-        execute();
-      } else {
-        setTimeout(execute, delayMs);
-      }
-    });
-  }
-
   /**
    * Schedule a sequence timeline - executes commands at specified times
    * @param {Object} sequence - Sequence definition with timeline array

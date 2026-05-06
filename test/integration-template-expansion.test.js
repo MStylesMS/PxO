@@ -3,7 +3,7 @@ const path = require('path');
 const Adapter = require('../src/modular-config-adapter');
 
 describe('modular config adapter integration', () => {
-  test('loads the local EDN config and exposes expected legacy runtime shape', () => {
+  test('loads the local EDN config and exposes the expected runtime shape', () => {
     const cfgPath = path.join(__dirname, '..', 'config', 'game.edn');
     const legacy = Adapter.loadConfig('edn', cfgPath);
 
@@ -19,7 +19,7 @@ describe('modular config adapter integration', () => {
       expect.objectContaining({ at: 2700, fire: 'hint-mm-45' }),
       expect.objectContaining({ at: 300, fire: 'hint-mm-5' })
     ]));
-    expect(fullGame.durations.game).toBe(3600);
+    expect(fullGame.gameplay).toEqual(expect.objectContaining({ duration: 3600 }));
     expect(fullGame.intro).toEqual(expect.objectContaining({ duration: 147, sequence: 'standard-intro' }));
     expect(fullGame.reset).toEqual(expect.objectContaining({ sequence: 'standard-reset' }));
   });
