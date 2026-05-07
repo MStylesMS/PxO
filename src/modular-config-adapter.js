@@ -235,6 +235,7 @@ class ModularConfigAdapter {
         cues: modular.global.cues,
         hints,
         colorScenes: modular.global.lights?.['color-scenes'] || modular.global.lights?.colorScenes || modular.global.colorScenes || modular.global['color-scenes'],
+        sequences: modular.global.sequences || {},
         'system-sequences': modular.global['system-sequences'] || {},
         'additional-phases': modular.global['additional-phases'] || {},
         'command-sequences': modular.global['command-sequences'] || {},

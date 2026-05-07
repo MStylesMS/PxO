@@ -639,7 +639,10 @@ class GameStateMachine extends EventEmitter {
    * Loads global sequences from the configuration.
    */
   loadGlobalSequences() {
-    // Merge and flatten canonical runtime sequence registries into a single lookup map.
+    // Merge and flatten all runtime sequence registries into a single lookup map.
+    // Room configs define gameplay sequences/schedules under :global :sequences.
+    // Control lifecycle hooks live under :system-sequences and :command-sequences.
+    const legacySeqs = this.cfg.global?.sequences || {};
     const systemSeqs = this.cfg.global?.['system-sequences'] || {};
     const commandSeqs = this.cfg.global?.['command-sequences'] || {};
 
@@ -676,11 +679,12 @@ class GameStateMachine extends EventEmitter {
       return out;
     };
 
+    const flatLegacy = collectSeqs(legacySeqs);
     const flatSystem = collectSeqs(systemSeqs);
     const flatCommand = collectSeqs(commandSeqs);
 
-    // Command sequences override any same-named entries from the broader system registry.
-    this.globalSequences = { ...flatSystem, ...flatCommand };
+    // Legacy gameplay sequences are the base; control registries take priority on name collisions.
+    this.globalSequences = { ...flatLegacy, ...flatSystem, ...flatCommand };
 
     log.info(`[PhaseEngine] Loaded ${Object.keys(this.globalSequences).length} global sequences.`);
   }
