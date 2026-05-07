@@ -7,7 +7,7 @@ describe('triggerPhase command routing', () => {
             global: {
                 mqtt: { 'game-topic': 'paradox/test' },
                 settings: {},
-                sequences: {
+                'system-sequences': {
                     'noop-sequence': { sequence: [] }
                 },
                 'additional-phases': {

@@ -117,20 +117,28 @@ function getConfiguredGameplayDurationSeconds(cfg, mode) {
 }
 
 function normalizeCommand(payload) {
-  return String(payload?.command || '').trim();
+  const raw = String(payload?.command || '').trim();
+  const lower = raw.toLowerCase();
+
+  const aliases = {
+    startgame: 'start',
+    resetgame: 'reset',
+    abortgame: 'abort',
+    solvegame: 'solve',
+    failgame: 'fail',
+    listhints: 'listhints',
+    getconfig: 'getconfig'
+  };
+
+  return aliases[lower] || raw;
 }
 
 function isStartCommand(commandName) {
   const c = String(commandName || '').toLowerCase();
-  return c === 'start' || c === 'startgame' || c === 'startmode' || c.startsWith('start:');
+  return c === 'start';
 }
 
 function inferStartMode(commandName, payload, cfg, sm) {
-  const normalized = String(commandName || '').trim();
-  if (normalized.toLowerCase().startsWith('start:')) {
-    return normalized.split(':', 2)[1] || null;
-  }
-
   const explicit = payload?.mode || payload?.value || payload?.gameType;
   if (explicit) return String(explicit);
 
@@ -1026,20 +1034,21 @@ async function main(rawArgs = process.argv.slice(2)) {
           return;
         }
 
-        // Process valid commands (allow a few synonyms for compatibility)
+        // Normalize public MQTT commands to the canonical runtime command set.
         const commandName = normalizeCommand(payload);
+        const normalizedPayload = { ...payload, command: commandName };
         const cmdKey = commandName.toLowerCase();
         const startCommand = isStartCommand(commandName);
 
         if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session || !startCommand)) {
-          gameplayLogger.commandReceived(commandName, payload, topic, { source: 'mqtt' });
+          gameplayLogger.commandReceived(commandName, normalizedPayload, topic, { source: 'mqtt' });
         }
 
         if (startCommand && gameplayLogger && !gameplayLogger.canAcceptStart()) {
-          gameplayLogger.commandRejected(commandName, 'start_lockout_2s', payload, topic, { source: 'lockout' });
+          gameplayLogger.commandRejected(commandName, 'start_lockout_2s', normalizedPayload, topic, { source: 'lockout' });
           sm.publishEvent('command_validation_failed', {
             command: commandName,
-            payload,
+            payload: normalizedPayload,
             error: 'start_lockout_2s'
           });
           sm.publishWarning('start_lockout_2s', {
@@ -1052,28 +1061,28 @@ async function main(rawArgs = process.argv.slice(2)) {
         if (cmdKey === 'listhints') {
           log.info('Publishing hints registry');
           publishHintsRegistry();
-          sm.publishEvent('command_processed', { command: payload.command, topic });
+          sm.publishEvent('command_processed', { command: commandName, topic });
           if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-            gameplayLogger.commandApplied(commandName, payload, topic, { source: 'ui-helper' });
+            gameplayLogger.commandApplied(commandName, normalizedPayload, topic, { source: 'ui-helper' });
           }
         } else if (cmdKey === 'getconfig') {
           log.info('Publishing full configuration');
           publishUiConfig();
           publishLightScenes();
-          sm.publishEvent('command_processed', { command: payload.command, topic });
+          sm.publishEvent('command_processed', { command: commandName, topic });
           if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-            gameplayLogger.commandApplied(commandName, payload, topic, { source: 'ui-helper' });
+            gameplayLogger.commandApplied(commandName, normalizedPayload, topic, { source: 'ui-helper' });
           }
-        } else if (payload.command === 'executeHint') {
-          const hintId = payload && payload.id;
+        } else if (commandName === 'executeHint') {
+          const hintId = normalizedPayload && normalizedPayload.id;
           if (!hintId) {
             if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-              gameplayLogger.commandRejected(commandName, 'missing_hint_id', payload, topic, { source: 'validation' });
+              gameplayLogger.commandRejected(commandName, 'missing_hint_id', normalizedPayload, topic, { source: 'validation' });
             }
-            sm.publishEvent('command_validation_failed', { command: 'executeHint', payload, error: 'missing_hint_id' });
+            sm.publishEvent('command_validation_failed', { command: 'executeHint', payload: normalizedPayload, error: 'missing_hint_id' });
             sm.publishWarning('executeHint_missing_id', {
               message: 'executeHint command called without required id parameter',
-              payload
+              payload: normalizedPayload
             });
             return;
           }
@@ -1083,11 +1092,11 @@ async function main(rawArgs = process.argv.slice(2)) {
               sm.fireHint(hintId, 'manual');
               sm.publishEvent('command_processed', { command: 'executeHint', hintId, topic });
               if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-                gameplayLogger.commandApplied(commandName, payload, topic, { hintId });
+                gameplayLogger.commandApplied(commandName, normalizedPayload, topic, { hintId });
               }
             } catch (e) {
               if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-                gameplayLogger.commandRejected(commandName, e.message || 'execute_hint_failed', payload, topic, { hintId });
+                gameplayLogger.commandRejected(commandName, e.message || 'execute_hint_failed', normalizedPayload, topic, { hintId });
               }
               sm.publishEvent('command_execution_failed', { command: 'executeHint', hintId, error: e.message });
               sm.publishWarning('executeHint_failed', {
@@ -1098,19 +1107,19 @@ async function main(rawArgs = process.argv.slice(2)) {
             }
           })();
         } else {
-          log.info(`Delegating command to state machine: ${JSON.stringify(payload)}`);
+          log.info(`Delegating command to state machine: ${JSON.stringify(normalizedPayload)}`);
           (async () => {
             try {
-              const result = await sm.handleCommand(payload);
+              const result = await sm.handleCommand(normalizedPayload);
               if (result === false) {
                 if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-                  gameplayLogger.commandRejected(commandName, 'state_machine_rejected', payload, topic, { result });
+                  gameplayLogger.commandRejected(commandName, 'state_machine_rejected', normalizedPayload, topic, { result });
                 }
                 return;
               }
 
               if (startCommand && gameplayLogger) {
-                const mode = inferStartMode(commandName, payload, cfg, sm);
+                const mode = inferStartMode(commandName, normalizedPayload, cfg, sm);
                 const gameplayDurationSec = getConfiguredGameplayDurationSeconds(cfg, mode);
                 gameplayLogger.beginPendingRun({
                   startCommand: commandName,
@@ -1120,22 +1129,22 @@ async function main(rawArgs = process.argv.slice(2)) {
                   tsMs: Date.now()
                 });
               } else if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-                gameplayLogger.commandApplied(commandName, payload, topic, { source: 'state_machine' });
+                gameplayLogger.commandApplied(commandName, normalizedPayload, topic, { source: 'state_machine' });
               }
             } catch (error) {
               if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session || startCommand)) {
-                gameplayLogger.commandRejected(commandName, error.message || 'state_machine_command_failed', payload, topic, { source: 'state_machine' });
+                gameplayLogger.commandRejected(commandName, error.message || 'state_machine_command_failed', normalizedPayload, topic, { source: 'state_machine' });
               }
 
               log.error('Error handling command:', error);
-              sm.publishEvent('command_execution_failed', { command: payload.command, payload, error: error.message });
+              sm.publishEvent('command_execution_failed', { command: commandName, payload: normalizedPayload, error: error.message });
               sm.publishWarning('state_machine_command_failed', {
-                message: `State machine failed to process command '${payload.command}': ${error.message}`,
-                command: payload.command,
+                message: `State machine failed to process command '${commandName}': ${error.message}`,
+                command: commandName,
                 error: error.message
               });
               sm.runErrorSequence('command_execution_failed', {
-                command: payload.command,
+                command: commandName,
                 error: error.message
               }).catch(() => { /* best effort */ });
             }
@@ -1312,6 +1321,7 @@ module.exports = Object.assign(module.exports || {}, {
   buildTriggerRules,
   getRulePhaseConstraint,
   doesTriggerConditionMatch,
+  normalizeCommand,
   normalizeTriggerEndCommand,
   executeTriggerAction,
   conditionEntryMatches,

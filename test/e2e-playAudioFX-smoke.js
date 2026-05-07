@@ -45,8 +45,8 @@ function assert(cond, msg) { if (!cond) throw new Error(msg); }
   const readyOk = await waitForReady();
   assert(readyOk, 'State machine did not reach ready state in time');
 
-  // Choose a short mode (hc-demo) using generic startMode command because schedule is short and contains braam cues
-  await sm.handleCommand({ command: 'startMode', mode: 'hc-demo' });
+  // Choose a short mode (hc-demo) using canonical start command with explicit mode.
+  await sm.handleCommand({ command: 'start', mode: 'hc-demo' });
   // Ensure schedule loaded
   assert(sm.gameType === 'hc-demo', 'Expected hc-demo gameType');
 

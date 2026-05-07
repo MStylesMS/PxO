@@ -2057,23 +2057,12 @@ class GameStateMachine extends EventEmitter {
 
   async handleCommand(cmd) {
     let name = cmd && cmd.command ? cmd.command : cmd;
-    // Pattern: start:<mode> maps directly to startMode
-    if (typeof name === 'string' && name.startsWith('start:')) {
-      const mode = name.split(':', 2)[1];
-      return await this._startViaSequences(mode);
-    }
     log.info(`Received command: ${name}`, cmd);
     switch (name) {
       case 'reset': {
         return await this._runResetSequence();
       }
-      case 'resetGame': {
-        return await this._runResetSequence();
-      }
       case 'abort': {
-        return await this._runAbortSequence({ source: 'command', force: true });
-      }
-      case 'abortGame': {
         return await this._runAbortSequence({ source: 'command', force: true });
       }
       case 'debugLog': {
@@ -2097,11 +2086,10 @@ class GameStateMachine extends EventEmitter {
         }
       }
       case 'start': {
-        return await this._startViaSequences(this.currentGameMode || (Object.keys(this.cfg.game || {})[0]));
+        const mode = cmd && (cmd.mode || cmd.value || cmd.gameType);
+        return await this._startViaSequences(mode || this.currentGameMode || (Object.keys(this.cfg.game || {})[0]));
       }
-      case 'solve':
-      case 'solveGame':
-      case 'win': {
+      case 'solve': {
         this._triggerEnd('win');
         return true;
       }
@@ -2109,16 +2097,7 @@ class GameStateMachine extends EventEmitter {
         this._triggerEnd('fail');
         return true;
       }
-      case 'failGame': {
-        this._triggerEnd('fail');
-        return true;
-      }
-      case 'startMode': { // generic explicit start with provided mode
-        const mode = cmd && (cmd.mode || cmd.value || cmd.gameType);
-        return await this._startViaSequences(mode);
-      }
-      case 'triggerPhase':
-      case 'phase': {
+      case 'triggerPhase': {
         const requestedPhase = cmd && (cmd.phase || cmd.name || cmd.value);
         const phaseName = String(requestedPhase || '').trim();
         if (!phaseName) {
@@ -2184,7 +2163,6 @@ class GameStateMachine extends EventEmitter {
       case 'wake':
         return await this.sequenceRunner.runControlSequence('props-wake-sequence', { gameMode: this.gameType });
       case 'restartAdapters':
-      case 'restart-adapters':
         return await this.sequenceRunner.runControlSequence('restart-adapters', { gameMode: this.gameType });
       case 'resetting':
         return this.resetting();
@@ -2242,8 +2220,7 @@ class GameStateMachine extends EventEmitter {
         const newMode = cmd && (cmd.mode || cmd.value || cmd.gameMode);
         return await this.setGameMode(newMode);
       }
-      case 'emergencyStop':
-      case 'emergency-stop': {
+      case 'emergencyStop': {
         return await this.emergencyStop({ source: 'command' });
       }
       default:

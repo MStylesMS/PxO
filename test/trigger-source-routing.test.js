@@ -5,6 +5,7 @@ const {
   buildTriggerRules,
   getRulePhaseConstraint,
   doesTriggerConditionMatch,
+  normalizeCommand,
   normalizeEventToken,
   getValueByPath
 } = require('../src/game');
@@ -79,6 +80,17 @@ describe('trigger source routing helpers', () => {
     expect(normalizeEventToken('open')).toBe('open');
     expect(normalizeEventToken('closed')).toBe('close');
     expect(normalizeEventToken('pressed')).toBe('press');
+  });
+
+  test('normalizeCommand maps external command names to canonical runtime names', () => {
+    expect(normalizeCommand({ command: 'startGame' })).toBe('start');
+    expect(normalizeCommand({ command: 'resetGame' })).toBe('reset');
+    expect(normalizeCommand({ command: 'solveGame' })).toBe('solve');
+    expect(normalizeCommand({ command: 'failGame' })).toBe('fail');
+    expect(normalizeCommand({ command: 'abortGame' })).toBe('abort');
+    expect(normalizeCommand({ command: 'getConfig' })).toBe('getconfig');
+    expect(normalizeCommand({ command: 'listHints' })).toBe('listhints');
+    expect(normalizeCommand({ command: 'triggerPhase' })).toBe('triggerPhase');
   });
 
   test('getValueByPath resolves nested payload fields', () => {
