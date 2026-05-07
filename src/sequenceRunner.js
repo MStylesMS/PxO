@@ -123,7 +123,8 @@ class SequenceRunner {
             if (perModeHit) return perModeHit;
         }
 
-        // Back-compat: room configs define gameplay sequences/schedules under :global :sequences.
+        // Back-compat for room configs that still define reusable gameplay
+        // sequences and schedules under :global :sequences.
         const legacySeqRoot = this.cfg.global?.sequences;
         const legacyHit = this.lookupSequenceInRoot(legacySeqRoot, variants);
         if (legacyHit) return legacyHit;
