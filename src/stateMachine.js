@@ -1526,7 +1526,7 @@ class GameStateMachine extends EventEmitter {
     // Handle game end triggers (unchanged)
     if (entry.end) {
       if (entry.end === 'fail') this._triggerEnd('fail');
-      if (entry.end === 'win') this._triggerEnd('win');
+      if (entry.end === 'win' || entry.end === 'solve') this._triggerEnd('win');
     }
 
     // Developer debug hook (unchanged)
@@ -1938,7 +1938,7 @@ class GameStateMachine extends EventEmitter {
       actionsTriggered = true;
       firedActions.push({ type: 'end', value: entry.end });
       if (entry.end === 'fail') this._triggerEnd('fail');
-      if (entry.end === 'win') this._triggerEnd('win');
+      if (entry.end === 'win' || entry.end === 'solve') this._triggerEnd('win');
     }
 
     if (entry.log) {

@@ -788,7 +788,7 @@ class ConfigValidator {
             const normalized = String(action.end).trim().toLowerCase();
             const allowed = new Set(['win', 'solve', 'solved', 'sovled', 'fail', 'failed', 'lose', 'loss']);
             if (!allowed.has(normalized)) {
-                this.addError(`Trigger action ${context} end must be one of: win, solve, fail`);
+                this.addError(`Trigger action ${context} end must be one of: solve, fail (win is also accepted as an alias for solve)`);
             }
         }
 
