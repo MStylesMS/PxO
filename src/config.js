@@ -71,20 +71,6 @@ function validateConfig(cfg) {
   // Basic structural validation
   if (!cfg.global || !cfg.global.mqtt || !cfg.global.mqtt.broker) throw new Error('Config.global.mqtt.broker required');
   if (!cfg.global.mqtt['game-topic']) throw new Error('Config.global.mqtt.game-topic required');
-
-  // Provide legacy topics tree if missing for backward compatibility tests
-  if (!cfg.global.mqtt.topics) {
-    const base = cfg.global.mqtt['game-topic'];
-    cfg.global.mqtt.topics = {
-      ui: { base_topic: base },
-      clock: { base_topic: `${base}/clock` },
-      fx: {
-        mirror: { base_topic: `${base}/mirror` },
-        picture: { base_topic: `${base}/picture` },
-        audio: { base_topic: `${base}/audio` }
-      }
-    };
-  }
   if (!cfg.game) throw new Error('Config.game required');
 
   // Check for prohibited sections from old format
@@ -112,7 +98,7 @@ function validateConfig(cfg) {
 
   // Color scenes validation removed - now hardcoded in UI
 
-  // Validate new zone format if present (supports both legacy and new formats during transition)
+  // Validate the runtime zone registry if present.
   if (cfg.global.mqtt.zones) {
     validateZoneFormat(cfg.global.mqtt.zones);
   }
@@ -138,7 +124,7 @@ function validateConfig(cfg) {
 }
 
 function validateZoneFormat(zones) {
-  const supportedTypes = ['pfx-media', 'mqtt-lights', 'pxc-clock', 'mqtt'];
+  const supportedTypes = ['pfx-media', 'mqtt-lights', 'pxc-clock', 'mqtt', 'mqtt-raw'];
 
   Object.entries(zones).forEach(([zoneName, zoneConfig]) => {
     if (!zoneConfig || typeof zoneConfig !== 'object') {

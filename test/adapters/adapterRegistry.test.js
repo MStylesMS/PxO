@@ -2,6 +2,7 @@ const AdapterRegistry = require('../../src/adapters/adapterRegistry');
 const PfxAdapter = require('../../src/adapters/pfx');
 const LightsAdapter = require('../../src/adapters/lights');
 const PxcAdapter = require('../../src/adapters/pxc');
+const GenericMqttRawAdapter = require('../../src/adapters/genericMqttRaw');
 
 describe('AdapterRegistry', () => {
     let mockMqtt;
@@ -11,7 +12,8 @@ describe('AdapterRegistry', () => {
         mockMqtt = {
             publish: jest.fn(),
             subscribe: jest.fn(),
-            on: jest.fn()
+            on: jest.fn(),
+            removeListener: jest.fn()
         };
     });
 
@@ -69,6 +71,22 @@ describe('AdapterRegistry', () => {
             expect(adapter).toBeInstanceOf(PxcAdapter);
             expect(adapter.zoneName).toBe('clock');
             expect(adapter.zoneType).toBe('pxc-clock');
+        });
+
+        test('should initialize mqtt-raw zones correctly', () => {
+            const zonesConfig = {
+                'door-lock': {
+                    'type': 'mqtt-raw',
+                    'base-topic': 'paradox/houdini/door-lock'
+                }
+            };
+
+            registry = new AdapterRegistry(mockMqtt, zonesConfig);
+
+            const adapter = registry.getZone('door-lock');
+            expect(adapter).toBeInstanceOf(GenericMqttRawAdapter);
+            expect(adapter.zoneName).toBe('door-lock');
+            expect(adapter.zoneType).toBe('mqtt-raw');
         });
 
         test('should handle multiple zones of different types', () => {
@@ -197,6 +215,48 @@ describe('AdapterRegistry', () => {
             const clockZones = registry.getZonesByType('pxc-clock');
             expect(clockZones).toHaveLength(1);
             expect(clockZones[0].zoneName).toBe('clock');
+        });
+
+        test('should execute commands through the adapter execute contract', async () => {
+            const adapter = registry.getZone('lights');
+            adapter.execute = jest.fn().mockResolvedValue({ ok: true });
+
+            const result = await registry.execute('lights', 'scene', { scene: 'warm' });
+
+            expect(result).toEqual({ ok: true });
+            expect(adapter.execute).toHaveBeenCalledWith(
+                'scene',
+                { scene: 'warm' },
+                expect.objectContaining({ mqtt: mockMqtt })
+            );
+        });
+
+        test('should publish payload-only mqtt-raw zone actions directly to the base topic', async () => {
+            registry = new AdapterRegistry(mockMqtt, {
+                'door-lock': { 'type': 'mqtt-raw', 'base-topic': 'paradox/houdini/door-lock' }
+            });
+
+            await registry.execute('door-lock', undefined, { payload: '1', retain: true });
+
+            expect(mockMqtt.publish).toHaveBeenCalledWith(
+                'paradox/houdini/door-lock',
+                '1',
+                { retain: true }
+            );
+        });
+
+        test('should report false from canExecute when a capability is not advertised', () => {
+            expect(registry.canExecute('lights', 'scene')).toBe(true);
+            expect(registry.canExecute('lights', 'playVideo')).toBe(false);
+        });
+
+        test('should fail clearly if an adapter does not implement execute', async () => {
+            const adapter = registry.getZone('mirror');
+            adapter.execute = undefined;
+
+            await expect(registry.execute('mirror', 'noop', {})).rejects.toThrow(
+                "Adapter type 'pfx-media' does not implement execute()"
+            );
         });
     });
 });

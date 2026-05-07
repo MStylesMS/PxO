@@ -100,12 +100,12 @@
                   ;; ==========
 
                   ;; Trigger response cues (converted from old trigger-cues format to proper three-tier syntax)
-                  :unlock-door {:type "mqtt" :topic "paradox/escape/actuators/main_door" :payload {:command "unlock"} :description "Raw MQTT unlock main door"}
-                  :unlock-door-lights {:zone "lights" :command "scene" :scene "green" :description "Green lights for door unlock"}
-                  :win-game {:type "mqtt" :topic "paradox/houdini/game" :payload {:command "win"} :description "Trigger game win via MQTT"}
-                  :reset-game {:type "mqtt" :topic "paradox/houdini/game" :payload {:command "reset"} :description "Reset game state via MQTT"}
-                  :secret-door {:type "mqtt" :topic "paradox/escape/doors/secret" :payload {:action "open"} :description "Open secret door via raw MQTT"}
-                  :secret-door-audio {:zone "mirror" :command "play" :file "Huge_Braam.mp3" :volume 110 :description "Audio effect for secret door (converted from fire-cue)"}
+                  :unlock-door {:command "publish" :topic "paradox/escape/actuators/main_door" :payload {:command "unlock"} :description "Raw MQTT unlock main door"}
+                  :unlock-door-lights {:zone "lights" :command "scene" :name "green" :description "Green lights for door unlock"}
+                  :win-game {:command "publish" :topic "paradox/houdini/game" :payload {:command "win"} :description "Trigger game win via MQTT"}
+                  :reset-game {:command "publish" :topic "paradox/houdini/game" :payload {:command "reset"} :description "Reset game state via MQTT"}
+                  :secret-door {:command "publish" :topic "paradox/escape/doors/secret" :payload {:action "open"} :description "Open secret door via raw MQTT"}
+                  :secret-door-audio {:zone "mirror" :command "playAudioFX" :file "Huge_Braam.mp3" :volume 110 :description "Audio effect for secret door"}
                   :secret-door-hint {:zone "clock" :command "hint" :text "Secret door opened!" :description "Hint for secret door"}};; End of cues
 
            ;; Hint definitions - reusable across games
@@ -122,10 +122,24 @@
                    }
 
            ;; Optional global named triggers for quick references and testing
-           :triggers {:door-switch-unlock {:description "Door switch activation trigger" :topic "paradox/escape/sensors/door_switch" :condition {:state "activated"}}
-                      :puzzle-solved-win {:description "Main puzzle solved trigger" :topic "paradox/escape/puzzles/main_puzzle" :condition {:status "solved"}}
-                      :emergency-reset {:description "Emergency reset button trigger" :topic "paradox/escape/emergency" :condition {:button "pressed"}}
-                      :keypad-correct-code {:description "Correct keypad code entered" :topic "paradox/escape/keypad/main" :condition {:code "1234" :status "entered"}}
+           :triggers {:door-switch-unlock {:description "Example trigger that fires a cue when the door switch activates"
+                                           :topic "paradox/escape/sensors/door_switch"
+                                           :condition {:state "activated"}
+                                           :actions [{:fire :unlock-door-lights}]}
+                      :puzzle-solved-win {:description "Example trigger that fires a named sequence when the main puzzle reports solved"
+                                          :topic "paradox/escape/puzzles/main_puzzle"
+                                          :condition {:status "solved"}
+                                          :actions [{:fire :show-clock-seq}]}
+                      :emergency-reset {:description "Example trigger that fires a named hint when the emergency button is pressed"
+                                        :topic "paradox/escape/emergency"
+                                        :condition {:button "pressed"}
+                                        :actions [{:fire :humphrey-close}]}
+                      :keypad-correct-code {:description "Example trigger mixing cue, sequence, and hint actions in order"
+                                            :topic "paradox/escape/keypad/main"
+                                            :condition {:code "1234" :status "entered"}
+                                            :actions [{:fire :unlock-door-lights}
+                                                      {:fire :show-clock-seq}
+                                                      {:fire :look-everywhere}]}
 
                       ;; End of triggers
                       }
@@ -291,13 +305,13 @@
 
                                :pause-sequence {:description "Pause side effects" ;; When game is paused, stop gameplay timer before executing
                                                 :timeline [{:at 0 :zone "mirror" :command "hideBrowser"}
-                                                           {:at 0 :type "mqtt" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"pause\"}"}
-                                                           {:at 0 :type "mqtt" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"fadeOut\",\"duration\":1}"}]}
+                                                           {:at 0 :command "publish" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"pause\"}"}
+                                                           {:at 0 :command "publish" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"fadeOut\",\"duration\":1}"}]}
 
                                :resume-sequence {:description "Resume side effects" ;; When game is resumed, restart gameplay timer timer after executing
                                                  :timeline [{:at 0 :zone "mirror" :command "showBrowser"}
-                                                            {:at 0 :type "mqtt" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"resume\"}"}
-                                                            {:at 1 :type "mqtt" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"fadeIn\",\"duration\":1}"}]}
+                                                            {:at 0 :command "publish" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"resume\"}"}
+                                                            {:at 1 :command "publish" :topic "paradox/houdini/clock/commands" :payload "{\"command\":\"fadeIn\",\"duration\":1}"}]}
 
                                :gameplay-end-sequence {} ;; When game timer runs out, execute before proceeding to solved/failed
 
@@ -420,8 +434,8 @@
                                                         {:at 89 :fire :start-music}
                                                         {:at 80 :fire :show-clock-seq}
                                                         {:at 60 :fire :lights-green}
-                                                        {:at 60 :hint :look-everywhere}
-                                                        {:at 50 :hint :picture-cymbal-fx}
+                                                        {:at 60 :fire :look-everywhere}
+                                                        {:at 50 :fire :picture-cymbal-fx}
                                                         {:at 45 :fire :lights-soft-white}
                                                         {:at 30 :fire :hide-clock-seq}]} ;; End of gameplay schedule
 

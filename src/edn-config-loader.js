@@ -309,8 +309,6 @@ class EdnConfigLoader {
       // Zone keys (any configured media zone) are handled by the default 'override'
 
       // Special cases
-      fireCue: 'override',
-      playHint: 'override',
       disableWhen: 'override'
     };
 

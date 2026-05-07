@@ -38,4 +38,28 @@ describe('INI loader gameplay logging fields', () => {
         expect(cfg.global.chat_to_player).toBe(null);
         expect(cfg.global.chat_from_player).toBe(null);
     });
+
+    test('does not auto-load legacy game.ini when pxo.ini is absent', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pxo-legacy-ini-'));
+        const legacyIniPath = path.join(tmpDir, 'game.ini');
+        const originalCwd = process.cwd();
+
+        fs.writeFileSync(legacyIniPath, [
+            '[global]',
+            'game_logging=on',
+            '[mqtt]',
+            'broker=legacy-host',
+            'port=1883'
+        ].join('\n'));
+
+        process.chdir(tmpDir);
+        try {
+            const cfg = loadIniConfig();
+
+            expect(cfg.global.game_logging).toBe(false);
+            expect(cfg.mqtt.broker).toBe(null);
+        } finally {
+            process.chdir(originalCwd);
+        }
+    });
 });

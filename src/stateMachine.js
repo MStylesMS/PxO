@@ -70,7 +70,7 @@ class GameStateMachine extends EventEmitter {
     this.phases = {}; // loaded from :phases config (map, not array)
     this.currentPhase = null; // current phase name (string)
     this.currentPhaseConfig = null; // current phase definition object
-    this.globalSequences = {}; // loaded from :global :sequences for reference resolution
+    this.globalSequences = {}; // flattened from canonical runtime sequence registries for reference resolution
     this.gameplayLogger = null;
   }
 
@@ -280,7 +280,7 @@ class GameStateMachine extends EventEmitter {
 
   // Execute text hint using :hint-text-seq sequence
   async executeTextHint(hint, source = 'direct') {
-    const text = hint.text || hint.description || hint.displayText || '';
+    const text = typeof hint?.text === 'string' ? hint.text.trim() : '';
     if (!text) {
       log.warn('Text hint has no text');
       return false;
@@ -579,11 +579,6 @@ class GameStateMachine extends EventEmitter {
     return false;
   }
 
-  // Helper to stop all media across all zones via adapters (delegates to utils)
-  stopAllMediaAcrossZones() { // legacy wrapper retained for minimal change surface
-    stopAllAcrossZones(this.zones);
-  }
-
   // --- PHASE ENGINE METHODS ---
 
   /**
@@ -644,12 +639,12 @@ class GameStateMachine extends EventEmitter {
    * Loads global sequences from the configuration.
    */
   loadGlobalSequences() {
-    // Support both legacy :global :sequences and new promoted keys :system-sequences and :command-sequences
-    // Merge and flatten available locations into a single lookup map for reference resolution.
+    // Merge and flatten all runtime sequence registries into a single lookup map.
+    // Room configs define gameplay sequences/schedules under :global :sequences.
+    // Control lifecycle hooks live under :system-sequences and :command-sequences.
     const legacySeqs = this.cfg.global?.sequences || {};
     const systemSeqs = this.cfg.global?.['system-sequences'] || {};
-    // command-sequences are the new location for game action sequences (previously under game-actions inside sequences)
-    const commandSeqs = this.cfg.global?.['command-sequences'] || (legacySeqs['game-actions'] || {});
+    const commandSeqs = this.cfg.global?.['command-sequences'] || {};
 
     const collectSeqs = (src) => {
       const out = {};
@@ -688,7 +683,7 @@ class GameStateMachine extends EventEmitter {
     const flatSystem = collectSeqs(systemSeqs);
     const flatCommand = collectSeqs(commandSeqs);
 
-    // Combine with precedence: legacy (explicit global.sequences) -> system -> command
+    // Legacy gameplay sequences are the base; control registries take priority on name collisions.
     this.globalSequences = { ...flatLegacy, ...flatSystem, ...flatCommand };
 
     log.info(`[PhaseEngine] Loaded ${Object.keys(this.globalSequences).length} global sequences.`);
@@ -825,15 +820,14 @@ class GameStateMachine extends EventEmitter {
     // Track all referenced sequences to find unused global sequences
     const referencedGlobalSequences = new Set();
 
-    // Helper to extract :fire-seq references from schedule/sequence arrays
-    const extractFireSeqRefs = (arr) => {
+    // Helper to extract named :fire references that resolve to sequences.
+    const extractFireRefs = (arr) => {
       if (!Array.isArray(arr)) return [];
       const refs = [];
       arr.forEach(entry => {
-        if (entry?.['fire-seq']) refs.push(entry['fire-seq']);
-        if (entry?.fireSeq) refs.push(entry.fireSeq);
+        if (typeof entry?.fire === 'string') refs.push(entry.fire);
         // Recursively check nested sequences
-        if (entry?.sequence) refs.push(...extractFireSeqRefs(entry.sequence));
+        if (entry?.sequence) refs.push(...extractFireRefs(entry.sequence));
       });
       return refs;
     };
@@ -866,8 +860,8 @@ class GameStateMachine extends EventEmitter {
             errors.push(`Game mode '${gameType}' phase '${phaseName}' references missing schedule '${scheduleName}'.`);
           } else {
             if (this.globalSequences[scheduleName]) referencedGlobalSequences.add(scheduleName);
-            const fireSeqRefs = extractFireSeqRefs(resolvedSchedule.schedule || []);
-            fireSeqRefs.forEach(seqName => {
+            const fireRefs = extractFireRefs(resolvedSchedule.schedule || []);
+            fireRefs.forEach(seqName => {
               if (this.globalSequences[seqName]) {
                 referencedGlobalSequences.add(seqName);
               }
@@ -877,11 +871,11 @@ class GameStateMachine extends EventEmitter {
       }
     }
 
-    // Check :fire-seq references inside global sequence definitions
+    // Check named :fire references inside global sequence definitions.
     Object.values(this.globalSequences).forEach(seqDef => {
       const seqArray = seqDef?.sequence || [];
-      const fireSeqRefs = extractFireSeqRefs(seqArray);
-      fireSeqRefs.forEach(seqName => {
+      const fireRefs = extractFireRefs(seqArray);
+      fireRefs.forEach(seqName => {
         if (this.globalSequences[seqName]) {
           referencedGlobalSequences.add(seqName);
         }
@@ -908,7 +902,7 @@ class GameStateMachine extends EventEmitter {
 
     // Don't log sequence reference warnings - too many false positives for:
     // - Library sequences called by other sequences
-    // - Sequences used in :fire commands (not just :fire-seq)
+    // - Sequences used in :fire commands
     // - Reset/solved/failed handler sequences
     // - Indirectly referenced utility sequences
     // Only actual errors (missing sequences) are important.
@@ -1182,38 +1176,16 @@ class GameStateMachine extends EventEmitter {
 
   // Dispatcher for individual cue actions with zone-based routing
   async executeCueAction(action, cueKey) {
-    const { zone, zones, play, scene, volume } = action;
-    const command = action.command || action.type;
+    const { zone, zones } = action;
+    const command = action.command;
+    const isRawMqtt = action.publish || command === 'publish';
 
     // Determine target zones: single zone or array of zones
     const targetZones = zones ? (Array.isArray(zones) ? zones : [zones]) : (zone ? [zone] : []);
+    const isMqttRawZoneAction = !isRawMqtt && this.isMqttRawZoneSelection(targetZones);
 
     try {
-      if (play) {
-        const resolvedPlay = this.resolveMediaFields(play, ['file', 'video', 'speech', 'fx', 'background', 'image'], `cue:${cueKey}.play`);
-        // Route media commands to appropriate zone adapter(s)
-        if (targetZones.length > 0) {
-          for (const zoneName of targetZones) {
-            let adapter = null;
-            try { adapter = this.zones.validateZone(zoneName); } catch (_) { adapter = null; }
-            // Prefer 'file' key; support legacy 'video' as alias
-            if (adapter) {
-              if (resolvedPlay.file || resolvedPlay.video) adapter.playVideo(resolvedPlay.file || resolvedPlay.video, { volumeAdjust: volume });
-              if (resolvedPlay.speech) adapter.playSpeech(resolvedPlay.speech, { volumeAdjust: volume });
-              if (resolvedPlay.fx) adapter.playAudioFX(resolvedPlay.fx, { volumeAdjust: volume });
-              if (resolvedPlay.background) {
-                const loop = (action.loop !== undefined) ? !!action.loop : true;
-                adapter.playBackground(resolvedPlay.background, loop, { volumeAdjust: volume });
-              }
-              // Prefer 'file' key; support legacy 'image' as alias
-              if (resolvedPlay.file || resolvedPlay.image) adapter.setImage(resolvedPlay.file || resolvedPlay.image);
-            }
-          }
-        } else {
-          log.warn(`Play action in cue ${cueKey} missing required 'zone' or 'zones' field`);
-        }
-      } else if (command) {
-        if (command === 'mqtt' || command === 'publish') {
+      if (isRawMqtt) {
           try {
             const topic = action.topic;
             const payload = (action.payload !== undefined) ? action.payload : action.message;
@@ -1227,7 +1199,26 @@ class GameStateMachine extends EventEmitter {
             log.warn(`Failed raw MQTT publish in cue ${cueKey}:`, error.message);
           }
           return;
+      }
+
+      if (isMqttRawZoneAction) {
+        const options = {};
+        if (action.payload !== undefined) options.payload = action.payload;
+        if (action.message !== undefined) options.message = action.message;
+        if (action.qos !== undefined) options.qos = action.qos;
+        if (action.retain !== undefined) options.retain = action.retain;
+
+        for (const zoneName of targetZones) {
+          try {
+            await this.zones.execute(zoneName, undefined, options);
+          } catch (error) {
+            log.warn(`Failed to execute mqtt-raw payload on zone '${zoneName}' in cue ${cueKey}:`, error.message);
+          }
         }
+        return;
+      }
+
+      if (command) {
 
         // Route commands to appropriate zone adapter(s)
         log.debug(`executeCueAction: command='${command}', targetZones=[${targetZones.join(', ')}], cueKey='${cueKey}'`);
@@ -1296,16 +1287,6 @@ class GameStateMachine extends EventEmitter {
         } else {
           log.warn(`Command '${command}' specified but no target zones found in cue ${cueKey}`);
         }
-      } else if (scene && targetZones.length > 0) {
-        // Handle scene commands on target zones
-        for (const zoneName of targetZones) {
-          try {
-            const adapter = this.zones.validateZone(zoneName);
-            adapter.setScene(scene);
-          } catch (error) {
-            log.warn(`Failed to execute scene '${scene}' on zone '${zoneName}' in cue ${cueKey}:`, error.message);
-          }
-        }
       } else if (action.publish) {
         // Handle raw MQTT publish commands (no zone targeting required)
         try {
@@ -1331,11 +1312,9 @@ class GameStateMachine extends EventEmitter {
     // Check game-mode specific cues first (priority override)
     const gameModeCue = this.gameType && this.cfg['game-modes']?.[this.gameType]?.cues?.[cueName];
 
-    // Resolve cue: game-mode override first, then global cues, then legacy fallbacks
+    // Resolve cue: game-mode override first, then global cues
     const cue = gameModeCue
-      || (this.cfg.global?.cues && this.cfg.global.cues[cueName])
-      || (this.cfg.cues && this.cfg.cues[cueName])
-      || (this.cfg.global?.actions && this.cfg.global.actions[cueName]); // Legacy fallback
+      || (this.cfg.global?.cues && this.cfg.global.cues[cueName]);
 
     if (!cue) {
       log.warn(`Cue '${cueName}' not found in configuration`);
@@ -1356,7 +1335,7 @@ class GameStateMachine extends EventEmitter {
     }
 
     // NEW: Handle single command object 
-    if (cue.zone || cue.zones || cue.command || cue.play || cue.scene) {
+    if (cue.zone || cue.zones || cue.command || cue.publish) {
       // Direct command object - execute and await (blocking for commands like verifyImage)
       try {
         await this.executeCueAction(cue, cueName);
@@ -1366,35 +1345,27 @@ class GameStateMachine extends EventEmitter {
       return;
     }
 
-    // LEGACY: Handle timeline-based cues (should be migrated to sequences)
-    if (cue && Array.isArray(cue.timeline) && typeof cue.duration === 'number') {
-      log.warn(`LEGACY: Cue '${cueName}' uses timeline format - should be migrated to sequence`);
-      // Validate cue timeline before scheduling
-      const { errors } = this.validateCueTimeline(cue, cueName) || { errors: [] };
-      if (errors && errors.length) {
-        try { console.error(`[CueValidation] Invalid timeline for '${cueName}': ${errors.join('; ')}`); } catch (_) { }
-        return;
-      }
-      // Schedule timeline actions relative to cue.duration
-      try { await this.scheduleCueTimeline(cue, cueName); } catch (e) { log.warn(`scheduleCueTimeline failed for ${cueName}: ${e.message}`); }
+    // Sequence-style cues remain supported through the shared sequence runner.
+    if (cue && Array.isArray(cue.sequence)) {
+      try { await this.sequenceRunner.runCue(cueName, { gameMode: this.gameType }); } catch (e) { log.warn(`runCue failed for ${cueName}: ${e.message}`); }
       return;
     }
 
-    // LEGACY: Handle old commands/actions array format
-    if (cue && (Array.isArray(cue.commands) || Array.isArray(cue.actions))) {
-      log.warn(`LEGACY: Cue '${cueName}' uses :commands array format - should be migrated to new format`);
-      try {
-        const actions = cue.commands || cue.actions || [];
-        for (const action of actions) {
-          await this.executeCueAction(action, cueName);
-        }
-      } catch (e) { log.warn(`executeCueAction failed for cue ${cueName}: ${e.message}`); }
-      return;
-    }
+    log.warn(`Cue '${cueName}' has unsupported format; use a direct command object, direct command array, or sequence-style cue.`);
+  }
 
-    // Final fallback to sequence runner (shouldn't happen in new model)
-    log.warn(`FALLBACK: Cue '${cueName}' format not recognized, trying sequence runner`);
-    try { await this.sequenceRunner.runCue(cueName, { gameMode: this.gameType }); } catch (e) { log.warn(`runCue failed for ${cueName}: ${e.message}`); }
+  /**
+   * Resolve a named sequence using the active runtime lookup order.
+   * Returns either the canonical new-format result or the older wrapped shape.
+   */
+  resolveNamedSequence(name) {
+    if (!name) return null;
+
+    try {
+      return this.sequenceRunner.resolveSequence(name, this.gameType);
+    } catch (_) { /* ignore */ }
+
+    return null;
   }
 
   /**
@@ -1404,16 +1375,7 @@ class GameStateMachine extends EventEmitter {
    */
   async fireSequenceByName(seqName, sequenceContext = {}) {
     if (!seqName) return;
-    // Try new-format resolver first (order / namespace agnostic)
-    let resolved = null;
-    try {
-      resolved = this.sequenceRunner.resolveSequenceNew(seqName, this.gameType);
-    } catch (_) { /* ignore */ }
-
-    // Fallback to legacy / multi-namespace resolver
-    if (!resolved) {
-      try { resolved = this.sequenceRunner.resolveSequence(seqName, this.gameType); } catch (_) { /* ignore */ }
-    }
+    const resolved = this.resolveNamedSequence(seqName);
 
     if (!resolved) {
       // Delegate to sequenceRunner's own missing-sequence handling for consistent messaging
@@ -1422,9 +1384,9 @@ class GameStateMachine extends EventEmitter {
       return;
     }
 
-    // If resolver returned array or object with timeline/sequence we normalize behavior similar to runSequenceDefNew
+    // Normalize the resolver output into the appropriate execution path.
     if (Array.isArray(resolved)) {
-      // Treat as simple step array (vector). Pass raw array to runner (Fix A) instead of wrapping.
+      // Treat as a simple step array and pass it straight to the runner.
       log.info(`Executing resolved vector sequence '${seqName}' (${resolved.length} steps)`);
       await this.sequenceRunner.runSequenceDefNew(seqName, resolved, { gameMode: this.gameType, ...(sequenceContext || {}) });
       return;
@@ -1437,9 +1399,14 @@ class GameStateMachine extends EventEmitter {
       return;
     }
 
+    if (resolved && Array.isArray(resolved.schedule)) {
+      log.warn(`fireSequenceByName: '${seqName}' resolves to a schedule and cannot be fired directly; use :schedule on a phase`);
+      return;
+    }
+
     if (resolved && Array.isArray(resolved.sequence)) {
-      log.info(`Executing legacy style resolved sequence '${seqName}' (array format)`);
-      try { await this.sequenceRunner.runControlSequence(seqName, { gameMode: this.gameType, ...(sequenceContext || {}) }); } catch (e) { log.warn(`runControlSequence failed for ${seqName}: ${e.message}`); }
+      log.info(`Executing resolved object sequence '${seqName}' (${resolved.sequence.length} steps)`);
+      try { await this.sequenceRunner.runSequenceDefNew(seqName, resolved, { gameMode: this.gameType, ...(sequenceContext || {}) }); } catch (e) { log.warn(`runSequenceDefNew failed for ${seqName}: ${e.message}`); }
       return;
     }
 
@@ -1447,26 +1414,18 @@ class GameStateMachine extends EventEmitter {
   }
 
   /**
-   * Fire a cue or sequence by name with automatic type detection
-   * Unified :fire command - checks if name is a cue (fire-and-forget) or sequence (blocking)
-   * Also detects hints with deprecation warning (use :hint directive instead)
+   * Fire a cue, sequence, or hint by name with automatic type detection.
+   * Unified :fire resolves the target by unique name within the active scope.
    * @param {string} name - Name of the cue, sequence, or hint to fire
    * @returns {Promise} Promise that resolves immediately (cues) or when complete (sequences/hints)
    */
   async fireByName(name, fireContext = {}) {
     if (!name) return;
 
-    // Check if this is a hint first (DEPRECATED usage)
+    // Check if this is a hint first.
     const hintCheck = this.lookupHint(name);
     if (hintCheck) {
-      log.warn(`⚠️  DEPRECATED: Hint '${name}' triggered via :fire - use :hint directive instead`);
-      this.publishWarning('deprecated_fire_for_hint', {
-        hint: name,
-        message: 'Using :fire for hints is deprecated. Use :hint directive for clarity.',
-        migration: `Change {:fire :${name}} to {:hint :${name}}`,
-        documentation: 'See docs/CONFIG.md for :hint directive usage'
-      });
-      await this.fireHint(name, 'fire-deprecated');
+      await this.fireHint(name, 'fire', fireContext.text ?? null);
       return;
     }
 
@@ -1480,19 +1439,15 @@ class GameStateMachine extends EventEmitter {
       return; // Fire-and-forget
     }
 
-    // Check if this is a sequence (try multiple namespaces)
-    let resolved = null;
-    try {
-      resolved = this.sequenceRunner.resolveSequenceNew(name, this.gameType);
-    } catch (_) { /* ignore */ }
-
-    if (!resolved) {
-      try {
-        resolved = this.sequenceRunner.resolveSequence(name, this.gameType);
-      } catch (_) { /* ignore */ }
-    }
+    // Check if this is a sequence using the active resolver order.
+    const resolved = this.resolveNamedSequence(name);
 
     if (resolved) {
+      if (Array.isArray(resolved.schedule)) {
+        log.warn(`fireByName: '${name}' resolves to a schedule and cannot be fired directly; use :schedule on a phase`);
+        return;
+      }
+
       log.debug(`fireByName: '${name}' resolved as SEQUENCE (blocking)`);
       const runtimeContext = {};
       if (typeof this.remaining === 'number') {
@@ -1521,13 +1476,13 @@ class GameStateMachine extends EventEmitter {
     }
 
     // Not found in either - log warning
-    log.warn(`fireByName: '${name}' not found in cues or sequences`);
+    log.warn(`fireByName: '${name}' not found in cues, sequences, or hints`);
   }
 
   _buildFireContext(action = {}) {
     const fireContext = {};
     const excludedKeys = new Set([
-      'fire', 'fireCue', 'fire-cue', 'fire-seq', 'hint', 'wait', 'zone', 'zones',
+      'fire', 'hint', 'wait', 'zone', 'zones',
       'command', 'at', 'step', '_comment', 'comment', 'description'
     ]);
 
@@ -1546,6 +1501,12 @@ class GameStateMachine extends EventEmitter {
     try { return this.zones?.getZone(zoneName) || null; } catch (_) { return null; }
   }
 
+  isMqttRawZoneSelection(zoneNames = []) {
+    return Array.isArray(zoneNames)
+      && zoneNames.length > 0
+      && zoneNames.every(zoneName => this.getAdapter(zoneName)?.zoneType === 'mqtt-raw');
+  }
+
   // Process a schedule entry with the new three-tier model
   // Note: Schedules are fire-and-forget (don't wait), but we don't await here
   // to maintain non-blocking schedule behavior
@@ -1557,45 +1518,15 @@ class GameStateMachine extends EventEmitter {
       this.fireByName(entry.fire, fireContext).catch(e => log.warn(`fireByName '${entry.fire}' failed: ${e.message}`));
     }
 
-    // Handle cue execution (fire-and-forget from schedule perspective) - backwards compatibility
-    if (entry.fireCue || entry['fire-cue']) {
-      const cueName = entry.fireCue || entry['fire-cue'];
-      // Don't await - schedules are truly fire-and-forget
-      this.fireCueByName(cueName).catch(e => log.warn(`fireCueByName '${cueName}' failed: ${e.message}`));
-    }
-
-    // Handle sequence execution (fire-and-forget from schedule perspective) - backwards compatibility
-    if (entry['fire-seq']) {
-      const seqName = entry['fire-seq'];
-      try {
-        // Don't await - schedules are truly fire-and-forget
-        this.sequenceRunner.runSequence(seqName, { gameMode: this.gameType });
-      } catch (e) {
-        log.warn(`runSequence failed for ${seqName}: ${e.message}`);
-      }
-    }
-
     // Handle inline commands (immediate execution) - NEW
     if (entry.zone || entry.zones) {
       this.executeCueAction(entry, context).catch(e => log.warn(`Inline command failed at ${context}: ${e.message}`));
     }
 
-    // DEPRECATED: Support legacy commands array with warning
-    if (Array.isArray(entry.commands)) {
-      log.warn(`DEPRECATED: Schedule entry at ${context} uses :commands array - migrate to inline syntax or sequences`);
-      entry.commands.forEach(a => this.executeCueAction(a, context).catch(e => log.warn(`Legacy cmd at ${context}: ${e.message}`)));
-    }
-
-    // Handle hint firing (unchanged)
-    if (entry.playHint || entry['play-hint']) {
-      const hintId = entry.playHint || entry['play-hint'];
-      if (!this.isScheduledHintSuppressed(hintId)) this.fireHint(hintId, 'scheduled');
-    }
-
     // Handle game end triggers (unchanged)
     if (entry.end) {
       if (entry.end === 'fail') this._triggerEnd('fail');
-      if (entry.end === 'win') this._triggerEnd('win');
+      if (entry.end === 'win' || entry.end === 'solve') this._triggerEnd('win');
     }
 
     // Developer debug hook (unchanged)
@@ -1629,73 +1560,6 @@ class GameStateMachine extends EventEmitter {
     }
     return false;
   }
-
-
-  // Validate cue timeline per rules in PR_CUE_REFACTOR.md
-  validateCueTimeline(cue, cueKey) {
-    const errors = [];
-    const warnings = [];
-    const { duration, timeline } = cue;
-
-    if (!duration || typeof duration !== 'number' || duration <= 0 || !Number.isInteger(duration)) {
-      errors.push(`duration must be positive integer, got ${duration}`);
-      return { errors, warnings }; // Early return if no duration
-    }
-
-    if (!Array.isArray(timeline)) {
-      errors.push('timeline must be an array');
-      return { errors, warnings };
-    }
-
-    const ats = new Set();
-    let hasZero = false;
-    let hasDuration = false;
-
-    for (let i = 0; i < timeline.length; i++) {
-      const entry = timeline[i];
-      if (!entry || typeof entry !== 'object') {
-        errors.push(`timeline[${i}] must be an object`);
-        continue;
-      }
-      const { at, actions } = entry;
-      if (typeof at !== 'number' || !Number.isInteger(at) || at < 0 || at > duration) {
-        errors.push(`timeline[${i}].at must be integer 0 <= at <= ${duration}, got ${at}`);
-      }
-      if (ats.has(at)) {
-        warnings.push(`timeline[${i}].at ${at} appears multiple times`);
-      }
-      ats.add(at);
-      if (at === 0) hasZero = true;
-      if (at === duration) hasDuration = true;
-      if (!Array.isArray(actions)) {
-        errors.push(`timeline[${i}].actions must be an array`);
-      }
-    }
-
-    if (!hasZero) warnings.push('timeline missing entry at :at 0');
-    if (!hasDuration) warnings.push(`timeline missing entry at :at ${duration}`);
-
-    return { errors, warnings };
-  }
-
-  // Schedule timeline entries with setTimeout
-  scheduleCueTimeline(cue, cueKey) {
-    const { duration, timeline } = cue;
-    // Sort by descending :at for countdown semantics
-    const sortedTimeline = [...timeline].sort((a, b) => b.at - a.at);
-
-    sortedTimeline.forEach(entry => {
-      const delayMs = (duration - entry.at) * 1000;
-      log.info(`Executing timeline action for cue ${cueKey} at ${entry.at}s remaining`);
-      const execute = () => (entry.actions || []).forEach(a => this.executeCueAction(a, cueKey));
-      if (delayMs <= 0) {
-        execute();
-      } else {
-        setTimeout(execute, delayMs);
-      }
-    });
-  }
-
   /**
    * Schedule a sequence timeline - executes commands at specified times
    * @param {Object} sequence - Sequence definition with timeline array
@@ -1740,18 +1604,6 @@ class GameStateMachine extends EventEmitter {
           return;
         }
 
-        // Handle fire-cue references (backwards compatibility)
-        if (cmd['fire-cue']) {
-          this.fireCueByName(cmd['fire-cue']);
-          return;
-        }
-
-        // Handle fire-seq references (backwards compatibility)
-        if (cmd['fire-seq']) {
-          this.fireSequenceByName(cmd['fire-seq']);
-          return;
-        }
-
         // Handle direct commands
         this.executeCueAction(cmd, `${context}[${index}]`);
       } catch (e) {
@@ -1771,13 +1623,10 @@ class GameStateMachine extends EventEmitter {
     }
 
     // Enhanced validation of core control sequence categories
-    // New EDN layout exposes sequences either as top-level maps
-    // (:system-sequences, :command-sequences) or legacy nested under
-    // :global :sequences {:system {} :game-actions {}}. Support both.
+    // Runtime validation operates on the canonical transformed sequence registries.
     const missingCategories = [];
     const validationIssues = [];
 
-    const legacySeqs = this.cfg.global?.sequences || {};
     const topSystemSeqs = this.cfg.global?.['system-sequences'] || {};
     const topCommandSeqs = this.cfg.global?.['command-sequences'] || {};
 
@@ -1805,8 +1654,8 @@ class GameStateMachine extends EventEmitter {
       });
     };
 
-    // Validate 'system' category: prefer top-level system-sequences, fall back to legacy.global.sequences.system
-    let systemMap = Object.keys(topSystemSeqs).length ? topSystemSeqs : (legacySeqs.system || {});
+    // Validate the canonical system registry.
+    let systemMap = topSystemSeqs;
     if (!systemMap || Object.keys(systemMap).length === 0) {
       log.warn(`Required sequence category missing at startup: system`);
       this.publishEvent('sequence_missing_core', { category: 'system' });
@@ -1815,8 +1664,8 @@ class GameStateMachine extends EventEmitter {
       validateSeqMap(systemMap, 'system');
     }
 
-    // Validate 'game-actions' / command sequences: prefer top-level command-sequences, fall back to legacy.global.sequences.game-actions
-    let gameActionsMap = Object.keys(topCommandSeqs).length ? topCommandSeqs : (legacySeqs['game-actions'] || {});
+    // Validate the canonical command sequence registry.
+    let gameActionsMap = topCommandSeqs;
     if (!gameActionsMap || Object.keys(gameActionsMap).length === 0) {
       log.warn(`Required sequence category missing at startup: game-actions`);
       this.publishEvent('sequence_missing_core', { category: 'game-actions' });
@@ -2009,14 +1858,6 @@ class GameStateMachine extends EventEmitter {
       }
     }
 
-    // Fallback: check old structure for backward compatibility
-    // Map phase names: 'game' -> 'gameplay' 
-    const phaseKey = phase === 'game' ? 'gameplay' : phase;
-    if (gameConfig[phaseKey] && gameConfig[phaseKey].duration !== undefined) {
-      const n = Number(gameConfig[phaseKey].duration);
-      if (Number.isFinite(n) && n > 0) return Math.round(n);
-    }
-
     return 0; // default fallback (no duration configured)
   }
 
@@ -2063,24 +1904,6 @@ class GameStateMachine extends EventEmitter {
     let actionsTriggered = false;
     const firedActions = [];
 
-    // Handle :hint directive (v2.3.1+) - Trigger hint system
-    if (entry.hint) {
-      const hintId = entry.hint;
-      const textOverride = entry.text; // Optional text override
-      log.info(`Triggering hint '${hintId}' at ${atLabel}s${contextSuffix}`);
-      firedActions.push({ type: 'hint', value: hintId });
-      try {
-        // Fire hint without awaiting (fire-and-forget for schedule execution)
-        this.fireHint(hintId, 'scheduled', textOverride).catch(e => {
-          log.warn(`Hint trigger failed at ${atLabel}s: ${e.message}`);
-        });
-      } catch (e) {
-        log.warn(`Hint trigger setup failed at ${atLabel}s: ${e.message}`);
-      }
-      primaryLogged = true;
-      actionsTriggered = true;
-    }
-
     // Handle unified fire command (v2.3.0+)
     if (entry.fire) {
       const fireContext = this._buildFireContext(entry);
@@ -2105,61 +1928,17 @@ class GameStateMachine extends EventEmitter {
       }
     }
 
-    // Handle cue execution - backwards compatibility
-    const cueName = entry.fireCue || entry['fire-cue'];
-    if (cueName) {
-      log.info(`Firing cue '${cueName}' at ${atLabel}s${contextSuffix}`);
-      this.fireCueByName(cueName).catch(e => log.warn(`fireCueByName '${cueName}' failed: ${e.message}`));
-      firedActions.push({ type: 'fire-cue', value: cueName });
-      primaryLogged = true;
-      actionsTriggered = true;
-    }
-
-    // Handle sequence execution - backwards compatibility
-    const seqName = entry.fireSeq || entry['fire-seq'];
-    if (seqName) {
-      log.info(`Firing sequence '${seqName}' at ${atLabel}s${contextSuffix}`);
-      try {
-        this.sequenceRunner.runSequence(seqName, { gameMode: this.gameType });
-        firedActions.push({ type: 'fire-seq', value: seqName });
-      } catch (e) {
-        log.warn(`runSequence failed for ${seqName}: ${e.message}`);
-      }
-      primaryLogged = true;
-      actionsTriggered = true;
-    }
-
     if (entry.zone || entry.zones) {
       actionsTriggered = true;
       firedActions.push({ type: 'zone-command' });
       this.executeCueAction(entry, `${phaseLabel}@${atLabel}`).catch(e => log.warn(`Inline command failed at ${phaseLabel}@${atLabel}: ${e.message}`));
     }
 
-    if (Array.isArray(entry.commands)) {
-      actionsTriggered = true;
-      firedActions.push({ type: 'legacy-commands-array', count: entry.commands.length });
-      log.warn(`DEPRECATED: Schedule entry at ${phaseLabel}@${atLabel} uses :commands array - migrate to inline syntax or sequences`);
-      try { entry.commands.forEach(a => this.executeCueAction(a, `${phaseLabel}@${atLabel}`).catch(e => log.warn(`Legacy cmd at ${phaseLabel}@${atLabel}: ${e.message}`))); } catch (_) { }
-    }
-
-    const hintId = entry.playHint || entry['play-hint'];
-    const shouldCheckSuppression = options.checkHintSuppression !== false;
-    if (hintId) {
-      actionsTriggered = true;
-      firedActions.push({ type: 'play-hint', value: hintId });
-      const suppressed = shouldCheckSuppression && typeof this.isScheduledHintSuppressed === 'function'
-        ? this.isScheduledHintSuppressed(hintId)
-        : false;
-      if (!suppressed) {
-        this.fireHint(hintId, 'scheduled');
-      }
-    }
-
     if (entry.end) {
       actionsTriggered = true;
       firedActions.push({ type: 'end', value: entry.end });
       if (entry.end === 'fail') this._triggerEnd('fail');
-      if (entry.end === 'win') this._triggerEnd('win');
+      if (entry.end === 'win' || entry.end === 'solve') this._triggerEnd('win');
     }
 
     if (entry.log) {
@@ -2197,13 +1976,6 @@ class GameStateMachine extends EventEmitter {
     if (!this._phaseSchedules || this._phaseSchedules.size === 0) return;
     for (const k of Array.from(this._phaseSchedules.keys())) this._phaseSchedules.delete(k);
     log.info('Cleared all phase-scoped schedules');
-  }
-
-  // Compatibility wrapper: executeSchedule can be stubbed by tests. By default
-  // it registers the schedule non-blocking with the unified timer.
-  async executeSchedule(schedule, duration, phaseKey = 'phase') {
-    this.registerPhaseSchedule(phaseKey, schedule, duration);
-    return;
   }
 
   // Calculate phase duration based on strict mode rules.
@@ -2268,7 +2040,7 @@ class GameStateMachine extends EventEmitter {
         return;
       }
 
-      await this.executeSchedule(resolved.schedule, resolved.duration, phaseKey);
+      this.registerPhaseSchedule(phaseKey, resolved.schedule, resolved.duration);
       return;
     }
   }
@@ -2277,23 +2049,12 @@ class GameStateMachine extends EventEmitter {
 
   async handleCommand(cmd) {
     let name = cmd && cmd.command ? cmd.command : cmd;
-    // Pattern: start:<mode> maps directly to startMode
-    if (typeof name === 'string' && name.startsWith('start:')) {
-      const mode = name.split(':', 2)[1];
-      return await this._startViaSequences(mode);
-    }
     log.info(`Received command: ${name}`, cmd);
     switch (name) {
       case 'reset': {
         return await this._runResetSequence();
       }
-      case 'resetGame': {
-        return await this._runResetSequence();
-      }
       case 'abort': {
-        return await this._runAbortSequence({ source: 'command', force: true });
-      }
-      case 'abortGame': {
         return await this._runAbortSequence({ source: 'command', force: true });
       }
       case 'debugLog': {
@@ -2317,11 +2078,10 @@ class GameStateMachine extends EventEmitter {
         }
       }
       case 'start': {
-        return await this._startViaSequences(this.currentGameMode || (Object.keys(this.cfg.game || {})[0]));
+        const mode = cmd && (cmd.mode || cmd.value || cmd.gameType);
+        return await this._startViaSequences(mode || this.currentGameMode || (Object.keys(this.cfg.game || {})[0]));
       }
-      case 'solve':
-      case 'solveGame':
-      case 'win': {
+      case 'solve': {
         this._triggerEnd('win');
         return true;
       }
@@ -2329,16 +2089,7 @@ class GameStateMachine extends EventEmitter {
         this._triggerEnd('fail');
         return true;
       }
-      case 'failGame': {
-        this._triggerEnd('fail');
-        return true;
-      }
-      case 'startMode': { // generic explicit start with provided mode
-        const mode = cmd && (cmd.mode || cmd.value || cmd.gameType);
-        return await this._startViaSequences(mode);
-      }
-      case 'triggerPhase':
-      case 'phase': {
+      case 'triggerPhase': {
         const requestedPhase = cmd && (cmd.phase || cmd.name || cmd.value);
         const phaseName = String(requestedPhase || '').trim();
         if (!phaseName) {
@@ -2404,17 +2155,11 @@ class GameStateMachine extends EventEmitter {
       case 'wake':
         return await this.sequenceRunner.runControlSequence('props-wake-sequence', { gameMode: this.gameType });
       case 'restartAdapters':
-      case 'restart-adapters':
         return await this.sequenceRunner.runControlSequence('restart-adapters', { gameMode: this.gameType });
       case 'resetting':
         return this.resetting();
       case 'adjustTime':
         return this.adjustTime((cmd && (cmd.delta ?? cmd.seconds)) || 0);
-      case 'playHint': {
-        const id = cmd && (cmd.id || cmd.value);
-        // Route hint execution via commands topic for consistency
-        return this.fireHint(id, 'command');
-      }
       case 'sendHint': {
         const text = cmd && cmd.text;
         const duration = cmd && (cmd.duration || this.cfg.global.hintDefaultSec || 10);
@@ -2454,7 +2199,7 @@ class GameStateMachine extends EventEmitter {
           }
 
           // Always hard-stop media as fallback/safety behavior.
-          this.stopAllMediaAcrossZones();
+          stopAllAcrossZones(this.zones);
           this.publishEvent('all_stopped');
           return true;
         }
@@ -2467,8 +2212,7 @@ class GameStateMachine extends EventEmitter {
         const newMode = cmd && (cmd.mode || cmd.value || cmd.gameMode);
         return await this.setGameMode(newMode);
       }
-      case 'emergencyStop':
-      case 'emergency-stop': {
+      case 'emergencyStop': {
         return await this.emergencyStop({ source: 'command' });
       }
       default:
@@ -2757,7 +2501,7 @@ class GameStateMachine extends EventEmitter {
     if (this.state !== 'gameplay') return false;
 
     // Check concurrency (allow pause during other sequences for safety)
-    if (this._runningSequence && !['start-sequence', 'intro-sequence'].includes(this._runningSequence)) {
+    if (this._runningSequence && !['gameplay-start-sequence', 'intro-sequence', 'intro-to-gameplay-sequence'].includes(this._runningSequence)) {
       log.warn(`Pause sequence rejected: ${this._runningSequence} running (not pausable)`);
       this.publishEvent('sequence_rejected_busy', {
         requested: 'pause-sequence',
@@ -3053,7 +2797,7 @@ class GameStateMachine extends EventEmitter {
     this.clearAllPhaseSchedules();
 
     // Immediate hard cleanup first.
-    this.stopAllMediaAcrossZones();
+    stopAllAcrossZones(this.zones);
 
     const emergencyResult = await this.sequenceRunner.runControlSequence('emergency-stop-sequence', {
       gameMode: this.gameType,
@@ -3072,7 +2816,7 @@ class GameStateMachine extends EventEmitter {
     if (!resetOk) {
       this.stopUnifiedTimer();
       this.clearAllPhaseSchedules();
-      this.stopAllMediaAcrossZones();
+      stopAllAcrossZones(this.zones);
       this.changeState('ready', { reason: 'emergency_stop_fallback_ready' });
       this.publishState();
     }
@@ -3127,7 +2871,7 @@ class GameStateMachine extends EventEmitter {
   gracefulHalt() {
     try {
       // Stop all media across zones first
-      this.stopAllMediaAcrossZones();
+      stopAllAcrossZones(this.zones);
     } catch (_) { }
 
     // No direct adapter calls; sequences/config should manage clock/lights behavior if needed

@@ -39,17 +39,17 @@ npm test
 
 ```bash
 # Start with config file
-node src/game.js --config /path/to/game.edn
+node src/game.js --edn /path/to/game.edn
 
 # Or use environment variable
 export PXO_CONFIG_PATH=/path/to/game.edn
 node src/game.js
 
 # Start in specific mode
-node src/game.js --config game.edn --mode demo
+node src/game.js --edn game.edn --mode demo
 
 # Debug mode (verbose logging)
-LOG_LEVEL=debug node src/game.js --config game.edn
+LOG_LEVEL=debug node src/game.js --edn game.edn
 ```
 
 ### Example Configuration
@@ -73,9 +73,9 @@ Create a simple game configuration (`example-game.edn`):
     :intro {
       :duration 30
       :timeline [
-        {:at 30 :cue :lights-red}
+        {:at 30 :fire :lights-red}
         {:at 25 :zone "audio" :command "playAudioFX" :file "intro-music.mp3"}
-        {:at 5 :cue :lights-green}
+        {:at 5 :fire :lights-green}
       ]
     }
   }
@@ -93,7 +93,7 @@ Create a simple game configuration (`example-game.edn`):
 Run your game:
 
 ```bash
-node src/game.js --config example-game.edn --mode demo
+node src/game.js --edn example-game.edn --mode demo
 ```
 
 ## Architecture Overview
@@ -147,7 +147,7 @@ This separates software process controls from OS power controls and prop/adapter
   :intro {
     :duration 30
     :timeline [
-      {:at 30 :cue :lights-red}
+      {:at 30 :fire :lights-red}
       {:at 25 :zone "audio" :command "playAudioFX" :file "music.mp3"}
     ]
   }
@@ -182,9 +182,12 @@ Each zone is an independent adapter that communicates via MQTT:
 - **[MQTT API Reference](docs/MQTT_API.md)** — Complete MQTT topic and message format documentation
 - **[EDN Configuration Guide](docs/CONFIG_EDN.md)** — Game configuration with EDN format
 - **[INI Configuration Guide](docs/CONFIG_INI.md)** — System settings with INI format
+- **[Testing Guide](docs/TESTING.md)** — Jest entry points, focused runs, and validation workflow
 - **[Setup Instructions](docs/SETUP.md)** — Installation and deployment guide
 - **[User Guide](docs/USER_GUIDE.md)** — Tutorial: building your first game
 - **[AI Agent Instructions](docs/AI_AGENT_INSTRUCTIONS.md)** — Development guidelines for AI coding agents
+
+Historical PR notes, migration sketches, and deferred idea documents live under `archive/` and are not part of the canonical reference set.
 
 ## Requirements
 
@@ -197,13 +200,23 @@ Each zone is an independent adapter that communicates via MQTT:
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run the full Jest suite
 npm test
 
-# Run specific test suites
+# Run unit-oriented suites only
+npm run test:unit
+
+# Run integration smoke suites
+npm run test:integration
+
+# Run specific focused suites
+npm run test:unified     # Unified phase/sequence behavior
 npm run test:contract    # Command contract tests
 npm run test:scheduler   # Timer and sequence tests
 npm run test:e2e         # End-to-end smoke tests
+
+# Run a focused file with Jest
+npm test -- --runTestsByPath test/discovery.test.js
 
 # Validate config file
 npm run validate -- /path/to/game.edn
@@ -279,11 +292,11 @@ sudo systemctl start mosquitto
 mosquitto_sub -h localhost -t 'paradox/#' -v
 
 # Terminal 2: Start PxO
-node src/game.js --config game.edn
+node src/game.js --edn game.edn
 
 # Terminal 3: Send a command
 mosquitto_pub -h localhost -t 'paradox/game/commands' \
-  -m '{"command":"startGame","mode":"demo"}'
+  -m '{"command":"start","mode":"demo"}'
 ```
 
 ## Configuration Examples
@@ -376,7 +389,7 @@ sudo systemctl status mosquitto
 npm run validate -- config/game.edn
 
 # Run in debug mode
-LOG_LEVEL=debug node src/game.js --config config/game.edn
+LOG_LEVEL=debug node src/game.js --edn config/game.edn
 ```
 
 ### Commands not reaching zones

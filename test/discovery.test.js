@@ -1,7 +1,7 @@
 /**
  * Unit tests for _publishMqttMetadata (game.js)
  *
- * Runs within the PxO custom test runner (test/run-tests.js).
+ * Runs under the standard Jest suite.
  * Uses global `describe`, `test`, `beforeEach`, `expect`, and `jest.fn()`.
  */
 

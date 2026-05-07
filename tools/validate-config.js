@@ -13,13 +13,16 @@ function fail(msg) {
 }
 
 function main() {
-  const ednPath = path.join(CONFIG_DIR, 'game.edn');
+  const requestedPath = process.argv[2];
+  const ednPath = requestedPath
+    ? path.resolve(process.cwd(), requestedPath)
+    : path.join(CONFIG_DIR, 'game.edn');
   if (!fs.existsSync(ednPath)) {
-    fail('Missing game.edn');
+    fail(`Missing EDN config: ${ednPath}`);
     return;
   }
   const rawEdn = fs.readFileSync(ednPath, 'utf8');
-  const cfg = loadConfig();
+  const cfg = loadConfig('edn', ednPath);
 
   // Collect issues
   const issues = [];

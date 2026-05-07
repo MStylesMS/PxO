@@ -1,7 +1,7 @@
 const ConfigValidator = require('../src/validators/configValidator');
 
 describe('ConfigValidator hint directives', () => {
-    test('accepts :hint in sequences and :play-hint in schedules', () => {
+    test('accepts :fire for named hints in sequences and schedules', () => {
         const config = {
             global: {
                 hints: {
@@ -9,7 +9,7 @@ describe('ConfigValidator hint directives', () => {
                 },
                 sequences: {
                     'hint-seq': [
-                        { hint: 'hint-01' },
+                        { fire: 'hint-01' },
                         { wait: 1 }
                     ]
                 }
@@ -23,7 +23,7 @@ describe('ConfigValidator hint directives', () => {
                         gameplay: {
                             duration: 60,
                             schedule: [
-                                { at: 30, 'play-hint': 'hint-01' }
+                                { at: 30, fire: 'hint-01' }
                             ]
                         },
                         abort: {
@@ -44,16 +44,14 @@ describe('ConfigValidator hint directives', () => {
         expect(result.errors).toEqual([]);
     });
 
-    test('warns when a hint is triggered via :fire in a sequence or schedule', () => {
+    test('rejects duplicate names across hints and cues in the same scope', () => {
         const config = {
             global: {
                 hints: {
-                    'hint-01': { type: 'text', sequence: 'hint-text-seq', text: 'Look closer', duration: 15 }
+                    intro: { type: 'text', sequence: 'hint-text-seq', text: 'Look closer', duration: 15 }
                 },
-                sequences: {
-                    'warning-seq': [
-                        { fire: 'hint-01' }
-                    ]
+                cues: {
+                    intro: { zone: 'picture', command: 'setImage', file: 'intro.png' }
                 },
                 'command-sequences': {
                     'hint-text-seq': {
@@ -84,8 +82,8 @@ describe('ConfigValidator hint directives', () => {
         const validator = new ConfigValidator();
         const result = validator.validate(config);
 
-        expect(result.isValid).toBe(true);
-        expect(result.warnings.filter(w => w.includes("Hint 'hint-01' is triggered via :fire; use :hint instead"))).toHaveLength(2);
+        expect(result.isValid).toBe(false);
+        expect(result.errors.join('\n')).toContain("Duplicate name 'intro' within global scope");
     });
 
     test('validates sequence hints against command-sequences and warns on unused fields', () => {

@@ -1,10 +1,12 @@
 const ModularConfigAdapter = require('../src/modular-config-adapter');
 const {
+  getConfiguredGameplayDurationSeconds,
   normalizeTriggerStrictMode,
   buildInputSourceMap,
   buildTriggerRules,
   getRulePhaseConstraint,
   doesTriggerConditionMatch,
+  normalizeCommand,
   normalizeEventToken,
   getValueByPath
 } = require('../src/game');
@@ -46,7 +48,7 @@ describe('trigger source routing helpers', () => {
       {
         name: 'solve-on-spell-box-open',
         trigger: { source: 'spell-box', condition: { event: 'opened' } },
-        actions: [{ type: 'game', command: 'solve' }]
+        actions: [{ end: 'win' }]
       },
       {
         name: 'unknown-source-with-topic',
@@ -81,6 +83,36 @@ describe('trigger source routing helpers', () => {
     expect(normalizeEventToken('pressed')).toBe('press');
   });
 
+  test('normalizeCommand maps external command names to canonical runtime names', () => {
+    expect(normalizeCommand({ command: 'startGame' })).toBe('start');
+    expect(normalizeCommand({ command: 'resetGame' })).toBe('reset');
+    expect(normalizeCommand({ command: 'solveGame' })).toBe('solve');
+    expect(normalizeCommand({ command: 'failGame' })).toBe('fail');
+    expect(normalizeCommand({ command: 'abortGame' })).toBe('abort');
+    expect(normalizeCommand({ command: 'getConfig' })).toBe('getconfig');
+    expect(normalizeCommand({ command: 'listHints' })).toBe('listhints');
+    expect(normalizeCommand({ command: 'triggerPhase' })).toBe('triggerPhase');
+  });
+
+  test('getConfiguredGameplayDurationSeconds only reads canonical durations map', () => {
+    expect(getConfiguredGameplayDurationSeconds({
+      game: {
+        demo: {
+          durations: { gameplay: 60 },
+          gameplay: { duration: 999 }
+        }
+      }
+    }, 'demo')).toBe(60);
+
+    expect(getConfiguredGameplayDurationSeconds({
+      game: {
+        legacyOnly: {
+          gameplay: { duration: 999 }
+        }
+      }
+    }, 'legacyOnly')).toBe(0);
+  });
+
   test('getValueByPath resolves nested payload fields', () => {
     const payload = { input_event: { event: 'open', input: '0' } };
     expect(getValueByPath(payload, 'input_event.event')).toBe('open');
@@ -98,7 +130,8 @@ describe('trigger source routing helpers', () => {
 
     expect(doesTriggerConditionMatch(payload, { event: 'opened' })).toBe(true);
     expect(doesTriggerConditionMatch(payload, { 'input_event.event': 'open' })).toBe(true);
-    expect(doesTriggerConditionMatch(payload, { input: '0' })).toBe(true);
+    expect(doesTriggerConditionMatch(payload, { 'input_event.input': '0' })).toBe(true);
+    expect(doesTriggerConditionMatch(payload, { input: '0' })).toBe(false);
     expect(doesTriggerConditionMatch(payload, { event: ['closed', 'opened'] })).toBe(true);
     expect(doesTriggerConditionMatch(payload, { event: 'closed' })).toBe(false);
   });
@@ -128,7 +161,7 @@ describe('modular trigger transformation', () => {
             source: 'spell-box',
             'when-phase': 'gameplay',
             condition: { event: 'opened' },
-            actions: [{ type: 'game', command: 'solve' }]
+            actions: [{ end: 'win' }]
           }
         },
         sequences: {},

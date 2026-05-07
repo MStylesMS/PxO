@@ -94,37 +94,51 @@ function formatSessionLogTimestamp(tsMs = Date.now()) {
   return `${yyyy}-${mm}-${dd}_${hh}-${mi}-${ss}`;
 }
 
+function parseCliArgs(rawArgs = process.argv.slice(2)) {
+  return minimist(rawArgs, {
+    alias: {
+      c: 'check',
+      validate: 'check',
+      'game-log-path': 'game_log_path'
+    },
+    boolean: ['check', 'validate'],
+    string: ['config', 'edn', 'game_log_path', 'game-log-path']
+  });
+}
+
 function getConfiguredGameplayDurationSeconds(cfg, mode) {
   const game = cfg?.game?.[mode];
   if (!game) return 0;
 
-  const direct = Number(game?.gameplay?.duration);
+  const direct = Number(game?.durations?.gameplay);
   if (Number.isFinite(direct) && direct > 0) return Math.round(direct);
-
-  const phaseDuration = Number(game?.durations?.gameplay?.seconds);
-  if (Number.isFinite(phaseDuration) && phaseDuration > 0) return Math.round(phaseDuration);
-
-  const legacyDuration = Number(game?.durations?.game);
-  if (Number.isFinite(legacyDuration) && legacyDuration > 0) return Math.round(legacyDuration);
 
   return 0;
 }
 
 function normalizeCommand(payload) {
-  return String(payload?.command || '').trim();
+  const raw = String(payload?.command || '').trim();
+  const lower = raw.toLowerCase();
+
+  const aliases = {
+    startgame: 'start',
+    resetgame: 'reset',
+    abortgame: 'abort',
+    solvegame: 'solve',
+    failgame: 'fail',
+    listhints: 'listhints',
+    getconfig: 'getconfig'
+  };
+
+  return aliases[lower] || raw;
 }
 
 function isStartCommand(commandName) {
   const c = String(commandName || '').toLowerCase();
-  return c === 'start' || c === 'startgame' || c === 'startmode' || c.startsWith('start:');
+  return c === 'start';
 }
 
 function inferStartMode(commandName, payload, cfg, sm) {
-  const normalized = String(commandName || '').trim();
-  if (normalized.toLowerCase().startsWith('start:')) {
-    return normalized.split(':', 2)[1] || null;
-  }
-
   const explicit = payload?.mode || payload?.value || payload?.gameType;
   if (explicit) return String(explicit);
 
@@ -151,10 +165,7 @@ function buildInputSourceMap(cfg) {
     duplicateSources: []
   };
 
-  const candidates = cfg?.global?.inputs
-    || cfg?.global?.['trigger-sources']
-    || cfg?.global?.triggerSources
-    || {};
+  const candidates = cfg?.global?.inputs || {};
 
   if (Array.isArray(candidates)) {
     candidates.forEach((entry, index) => {
@@ -392,11 +403,6 @@ function doesTriggerConditionMatch(payload, condition = {}) {
       actualValue = getValueByPath(payload, key);
     }
 
-    // Backward-compatible convenience: if key is flat and absent, probe common nested input event envelope.
-    if (actualValue === undefined && payload && payload.input_event && typeof payload.input_event === 'object') {
-      actualValue = payload.input_event[key];
-    }
-
     if (!conditionEntryMatches(actualValue, expectedValue, key)) {
       return false;
     }
@@ -405,15 +411,77 @@ function doesTriggerConditionMatch(payload, condition = {}) {
   return true;
 }
 
-async function main() {
-  // Parse command line arguments
-  const argv = minimist(process.argv.slice(2), {
-    alias: {
-      c: 'check'
-    },
-    boolean: ['check'],
-    string: ['game_log_path']
-  });
+function normalizeTriggerEndCommand(endValue) {
+  const normalized = String(endValue || '').trim().toLowerCase();
+  const aliases = {
+    solve: 'solve',
+    solved: 'solve',
+    sovled: 'solve',
+    win: 'solve',
+    fail: 'fail',
+    failed: 'fail',
+    lose: 'fail',
+    loss: 'fail'
+  };
+
+  return aliases[normalized] || null;
+}
+
+async function executeTriggerAction(action, triggerName, { sm, log: logger = log } = {}) {
+  if (!action || typeof action !== 'object') {
+    logger.warn(`Invalid trigger action in ${triggerName}: expected object`);
+    return false;
+  }
+
+  if (!sm) {
+    throw new Error('executeTriggerAction requires a state machine instance');
+  }
+
+  if (action.fire !== undefined) {
+    if (typeof action.fire !== 'string' || action.fire.trim() === '') {
+      logger.warn(`Trigger ${triggerName} has invalid fire action; expected non-empty string target`);
+      return false;
+    }
+
+    const fireContext = typeof sm._buildFireContext === 'function'
+      ? sm._buildFireContext(action)
+      : {};
+    await sm.fireByName(action.fire, fireContext);
+    logger.info(`Fired trigger action '${action.fire}' for ${triggerName}`);
+    return true;
+  }
+
+  if (action.end !== undefined) {
+    const command = normalizeTriggerEndCommand(action.end);
+    if (!command) {
+      logger.warn(`Trigger ${triggerName} has invalid end action '${action.end}'; use win or fail`);
+      return false;
+    }
+
+    await sm.handleCommand({ command });
+    logger.info(`Executed trigger end '${command}' for ${triggerName}`);
+    return true;
+  }
+
+  const rawMqttAction = action.publish || action.command === 'publish';
+  const zoneAction = Boolean(
+    action.zone
+    || action.zones
+    || ((action.command || action.publish) && (action.zone || action.zones))
+  );
+
+  if (rawMqttAction || zoneAction) {
+    await sm.executeCueAction(action, `trigger:${triggerName}`);
+    logger.info(`Executed trigger cue-style action for ${triggerName}`);
+    return true;
+  }
+
+  logger.warn(`Unsupported trigger action in ${triggerName}; use fire, end, zone/zones action, or raw MQTT publish`);
+  return false;
+}
+
+async function main(rawArgs = process.argv.slice(2)) {
+  const argv = parseCliArgs(rawArgs);
 
   if (argv.check) {
     const { validateEdnFile } = require('../tools/validate-edn');
@@ -546,10 +614,6 @@ async function main() {
 
   // The new AdapterRegistry will handle all adapter instantiation.
   // Legacy media registry is no longer needed.
-  // Store UI topics for any code that still needs them during transition
-  cfg.global = cfg.global || {};
-  cfg.global.mqtt = cfg.global.mqtt || {};
-  cfg.global.mqtt.uiTopics = uiTopics;
 
   const sm = new GameStateMachine({ cfg, mqtt });
   sm.init();
@@ -583,7 +647,7 @@ async function main() {
   // Wire logger warn/error events to MQTT warnings topic so UI/operators can be notified
   try {
     const { getWarningsTopic } = require('./engineUtils');
-    const warningsTopic = getWarningsTopic(cfg) || (cfg.global.mqtt && cfg.global.mqtt.uiTopics && cfg.global.mqtt.uiTopics.warnings);
+    const warningsTopic = getWarningsTopic(cfg);
 
     if (warningsTopic) {
       // Publish a human-readable warning when logger emits warn/error
@@ -762,42 +826,10 @@ async function main() {
     // Execute all actions for this trigger
     for (const action of actions) {
       try {
-        await executeAction(action, rule.name);
+        await executeTriggerAction(action, rule.name, { sm, log });
       } catch (error) {
         log.error(`Failed to execute action for trigger ${rule.name}:`, error);
       }
-    }
-  }
-
-  async function executeAction(action, triggerName) {
-    log.debug(`Executing action type: ${action.type} for trigger: ${triggerName}`);
-
-    switch (action.type) {
-      case 'mqtt':
-        mqtt.publish(action.topic, action.payload);
-        log.info(`Published MQTT: ${action.topic}`, action.payload);
-        break;
-
-      case 'game':
-        await sm.handleCommand({ command: action.command });
-        log.info(`Sent game command: ${action.command}`);
-        break;
-
-      // Removed device-specific action types; use generic zone/adapter commands via sequences or state machine
-
-      case 'cue':
-        // Fire a named cue via the state machine's cue dispatcher
-        sm.fireCueByName(action.cue);
-        log.info(`Fired cue: ${action.cue}`);
-        break;
-
-      case 'hint':
-        // Hint trigger actions are not supported via this path; use a 'cue' or 'game' command instead.
-        log.warn(`Unsupported 'hint' action type used in trigger: ${triggerName}. No action taken.`);
-        break;
-
-      default:
-        log.warn(`Unknown action type: ${action.type}`);
     }
   }
 
@@ -808,13 +840,9 @@ async function main() {
       const gameHints = (gameModes?.[mode]?.hints) || [];
       const entries = sm.getCombinedHints(gameHints) || [];
 
-      // Legacy compatibility: minimal list with id/type/label
-      const legacyHints = entries.map(h => ({ id: h.id, type: h.type || 'text', label: (h.displayText || h.id) }));
-
       const payload = {
         mode,
         entries,
-        hints: legacyHints,
         ts: Date.now()
       };
       mqtt.publish(uiTopics.hintsRegistry, payload, { retain: true });
@@ -1002,20 +1030,21 @@ async function main() {
           return;
         }
 
-        // Process valid commands (allow a few synonyms for compatibility)
+        // Normalize public MQTT commands to the canonical runtime command set.
         const commandName = normalizeCommand(payload);
+        const normalizedPayload = { ...payload, command: commandName };
         const cmdKey = commandName.toLowerCase();
         const startCommand = isStartCommand(commandName);
 
         if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session || !startCommand)) {
-          gameplayLogger.commandReceived(commandName, payload, topic, { source: 'mqtt' });
+          gameplayLogger.commandReceived(commandName, normalizedPayload, topic, { source: 'mqtt' });
         }
 
         if (startCommand && gameplayLogger && !gameplayLogger.canAcceptStart()) {
-          gameplayLogger.commandRejected(commandName, 'start_lockout_2s', payload, topic, { source: 'lockout' });
+          gameplayLogger.commandRejected(commandName, 'start_lockout_2s', normalizedPayload, topic, { source: 'lockout' });
           sm.publishEvent('command_validation_failed', {
             command: commandName,
-            payload,
+            payload: normalizedPayload,
             error: 'start_lockout_2s'
           });
           sm.publishWarning('start_lockout_2s', {
@@ -1025,31 +1054,31 @@ async function main() {
           return;
         }
 
-        if (cmdKey === 'listhints' || cmdKey === 'gethints' || cmdKey === 'hints') {
+        if (cmdKey === 'listhints') {
           log.info('Publishing hints registry');
           publishHintsRegistry();
-          sm.publishEvent('command_processed', { command: payload.command, topic });
+          sm.publishEvent('command_processed', { command: commandName, topic });
           if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-            gameplayLogger.commandApplied(commandName, payload, topic, { source: 'ui-helper' });
+            gameplayLogger.commandApplied(commandName, normalizedPayload, topic, { source: 'ui-helper' });
           }
-        } else if (cmdKey === 'getconfig' || cmdKey === 'config') {
+        } else if (cmdKey === 'getconfig') {
           log.info('Publishing full configuration');
           publishUiConfig();
           publishLightScenes();
-          sm.publishEvent('command_processed', { command: payload.command, topic });
+          sm.publishEvent('command_processed', { command: commandName, topic });
           if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-            gameplayLogger.commandApplied(commandName, payload, topic, { source: 'ui-helper' });
+            gameplayLogger.commandApplied(commandName, normalizedPayload, topic, { source: 'ui-helper' });
           }
-        } else if (payload.command === 'executeHint') {
-          const hintId = payload && (payload.id || payload.hintId || payload.hint);
+        } else if (commandName === 'executeHint') {
+          const hintId = normalizedPayload && normalizedPayload.id;
           if (!hintId) {
             if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-              gameplayLogger.commandRejected(commandName, 'missing_hint_id', payload, topic, { source: 'validation' });
+              gameplayLogger.commandRejected(commandName, 'missing_hint_id', normalizedPayload, topic, { source: 'validation' });
             }
-            sm.publishEvent('command_validation_failed', { command: 'executeHint', payload, error: 'missing_hint_id' });
+            sm.publishEvent('command_validation_failed', { command: 'executeHint', payload: normalizedPayload, error: 'missing_hint_id' });
             sm.publishWarning('executeHint_missing_id', {
-              message: 'executeHint command called without required id/hintId/hint parameter',
-              payload
+              message: 'executeHint command called without required id parameter',
+              payload: normalizedPayload
             });
             return;
           }
@@ -1059,11 +1088,11 @@ async function main() {
               sm.fireHint(hintId, 'manual');
               sm.publishEvent('command_processed', { command: 'executeHint', hintId, topic });
               if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-                gameplayLogger.commandApplied(commandName, payload, topic, { hintId });
+                gameplayLogger.commandApplied(commandName, normalizedPayload, topic, { hintId });
               }
             } catch (e) {
               if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-                gameplayLogger.commandRejected(commandName, e.message || 'execute_hint_failed', payload, topic, { hintId });
+                gameplayLogger.commandRejected(commandName, e.message || 'execute_hint_failed', normalizedPayload, topic, { hintId });
               }
               sm.publishEvent('command_execution_failed', { command: 'executeHint', hintId, error: e.message });
               sm.publishWarning('executeHint_failed', {
@@ -1074,19 +1103,19 @@ async function main() {
             }
           })();
         } else {
-          log.info(`Delegating command to state machine: ${JSON.stringify(payload)}`);
+          log.info(`Delegating command to state machine: ${JSON.stringify(normalizedPayload)}`);
           (async () => {
             try {
-              const result = await sm.handleCommand(payload);
+              const result = await sm.handleCommand(normalizedPayload);
               if (result === false) {
                 if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-                  gameplayLogger.commandRejected(commandName, 'state_machine_rejected', payload, topic, { result });
+                  gameplayLogger.commandRejected(commandName, 'state_machine_rejected', normalizedPayload, topic, { result });
                 }
                 return;
               }
 
               if (startCommand && gameplayLogger) {
-                const mode = inferStartMode(commandName, payload, cfg, sm);
+                const mode = inferStartMode(commandName, normalizedPayload, cfg, sm);
                 const gameplayDurationSec = getConfiguredGameplayDurationSeconds(cfg, mode);
                 gameplayLogger.beginPendingRun({
                   startCommand: commandName,
@@ -1096,22 +1125,22 @@ async function main() {
                   tsMs: Date.now()
                 });
               } else if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
-                gameplayLogger.commandApplied(commandName, payload, topic, { source: 'state_machine' });
+                gameplayLogger.commandApplied(commandName, normalizedPayload, topic, { source: 'state_machine' });
               }
             } catch (error) {
               if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session || startCommand)) {
-                gameplayLogger.commandRejected(commandName, error.message || 'state_machine_command_failed', payload, topic, { source: 'state_machine' });
+                gameplayLogger.commandRejected(commandName, error.message || 'state_machine_command_failed', normalizedPayload, topic, { source: 'state_machine' });
               }
 
               log.error('Error handling command:', error);
-              sm.publishEvent('command_execution_failed', { command: payload.command, payload, error: error.message });
+              sm.publishEvent('command_execution_failed', { command: commandName, payload: normalizedPayload, error: error.message });
               sm.publishWarning('state_machine_command_failed', {
-                message: `State machine failed to process command '${payload.command}': ${error.message}`,
-                command: payload.command,
+                message: `State machine failed to process command '${commandName}': ${error.message}`,
+                command: commandName,
                 error: error.message
               });
               sm.runErrorSequence('command_execution_failed', {
-                command: payload.command,
+                command: commandName,
                 error: error.message
               }).catch(() => { /* best effort */ });
             }
@@ -1281,12 +1310,17 @@ async function main() {
 
 module.exports = Object.assign(module.exports || {}, {
   main,
+  parseCliArgs,
   _publishMqttMetadata,
+  getConfiguredGameplayDurationSeconds,
   normalizeTriggerStrictMode,
   buildInputSourceMap,
   buildTriggerRules,
   getRulePhaseConstraint,
   doesTriggerConditionMatch,
+  normalizeCommand,
+  normalizeTriggerEndCommand,
+  executeTriggerAction,
   conditionEntryMatches,
   normalizeEventToken,
   getValueByPath

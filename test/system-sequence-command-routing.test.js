@@ -39,12 +39,14 @@ describe('System sequence command routing', () => {
     expect(calls[0][0]).toBe('restart-adapters');
   });
 
-  test('restart-adapters alias routes to restart-adapters sequence', () => {
+  test('restart-adapters alias is rejected by the state machine', async () => {
     const sm = createStateMachine();
-    sm.handleCommand({ command: 'restart-adapters' });
+    sm.publishWarning = jest.fn();
 
-    const calls = sm.sequenceRunner.runControlSequence.mock.calls;
-    expect(calls.length).toBe(1);
-    expect(calls[0][0]).toBe('restart-adapters');
+    const result = await sm.handleCommand({ command: 'restart-adapters' });
+
+    expect(result).toBe(false);
+    expect(sm.sequenceRunner.runControlSequence.mock.calls.length).toBe(0);
+    expect(sm.publishWarning).toHaveBeenCalledWith('unknown_command', expect.objectContaining({ command: 'restart-adapters' }));
   });
 });

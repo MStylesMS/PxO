@@ -77,6 +77,7 @@ PxO now enforces strict phase syntax:
   - Must use `:schedule "name-of-schedule"`
   - Duration is inherited from the named schedule definition (`:duration` or `:seconds` inside that schedule definition)
   - Phase-level `:duration`/`:seconds` is invalid and causes validation errors
+  - Schedules are phase-only containers; they cannot be nested inside triggers, sequences, hints, or other schedules
 - A phase cannot define both `:sequence` and `:schedule`
 
 Valid examples:
@@ -246,16 +247,28 @@ To keep trigger rules maintainable, define named input sources in `:inputs` and 
     :source :front-door
     :condition {:event "open"}
     :when-phase :gameplay
-    :actions [{:type :cue :cue :door-open-cue}]
+    :actions [{:fire "door-open-cue"}]
   }
 
   :gpio-open {
     :source :gpio-door
     :condition {:value "1"}
-    :actions [{:type :game :command "solve"}]
+    :actions [{:end "win"}]
   }
 }
 ```
+
+Trigger action rules:
+
+- `:actions` remains the ordered execution list for a trigger.
+- Each action entry uses the shared executable action syntax:
+  - `{:fire "name"}` to dispatch a named cue, sequence, or hint
+  - `{:zone "mirror" :command "setImage" :file "spell.png"}` for inline zone actions
+  - `{:zone "door-lock" :payload "1"}` for payload-only actions targeting an `mqtt-raw` zone
+  - `{:command "publish" :topic "paradox/test" :payload {...}}` for raw MQTT publish actions
+  - `{:end "win"}` or `{:end "fail"}` for phase-ending actions
+- Legacy typed trigger actions such as `{:type :cue ...}` and `{:type :game ...}` are no longer supported.
+- Schedules are phase-only. Trigger actions cannot use `:schedule`, and `:fire` must not target a named schedule.
 
 Compatibility notes:
 - Existing `:trigger {:topic "..."}` style rules remain supported.
@@ -338,6 +351,22 @@ Define zone adapters and MQTT topics:
 - `pfx-media` — Video/audio playback (ParadoxFX)
 - `pxc-clock` — Countdown timer UI (PxC clock surface)
 - `mqtt` — Generic MQTT passthrough zone (`{baseTopic}/commands`, `{baseTopic}/events`)
+- `mqtt-raw` — Raw MQTT payload zone (publishes `:payload`/`:message` directly to `:baseTopic`)
+
+Example raw device zones:
+
+```clojure
+:zones {
+  :suitcase {:type "mqtt" :baseTopic "paradox/agent22/suitcase"}
+  :door-lock {:type "mqtt-raw" :baseTopic "paradox/agent22/door-lock"}
+}
+
+:cues {
+  :unlock-door {:zone "door-lock" :payload "1"}
+  :lock-door   {:zone "door-lock" :payload "0"}
+  :arm-case    {:zone "suitcase" :command "arm" :code "1234"}
+}
+```
 
 ---
 
@@ -466,7 +495,7 @@ Timeline-based execution with explicit duration:
     :duration 45
     :timeline [
       ; Execute at T-45 seconds (start)
-      {:at 45 :cue :lights-red}
+      {:at 45 :fire :lights-red}
       
       ; Execute at T-40 seconds
       {:at 40 :zone "mirror" :command "playVideo" :file :intro-video}
@@ -479,14 +508,14 @@ Timeline-based execution with explicit duration:
       {:at 5 :zone "mirror" :command "showBrowser"}
       
       ; Execute at T-3 seconds (near end)
-      {:at 3 :cue :lights-green}
+      {:at 3 :fire :lights-green}
     ]
   }
   
   :gameplay-sequence {
     :duration 3600
     :timeline [
-      {:at 3600 :cue :lights-green}
+      {:at 3600 :fire :lights-green}
       {:at 3300 :zone "audio" :command "playAudioFX" :file "ambient.mp3" :loop true}
       ; ... more steps
     ]
@@ -502,7 +531,7 @@ Timeline-based execution with explicit duration:
 
 **1. Cue Execution**:
 ```clojure
-{:at 30 :cue :cue-name}
+{:at 30 :fire :cue-name}
 ```
 
 **2. Direct Command**:
@@ -517,7 +546,7 @@ Timeline-based execution with explicit duration:
 
 **4. Sub-Sequence**:
 ```clojure
-{:at 15 :fire-seq :other-sequence}
+{:at 15 :fire :other-sequence}
 ```
 
 **5. Browser Verification (Blocking)**:
@@ -658,7 +687,7 @@ Game mode variations with duration overrides:
 **Mode Selection**:
 ```bash
 # CLI flag
-node src/game.js --config game.edn --mode demo
+node src/game.js --edn game.edn --mode demo
 
 # Environment variable
 GAME_MODE=demo node src/game.js
@@ -720,7 +749,7 @@ Game-mode hint list behavior (`game-modes.<mode>.hints`):
 Notes:
 - `action` hints are reserved for a future feature. Current runtime behavior is warning-only (`hint_action_not_implemented`) and no action is executed.
 - Action hint syntax (future): `:my-action-hint {:type "action" :sequence "some-sequence" :text "Optional UI text"}`
-- Invoke hint definitions with `:hint`, not `:fire`. Example: `{:at 50 :hint :picture-cymbal-fx}`. PxO still accepts `:fire` for backward compatibility, but validation and runtime logs warn so configs can be migrated safely.
+- Use `:fire` for named cues, sequences, and hints. Example: `{:at 50 :fire :picture-cymbal-fx}`. Keep names unique within a scope so resolution stays unambiguous.
 - Text and sequence hints resolve only from `:command-sequences` (no fallback to `:system-sequences`).
 - Sequence hints may provide template values either directly on the hint or under `:parameters {}`.
 - Reserved built-ins for template substitution are `text` and `duration`.
@@ -808,10 +837,10 @@ Variables are expanded at runtime from context (hint parameters, sequence parame
     :intro {
       :duration 30
       :timeline [
-        {:at 30 :cue :lights-red}
+        {:at 30 :fire :lights-red}
         {:at 25 :zone "mirror" :command "playVideo" :file :intro-video}
-        {:at 5 :cue :show-clock}
-        {:at 3 :cue :lights-green}
+        {:at 5 :fire :show-clock}
+        {:at 3 :fire :lights-green}
       ]
     }
   }
@@ -854,6 +883,7 @@ Common validation errors:
 - Timeline steps without `:at` field
 - Duplicate hint names within same map scope
 - Invalid keyword references
+- Named dispatch must use `:fire` rather than `:cue`, `:hint`, `:play-hint`, or `:fire-seq`
 
 ---
 
@@ -878,13 +908,13 @@ Common validation errors:
     :duration 45
     :timeline [
       ; Phase 1: Lights dim (T=0)
-      {:at 45 :cue :lights-dim}
+      {:at 45 :fire :lights-dim}
       
       ; Phase 2: Intro video starts (T=5)
       {:at 40 :zone "mirror" :command "playVideo" :file :intro-video}
       
       ; Phase 3: Show clock UI (T=40)
-      {:at 5 :cue :show-clock}
+      {:at 5 :fire :show-clock}
     ]
   }
 }
@@ -898,8 +928,8 @@ Common validation errors:
   :stop-all [{:zones ["mirror" "audio"] :command "stopAudio"}]
 }
 :sequences {
-  :intro {:timeline [{:at 10 :cue :stop-all}]}
-  :gameplay {:timeline [{:at 5 :cue :stop-all}]}
+  :intro {:timeline [{:at 10 :fire :stop-all}]}
+  :gameplay {:timeline [{:at 5 :fire :stop-all}]}
 }
 
 ; Avoid (duplicated)

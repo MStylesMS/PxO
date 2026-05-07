@@ -1,7 +1,7 @@
 const GameStateMachine = require('../src/stateMachine');
 
 describe('GameStateMachine fireCueByName', () => {
-    let gsm, mqtt, mirrorAdapter, lightsAdapter;
+    let gsm, mqtt, mirrorAdapter, lightsAdapter, rawAdapter;
 
     beforeEach(() => {
         mqtt = { publish: jest.fn() };
@@ -14,25 +14,14 @@ describe('GameStateMachine fireCueByName', () => {
                         'logo-solved': 'images/Agent22-green-white.png'
                     },
                     cues: {
-                        testcue: {
-                            actions: [
-                                { zone: 'mirror', play: { video: 'test.mp4' } },
-                                { publish: { topic: 'paradox/test', payload: 'hello' } }
-                            ]
-                        },
-                        imagecue: {
-                            actions: [
-                                { zone: 'mirror', command: 'setImage', file: 'logo-solved' }
-                            ]
-                        },
-                        timelinecue: {
-                            duration: 10,
-                            timeline: [
-                                { at: 10, actions: [{ zone: 'mirror', play: { video: 'start.mp4' } }] },
-                                { at: 5, actions: [{ publish: { topic: 'paradox/mid', payload: 'midway' } }] },
-                                { at: 0, actions: [{ zone: 'lights', scene: 'bright' }] }
-                            ]
-                        }
+                        testcue: [
+                            { zone: 'mirror', command: 'playVideo', file: 'test.mp4' },
+                            { command: 'publish', topic: 'paradox/test', payload: 'hello' }
+                        ],
+                        mqttcue: { command: 'publish', topic: 'paradox/test/raw', payload: { ok: true } },
+                        rawzonecue: { zone: 'door-lock', payload: '1' },
+                        imagecue: { zone: 'mirror', command: 'setImage', file: 'logo-solved' },
+                        scenecue: { zone: 'lights', command: 'scene', name: 'bright' }
                     }
                 }
             },
@@ -40,16 +29,19 @@ describe('GameStateMachine fireCueByName', () => {
         });
 
         // Inject mock adapters via zones registry
-        mirrorAdapter = { playVideo: jest.fn() };
-        lightsAdapter = { setScene: jest.fn() };
+        mirrorAdapter = { playVideo: jest.fn(), zoneType: 'pfx-media' };
+        lightsAdapter = { scene: jest.fn(), zoneType: 'mqtt-lights' };
+        rawAdapter = { zoneType: 'mqtt-raw' };
         gsm.zones.getZone = (zone) => {
             if (zone === 'mirror') return mirrorAdapter;
             if (zone === 'lights') return lightsAdapter;
+            if (zone === 'door-lock') return rawAdapter;
             return null;
         };
         gsm.zones.validateZone = (zone) => {
             if (zone === 'mirror') return mirrorAdapter;
             if (zone === 'lights') return lightsAdapter;
+            if (zone === 'door-lock') return rawAdapter;
             return null;
         };
         gsm.zones.execute = jest.fn();
@@ -57,23 +49,13 @@ describe('GameStateMachine fireCueByName', () => {
 
     it('should dispatch video and publish actions', async () => {
         await gsm.fireCueByName('testcue');
-        expect(mirrorAdapter.playVideo).toHaveBeenCalledWith('test.mp4', { volumeAdjust: undefined });
+        expect(gsm.zones.execute).toHaveBeenCalledWith('mirror', 'playVideo', { file: 'test.mp4' });
         expect(mqtt.publish).toHaveBeenCalledWith('paradox/test', 'hello');
     });
 
-    it('should schedule and execute timeline actions', async () => {
-        jest.useFakeTimers();
-        await gsm.fireCueByName('timelinecue');
-        // Run pending timers (delay 0ms for at=10)
-        jest.runOnlyPendingTimers();
-        expect(mirrorAdapter.playVideo).toHaveBeenCalledWith('start.mp4', { volumeAdjust: undefined });
-        // Advance to 5s (5000ms delay for at=5)
-        jest.advanceTimersByTime(5000);
-        expect(mqtt.publish).toHaveBeenCalledWith('paradox/mid', 'midway');
-        // Advance to 10s (10000ms delay for at=0)
-        jest.advanceTimersByTime(5000);
-        expect(lightsAdapter.setScene).toHaveBeenCalledWith('bright');
-        jest.useRealTimers();
+    it('should dispatch raw mqtt cues declared with publish command', async () => {
+        await gsm.fireCueByName('mqttcue');
+        expect(mqtt.publish).toHaveBeenCalledWith('paradox/test/raw', JSON.stringify({ ok: true }));
     });
 
     it('should resolve media aliases from global.media for command actions', async () => {
@@ -81,5 +63,15 @@ describe('GameStateMachine fireCueByName', () => {
         expect(gsm.zones.execute).toHaveBeenCalledWith('mirror', 'setImage', {
             file: 'images/Agent22-green-white.png'
         });
+    });
+
+    it('should dispatch direct scene commands', async () => {
+        await gsm.fireCueByName('scenecue');
+        expect(gsm.zones.execute).toHaveBeenCalledWith('lights', 'scene', { name: 'bright' });
+    });
+
+    it('should dispatch payload-only mqtt-raw zone cues without a command key', async () => {
+        await gsm.fireCueByName('rawzonecue');
+        expect(gsm.zones.execute).toHaveBeenCalledWith('door-lock', undefined, { payload: '1' });
     });
 });

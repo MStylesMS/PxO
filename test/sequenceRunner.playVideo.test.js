@@ -17,32 +17,32 @@ function makeCfg() {
     };
 }
 
-(function run() {
-    const mqtt = makeMockMqtt();
-    const zonesCfg = {
-        picture: { type: 'pfx-media', 'base-topic': 'paradox/houdini/picture' }
-    };
-    const registry = new AdapterRegistry(mqtt, zonesCfg);
+describe('SequenceRunner playVideo integration', () => {
+    test('executes playVideo steps through the PFX adapter', async () => {
+        const mqtt = makeMockMqtt();
+        const zonesCfg = {
+            picture: { type: 'pfx-media', 'base-topic': 'paradox/houdini/picture' }
+        };
+        const registry = new AdapterRegistry(mqtt, zonesCfg);
 
-    const calls = [];
-    // Monkey-patch picture.playVideo to capture calls and args
-    const picture = registry.getZone('picture');
-    const orig = picture.playVideo.bind(picture);
-    picture.playVideo = (file, opts) => { calls.push({ file, opts }); orig(file, opts); };
+        const calls = [];
+        const picture = registry.getZone('picture');
+        const orig = picture.playVideo.bind(picture);
+        picture.playVideo = (file, opts) => {
+            calls.push({ file, opts });
+            orig(file, opts);
+        };
 
-    const runner = new SequenceRunner({ cfg: makeCfg(), clock: {}, zones: registry, mqtt, lights: {} });
+        const runner = new SequenceRunner({ cfg: makeCfg(), clock: {}, zones: registry, mqtt, lights: {} });
+        const seq = {
+            meta: { description: 'test' },
+            sequence: [{ zone: 'picture', command: 'playVideo', file: 'intro.mp4', volumeAdjust: -5 }]
+        };
 
-    const seq = {
-        meta: { description: 'test' }, sequence: [
-            { step: 1, command: 'playVideo', targets: [{ zone: 'picture', file: 'intro.mp4', volumeAdjust: -5 }] }
-        ]
-    };
-
-    runner.runInlineSequence('inline-playVideo', seq, { gameMode: 'hc-demo' }).then(res => {
-        if (!res.ok) throw new Error('sequence failed');
+        const res = await runner.runInlineSequence('inline-playVideo', seq, { gameMode: 'hc-demo' });
+        expect(res.ok).toBe(true);
         assert.equal(calls.length, 1, 'picture.playVideo should be called once');
         assert.equal(calls[0].file, 'intro.mp4');
         assert.equal(calls[0].opts.volumeAdjust, -5);
-        console.log('sequenceRunner.playVideo.test.js PASS');
-    }).catch(err => { console.error(err); process.exit(1); });
-})();
+    });
+});

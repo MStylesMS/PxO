@@ -12,7 +12,7 @@ describe('Unified Sequence and Schedule System', () => {
 
     test('resolves global sequence reference', () => {
         const config = {
-            global: { mqtt: { 'game-topic': 'game' }, sequences: { 'test-sequence': { sequence: [{ step: 1, command: 'showBrowser' }] } } },
+            global: { mqtt: { 'game-topic': 'game' }, 'system-sequences': { 'test-sequence': { sequence: [{ command: 'showBrowser' }] } } },
             game: {}
         };
         const sm = new StateMachine({ cfg: config, mqtt: { publish: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { } }, lights: { scene: () => { } } });
@@ -22,13 +22,13 @@ describe('Unified Sequence and Schedule System', () => {
     });
 
     test('handles inline sequence array', () => {
-        const inline = [{ step: 1, command: 'showBrowser' }];
+        const inline = [{ command: 'showBrowser' }];
         const resolved = stateMachine.sequenceRunner.resolveSequence(inline, null);
         assert(Array.isArray(resolved.sequence) && resolved.sequence.length === 1, 'inline resolution failed');
     });
 
     test('executes step with wait property', async () => {
-        const seqDef = { sequence: [{ step: 1, command: 'fadeInClock', duration: 0.01, wait: true }] };
+        const seqDef = { sequence: [{ command: 'fadeInClock', duration: 0.01, wait: true }] };
         const res = await stateMachine.sequenceRunner.runInlineSequence('inline-test', seqDef, {});
         assert(res.ok === true, 'sequence did not complete successfully');
     });
@@ -50,12 +50,24 @@ describe('Unified Sequence and Schedule System', () => {
         sm.gameType = 'test';
         sm.sequenceRunner.resolveSequence = () => ({ duration: 3, schedule: [{ at: 3, fire: 'x' }] });
         let executedSchedule = null;
-        sm.executeSchedule = async (schedule, duration) => { executedSchedule = { schedule, duration }; };
+        sm.registerPhaseSchedule = (phaseKey, schedule, duration) => { executedSchedule = { phaseKey, schedule, duration }; };
 
         await sm.executePhase('phase-2', { schedule: 'test-schedule' });
         assert(!!executedSchedule, 'expected schedule to execute');
+        assert(executedSchedule.phaseKey === 'phase-2', 'expected schedule to register against the phase key');
         assert(executedSchedule.duration === 3, 'expected schedule duration to come from schedule definition');
         assert(Array.isArray(executedSchedule.schedule), 'expected schedule array');
+    });
+
+    test('fireByName does not execute schedule definitions directly', async () => {
+        const sm = new StateMachine({ cfg, mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { }, pause: () => { }, resume: () => { }, setTime: () => { } }, lights: { scene: () => { } }, media: {} });
+        sm.gameType = 'test';
+        sm.sequenceRunner.resolveSequence = () => ({ duration: 5, schedule: [{ at: 5, fire: 'x' }] });
+        sm.fireSequenceByName = jest.fn();
+
+        await sm.fireByName('phase-only-schedule');
+
+        assert(sm.fireSequenceByName.mock.calls.length === 0, 'expected schedule definitions to be rejected by fireByName');
     });
 
     test('calculatePhaseDuration enforces strict source of duration', () => {
@@ -71,6 +83,29 @@ describe('Unified Sequence and Schedule System', () => {
 
         const schedDuration = sm.calculatePhaseDuration({ schedule: 'sched-ok' }, 'gameplay');
         assert(schedDuration === 42, 'expected schedule phase duration from schedule definition');
+    });
+
+    test('getPhaseDuration only reads canonical durations map', () => {
+        const localCfg = {
+            global: { mqtt: { 'game-topic': 'game' }, settings: {} },
+            game: {
+                test: {
+                    durations: { gameplay: 60 },
+                    gameplay: { duration: 999 }
+                },
+                legacyOnly: {
+                    gameplay: { duration: 999 }
+                }
+            }
+        };
+
+        const sm = new StateMachine({ cfg: localCfg, mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { }, pause: () => { }, resume: () => { }, setTime: () => { } }, lights: { scene: () => { } }, media: {} });
+
+        sm.gameType = 'test';
+        assert(sm.getPhaseDuration('gameplay') === 60, 'expected canonical durations map to be used');
+
+        sm.gameType = 'legacyOnly';
+        assert(sm.getPhaseDuration('gameplay') === 0, 'expected legacy per-phase duration fallback to be ignored');
     });
 
     test('validatePhaseStructure flags forbidden sequence/schedule combinations and missing duration', () => {

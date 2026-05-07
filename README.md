@@ -103,15 +103,15 @@ node src/game.js --edn game.edn --mode demo
 ```bash
 # Start game
 mosquitto_pub -h localhost -t 'paradox/game/commands' \
-  -m '{"command":"startGame","mode":"demo"}'
+  -m '{"command":"start","mode":"demo"}'
 
 # Pause game
 mosquitto_pub -h localhost -t 'paradox/game/commands' \
-  -m '{"command":"pauseGame"}'
+  -m '{"command":"pause"}'
 
 # Reset game
 mosquitto_pub -h localhost -t 'paradox/game/commands' \
-  -m '{"command":"resetGame"}'
+  -m '{"command":"reset"}'
 ```
 
 ## Architecture
@@ -147,6 +147,7 @@ ready → intro → gameplay → paused/solved/failed → sleeping
 - 💻 **[CLI Reference](docs/CLI.md)** — Command line options and usage
 - ⚙️ **[EDN Configuration](docs/CONFIG_EDN.md)** — EDN config reference
 - 🛠️ **[INI Configuration](docs/CONFIG_INI.md)** — System settings reference
+- 🧪 **[Testing Guide](docs/TESTING.md)** — Jest entry points, focused runs, and validation workflow
 - 🚀 **[Setup & Deployment](docs/SETUP.md)** — Installation and systemd services
 - 🤖 **[AI Agent Instructions](docs/AI_AGENT_INSTRUCTIONS_PXO.md)** — Development patterns
 
@@ -249,7 +250,7 @@ After=network.target mosquitto.service
 Type=simple
 User=paradox
 WorkingDirectory=/opt/paradox/pxo
-ExecStart=/usr/bin/node src/game.js --config /path/to/game.edn
+ExecStart=/usr/bin/node src/game.js --edn /path/to/game.edn
 Restart=always
 
 [Install]
@@ -268,7 +269,7 @@ See [SETUP.md](docs/SETUP.md) for complete deployment instructions.
 ### Game Control
 
 ```
-paradox/game/commands      # Game control commands (startGame, pauseGame, etc.)
+paradox/game/commands      # Game control commands (start, pause, reset, etc.)
 paradox/game/state         # Current game state (ready, intro, gameplay, etc.)
 paradox/game/state         # Also carries lifecycle/heartbeat updates
 ```
@@ -286,11 +287,23 @@ See [MQTT_API.md](docs/MQTT_API.md) for complete API reference.
 ## Testing
 
 ```bash
-# Monitor MQTT topics
+# Run the full Jest suite
+npm test
+
+# Run unit-oriented suites only
+npm run test:unit
+
+# Run integration smoke suites
+npm run test:integration
+
+# Run a focused file
+npm test -- --runTestsByPath test/discovery.test.js
+
+# Monitor MQTT topics during manual testing
 mosquitto_sub -h localhost -t 'paradox/game/#' -v
 
-# Test game flow
-node src/game.js --config examples/demo-game.edn --mode demo
+# Manual game-flow probe
+node src/game.js --edn examples/demo-game.edn --mode demo
 ```
 
 ## Raspberry Pi Support

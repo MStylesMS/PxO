@@ -251,8 +251,6 @@ class PfxAdapterBase {
   }
   playAudioFX(file, options = {}) {
     const command = { command: 'playAudioFX', file };
-    // Backward compatibility for older PFx consumers still reading `audio`.
-    command.audio = file;
     // Absolute volume takes priority over relative adjustments
     if (options.volume !== undefined) {
       command.volume = options.volume;
@@ -266,8 +264,6 @@ class PfxAdapterBase {
   }
   playSpeech(file, options = {}) {
     const command = { command: 'playSpeech', file };
-    // Backward compatibility for older PFx consumers still reading `audio`.
-    command.audio = file;
     // Absolute volume takes priority over relative adjustments
     if (options.volume !== undefined) {
       command.volume = options.volume;

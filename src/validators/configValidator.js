@@ -11,6 +11,7 @@
 
 class ConfigValidator {
     constructor() {
+        this.config = null;
         this.errors = [];
         this.warnings = [];
         this.globalHintIds = new Set();
@@ -20,6 +21,7 @@ class ConfigValidator {
      * Main validation entry point
      */
     validate(config) {
+        this.config = config;
         this.errors = [];
         this.warnings = [];
         this.globalHintIds = this.collectHintIds(config?.global?.hints);
@@ -61,20 +63,16 @@ class ConfigValidator {
         return new Set(Object.keys(hints).filter(name => typeof name === 'string' && name.length > 0));
     }
 
-    isDeprecatedFireHint(name) {
-        return typeof name === 'string' && this.globalHintIds.has(name);
-    }
-
-    warnDeprecatedFireHint(name, context) {
-        this.addWarning(`Hint '${name}' is triggered via :fire; use :hint instead`, context);
-    }
-
     /**
      * Validate global configuration section
      */
     validateGlobalConfig(global) {
         if (global.hints) {
             this.validateGlobalHints(global.hints, global, 'global');
+        }
+
+        if (global.triggers) {
+            this.validateTriggers(global.triggers, 'global.triggers');
         }
 
         // Validate cues
@@ -428,16 +426,10 @@ class ConfigValidator {
      * Validate individual cue command
      */
     validateCueCommand(cmd, context) {
-        // Raw MQTT commands are allowed without zones
-        if (cmd.type === 'mqtt') {
-            // Validate MQTT command structure
-            if (!cmd.topic) {
-                this.addError(`Raw MQTT command in ${context} must specify 'topic'`);
-            }
-            if (!cmd.payload) {
-                this.addError(`Raw MQTT command in ${context} must specify 'payload'`);
-            }
-            return; // Skip zone validation for MQTT commands
+        // Raw MQTT commands are allowed without zones.
+        if (this.isRawMqttCommand(cmd)) {
+            this.validateRawMqttCommand(cmd, context);
+            return;
         }
 
         // Must have zone or zones for regular commands
@@ -446,9 +438,24 @@ class ConfigValidator {
             return;
         }
 
+        const isMqttRawZoneAction = this.targetsOnlyMqttRawZones(cmd);
+
         // Must have command
-        if (!cmd.command && !cmd.play && !cmd.scene) {
-            this.addError(`Command in ${context} must specify 'command', 'play', or 'scene'`);
+        if (!cmd.command && !isMqttRawZoneAction) {
+            this.addError(`Command in ${context} must specify 'command'`);
+        }
+
+        if (isMqttRawZoneAction) {
+            const payload = cmd.payload !== undefined ? cmd.payload : cmd.message;
+            if (payload === undefined) {
+                this.addError(`mqtt-raw command in ${context} must specify 'payload' or 'message'`);
+            }
+            if (cmd.command !== undefined) {
+                this.addError(`mqtt-raw command in ${context} must not specify 'command'`);
+            }
+            if (cmd.topic !== undefined) {
+                this.addError(`mqtt-raw command in ${context} must not specify 'topic' - use the zone base-topic`);
+            }
         }
 
         // Prohibited timing/blocking keywords in cues
@@ -464,6 +471,46 @@ class ConfigValidator {
                 this.addError(`Cue command in ${context} cannot contain '${key}' - use sequences for timing/blocking`);
             }
         });
+    }
+
+    isRawMqttCommand(cmd) {
+        return Boolean(
+            cmd
+            && typeof cmd === 'object'
+            && (
+                cmd.command === 'publish'
+                || cmd.publish
+            )
+        );
+    }
+
+    validateRawMqttCommand(cmd, context) {
+        const publish = cmd.publish && typeof cmd.publish === 'object' ? cmd.publish : null;
+        const topic = publish ? publish.topic : cmd.topic;
+        const payload = publish
+            ? publish.payload
+            : (cmd.payload !== undefined ? cmd.payload : cmd.message);
+
+        if (!topic || typeof topic !== 'string') {
+            this.addError(`Raw MQTT command in ${context} must specify string 'topic'`);
+        }
+
+        if (payload === undefined) {
+            this.addError(`Raw MQTT command in ${context} must specify 'payload' or 'message'`);
+        }
+    }
+
+    getConfiguredZone(zoneName) {
+        return this.config?.global?.mqtt?.zones?.[zoneName] || null;
+    }
+
+    targetsOnlyMqttRawZones(cmd) {
+        const zoneNames = Array.isArray(cmd?.zones)
+            ? cmd.zones
+            : (cmd?.zone ? [cmd.zone] : []);
+
+        return zoneNames.length > 0
+            && zoneNames.every(zoneName => this.getConfiguredZone(zoneName)?.type === 'mqtt-raw');
     }
 
     /**
@@ -544,7 +591,7 @@ class ConfigValidator {
         const stepTypes = this.getStepDiscriminators(step);
 
         if (stepTypes.length === 0) {
-            this.addError(`Sequence step in ${context} must have a valid discriminator (zone+command, fire-cue, fire-seq, fire, hint, wait)`);
+            this.addError(`Sequence step in ${context} must have a valid discriminator (zone action, fire, wait)`);
         } else if (stepTypes.length > 1) {
             this.addError(`Sequence step in ${context} has multiple discriminators: ${stepTypes.join(', ')}`);
         }
@@ -558,26 +605,20 @@ class ConfigValidator {
 
         if (step.fire) {
             if (typeof step.fire !== 'string') {
-                this.addError(`Fire step in ${context} must reference a string cue/sequence name`);
-            } else if (this.isDeprecatedFireHint(step.fire)) {
-                this.warnDeprecatedFireHint(step.fire, context);
+                this.addError(`Fire step in ${context} must reference a string named target`);
             }
         }
 
-        if (step['fire-cue']) {
-            if (typeof step['fire-cue'] !== 'string') {
-                this.addError(`Fire-cue step in ${context} must reference a string cue name`);
-            }
+        if (step.hint !== undefined) {
+            this.addError(`Sequence step in ${context} uses unsupported hint key - use fire`);
         }
 
-        if (step['fire-seq']) {
-            if (typeof step['fire-seq'] !== 'string') {
-                this.addError(`Fire-seq step in ${context} must reference a string sequence name`);
-            }
+        if (step['fire-cue'] !== undefined) {
+            this.addError(`Sequence step in ${context} uses unsupported fire-cue key - use fire`);
         }
 
-        if (step.hint !== undefined && typeof step.hint !== 'string') {
-            this.addError(`Hint step in ${context} must reference a string hint id`);
+        if (step['fire-seq'] !== undefined) {
+            this.addError(`Sequence step in ${context} uses unsupported fire-seq key - use fire`);
         }
 
         if (step.zone || step.zones) {
@@ -667,6 +708,105 @@ class ConfigValidator {
         });
     }
 
+    validateTriggers(triggers, context) {
+        if (Array.isArray(triggers)) {
+            triggers.forEach((rule, index) => {
+                this.validateTriggerRule(rule, `${context}[${index}]`, rule?.name || `trigger-${index}`);
+            });
+            return;
+        }
+
+        if (!triggers || typeof triggers !== 'object') {
+            this.addError(`Triggers in ${context} must be an object or array`);
+            return;
+        }
+
+        if (Array.isArray(triggers.escapeRoomRules)) {
+            triggers.escapeRoomRules.forEach((rule, index) => {
+                this.validateTriggerRule(rule, `${context}.escapeRoomRules[${index}]`, rule?.name || `trigger-${index}`);
+            });
+            return;
+        }
+
+        Object.entries(triggers).forEach(([triggerName, triggerDef]) => {
+            if (triggerName.startsWith('_')) return;
+            this.validateTriggerRule(triggerDef, `${context}.${triggerName}`, triggerName);
+        });
+    }
+
+    validateTriggerRule(rule, context, triggerName) {
+        if (!rule || typeof rule !== 'object') {
+            this.addError(`Trigger '${triggerName}' in ${context} must be an object`);
+            return;
+        }
+
+        const whenPhase = rule['when-phase'] ?? rule.whenPhase ?? rule.trigger?.['when-phase'] ?? rule.trigger?.whenPhase;
+        if (whenPhase !== undefined) {
+            const validWhenPhase = typeof whenPhase === 'string'
+                || (Array.isArray(whenPhase) && whenPhase.every(phase => typeof phase === 'string'));
+            if (!validWhenPhase) {
+                this.addError(`Trigger '${triggerName}' in ${context} must use string or string-array when-phase guard`, `${context}.when-phase`);
+            }
+        }
+
+        if (!Array.isArray(rule.actions)) {
+            this.addError(`Trigger '${triggerName}' in ${context} must define :actions as an array`, `${context}.actions`);
+            return;
+        }
+
+        if (rule.actions.length === 0) {
+            this.addWarning(`Trigger '${triggerName}' in ${context} has no actions`, `${context}.actions`);
+            return;
+        }
+
+        rule.actions.forEach((action, index) => {
+            this.validateTriggerAction(action, `${context}.actions[${index}]`);
+        });
+    }
+
+    validateTriggerAction(action, context) {
+        if (!action || typeof action !== 'object') {
+            this.addError(`Trigger action in ${context} must be an object`);
+            return;
+        }
+
+        const discriminators = this.getTriggerActionDiscriminators(action);
+
+        if (discriminators.length === 0) {
+            this.addError(`Trigger action in ${context} must have a valid discriminator (fire, zone action, raw MQTT, end)`);
+        } else if (discriminators.length > 1) {
+            this.addError(`Trigger action in ${context} has multiple discriminators: ${discriminators.join(', ')}`);
+        }
+
+        this.validateTriggerActionProhibitedSyntax(action, context);
+
+        if (action.fire !== undefined && typeof action.fire !== 'string') {
+            this.addError(`Trigger action ${context} fire must reference a string named target`);
+        }
+
+        if (action.end !== undefined) {
+            const normalized = String(action.end).trim().toLowerCase();
+            const allowed = new Set(['win', 'solve', 'solved', 'sovled', 'fail', 'failed', 'lose', 'loss']);
+            if (!allowed.has(normalized)) {
+                this.addError(`Trigger action ${context} end must be one of: solve, fail (win is also accepted as an alias for solve)`);
+            }
+        }
+
+        if (this.isRawMqttCommand(action)) {
+            this.validateRawMqttCommand(action, context);
+        }
+
+        const cueStyleAction = Boolean(
+            action.zone
+            || action.zones
+            || ((action.command || action.publish) && (action.zone || action.zones))
+        );
+
+        if (cueStyleAction) {
+            this.validateCueCommand(action, context);
+        }
+    }
+
     /**
      * Validate schedule entries
      */
@@ -706,7 +846,7 @@ class ConfigValidator {
         const discriminators = this.getScheduleDiscriminators(command);
 
         if (discriminators.length === 0) {
-            this.addError(`Schedule entry in ${context} must have a valid discriminator (fire-cue, fire-seq, fire, hint, play-hint, zone+command, end)`);
+            this.addError(`Schedule entry in ${context} must have a valid discriminator (fire, zone+command, end)`);
         } else if (discriminators.length > 1) {
             this.addError(`Schedule entry in ${context} has multiple discriminators: ${discriminators.join(', ')}`);
         }
@@ -717,38 +857,28 @@ class ConfigValidator {
         // Validate command content
         if (command.fire) {
             if (typeof command.fire !== 'string') {
-                this.addError(`Schedule entry ${context} fire must reference a string cue/sequence name`);
-            } else if (this.isDeprecatedFireHint(command.fire)) {
-                this.warnDeprecatedFireHint(command.fire, context);
+                this.addError(`Schedule entry ${context} fire must reference a string named target`);
             }
         }
 
-        if (command['fire-cue']) {
-            if (typeof command['fire-cue'] !== 'string') {
-                this.addError(`Schedule entry ${context} fire-cue must reference a string cue name`);
-            }
+        if (command.hint !== undefined) {
+            this.addError(`Schedule entry ${context} uses unsupported hint key - use fire`);
         }
 
-        if (command['fire-seq']) {
-            if (typeof command['fire-seq'] !== 'string') {
-                this.addError(`Schedule entry ${context} fire-seq must reference a string sequence name`);
-            }
+        if (command.playHint !== undefined) {
+            this.addError(`Schedule entry ${context} uses unsupported playHint key - use fire`);
         }
 
-        if (command.hint !== undefined && typeof command.hint !== 'string') {
-            this.addError(`Schedule entry ${context} hint must reference a string hint id`);
-        }
-
-        if (command.playHint !== undefined && typeof command.playHint !== 'string') {
-            this.addError(`Schedule entry ${context} playHint must reference a string hint id`);
-        }
-
-        if (command['play-hint'] !== undefined && typeof command['play-hint'] !== 'string') {
-            this.addError(`Schedule entry ${context} play-hint must reference a string hint id`);
+        if (command['play-hint'] !== undefined) {
+            this.addError(`Schedule entry ${context} uses unsupported play-hint key - use fire`);
         }
 
         if (command.zone || command.zones) {
             this.validateCueCommand(command, context);
+        }
+
+        if (this.isRawMqttCommand(command)) {
+            this.validateRawMqttCommand(command, context);
         }
     }
 
@@ -758,9 +888,13 @@ class ConfigValidator {
     validateScheduleProhibitedSyntax(command, context) {
         // Prohibited execution syntax that should generate errors
         const prohibited = [
-            { key: 'cue', replacement: 'fire-cue' },
-            { key: 'sequence', replacement: 'fire-seq' },
-            { key: 'seq', replacement: 'fire-seq' }
+            { key: 'cue', replacement: 'fire' },
+            { key: 'sequence', replacement: 'fire' },
+            { key: 'seq', replacement: 'fire' },
+            { key: 'fireCue', replacement: 'fire' },
+            { key: 'fireSeq', replacement: 'fire' },
+            { key: 'fire-cue', replacement: 'fire' },
+            { key: 'fire-seq', replacement: 'fire' }
         ];
 
         prohibited.forEach(({ key, replacement }) => {
@@ -769,13 +903,13 @@ class ConfigValidator {
             }
         });
 
-        // Warn about deprecated :commands arrays
+        if (command.schedule !== undefined) {
+            this.addError(`Schedule entry ${context} cannot execute nested schedules - schedules are phase-only`);
+        }
+
+        // Reject legacy :commands arrays in schedule entries.
         if (command.commands) {
-            if (Array.isArray(command.commands) && command.commands.length > 1) {
-                this.addWarning(`Schedule entry ${context} has multiple commands - consider creating a sequence`);
-            } else {
-                this.addWarning(`Schedule entry ${context} uses deprecated :commands array - use inline command syntax`);
-            }
+            this.addError(`Schedule entry ${context} uses unsupported :commands array - use inline command syntax or a named sequence`);
         }
     }
 
@@ -796,11 +930,12 @@ class ConfigValidator {
      * Validate name uniqueness within a single scope
      * 
      * IMPORTANT: This validates WITHIN-SCOPE uniqueness only.
-     * - Checks that cues and sequences don't have duplicate names in the SAME scope
+    * - Checks that cues, sequences, and hints don't have duplicate names in the SAME scope
      * - Does NOT check cross-scope (e.g., global vs game-mode) - those are allowed overrides
      * 
      * Example of what this CATCHES (ERROR):
-     *   global.cues.intro + global.sequences.intro = DUPLICATE (same scope)
+    *   global.cues.intro + global.sequences.intro = DUPLICATE (same scope)
+    *   global.hints.intro + global.cues.intro = DUPLICATE (same scope)
      * 
      * Example of what this ALLOWS (valid override):
      *   global.cues.intro + game-modes.hc-demo.cues.intro = OK (different scopes, local wins)
@@ -820,6 +955,11 @@ class ConfigValidator {
             Object.keys(config.cues).forEach(name => {
                 registerName(name, `${context}.cues.${name}`);
             });
+        }
+
+        // Check hint names in this scope.
+        if (config.hints) {
+            this.collectHintNames(config.hints, `${context}.hints`, registerName);
         }
 
         // Check sequence names in this scope (may be nested or flat)
@@ -842,10 +982,31 @@ class ConfigValidator {
             if (locations.length > 1) {
                 this.addError(
                     `Duplicate name '${name}' within ${context} scope found at: ${locations.join(', ')}. ` +
-                    `Cue and sequence names must be unique within the same scope (but can override across scopes).`
+                    `Cue, sequence, and hint names must be unique within the same scope (but can override across scopes).`
                 );
             }
         });
+    }
+
+    collectHintNames(hints, basePath, registerName) {
+        if (!hints) return;
+
+        if (Array.isArray(hints)) {
+            hints.forEach((hint, index) => {
+                if (!hint || typeof hint !== 'object') return;
+                const hintId = typeof hint.id === 'string' ? hint.id : null;
+                if (hintId) {
+                    registerName(hintId, `${basePath}[${index}].id`);
+                }
+            });
+            return;
+        }
+
+        if (typeof hints === 'object') {
+            Object.keys(hints).forEach(name => {
+                registerName(name, `${basePath}.${name}`);
+            });
+        }
     }
 
     /**
@@ -884,12 +1045,12 @@ class ConfigValidator {
         const discriminators = [];
 
         if (step.wait !== undefined) discriminators.push('wait');
-        if (step.hint !== undefined) discriminators.push('hint');
         if (step.fire) discriminators.push('fire');
-        if (step['fire-cue']) discriminators.push('fire-cue');
-        if (step['fire-seq']) discriminators.push('fire-seq');
-        if (step.zone && step.command) discriminators.push('zone+command');
-        if (step.zones && step.command) discriminators.push('zones+command');
+        if (step.hint !== undefined) discriminators.push('hint (PROHIBITED)');
+        if (step['fire-cue']) discriminators.push('fire-cue (PROHIBITED)');
+        if (step['fire-seq']) discriminators.push('fire-seq (PROHIBITED)');
+        if (step.zone && (step.command || this.targetsOnlyMqttRawZones(step))) discriminators.push('zone-action');
+        if (step.zones && (step.command || this.targetsOnlyMqttRawZones(step))) discriminators.push('zones-action');
 
         return discriminators;
     }
@@ -901,12 +1062,12 @@ class ConfigValidator {
         const discriminators = [];
 
         if (command.fire) discriminators.push('fire');
-        if (command.hint !== undefined) discriminators.push('hint');
-        if (command.playHint !== undefined || command['play-hint'] !== undefined) discriminators.push('play-hint');
-        if (command['fire-cue']) discriminators.push('fire-cue');
-        if (command['fire-seq']) discriminators.push('fire-seq');
-        if (command.zone && command.command) discriminators.push('zone+command');
-        if (command.zones && command.command) discriminators.push('zones+command');
+        if (this.isRawMqttCommand(command)) discriminators.push('raw-mqtt');
+        if (command.hint !== undefined) discriminators.push('hint (PROHIBITED)');
+        if (command.playHint !== undefined || command['play-hint'] !== undefined) discriminators.push('play-hint (PROHIBITED)');
+        if (command['fire-cue']) discriminators.push('fire-cue (PROHIBITED)');
+        if (command['fire-seq']) discriminators.push('fire-seq (PROHIBITED)');
+        if ((command.zone || command.zones) && (command.command || this.targetsOnlyMqttRawZones(command))) discriminators.push('zone-action');
         if (command.commands) discriminators.push('commands');
         if (command.end) discriminators.push('end');
 
@@ -914,8 +1075,62 @@ class ConfigValidator {
         if (command.cue) discriminators.push('cue (PROHIBITED)');
         if (command.sequence) discriminators.push('sequence (PROHIBITED)');
         if (command.seq) discriminators.push('seq (PROHIBITED)');
+        if (command.schedule !== undefined) discriminators.push('schedule (PROHIBITED)');
 
         return discriminators;
+    }
+
+    getTriggerActionDiscriminators(action) {
+        const discriminators = [];
+
+        if (action.fire) discriminators.push('fire');
+        if (this.isRawMqttCommand(action)) discriminators.push('raw-mqtt');
+        if ((action.zone || action.zones) && (action.command || this.targetsOnlyMqttRawZones(action))) discriminators.push('zone-action');
+        if (action.end) discriminators.push('end');
+
+        if (action.type !== undefined) discriminators.push('type (PROHIBITED)');
+        if (action.cue !== undefined) discriminators.push('cue (PROHIBITED)');
+        if (action.sequence !== undefined) discriminators.push('sequence (PROHIBITED)');
+        if (action.seq !== undefined) discriminators.push('seq (PROHIBITED)');
+        if (action.hint !== undefined) discriminators.push('hint (PROHIBITED)');
+        if (action.playHint !== undefined || action['play-hint'] !== undefined) discriminators.push('play-hint (PROHIBITED)');
+        if (action['fire-cue'] !== undefined) discriminators.push('fire-cue (PROHIBITED)');
+        if (action['fire-seq'] !== undefined) discriminators.push('fire-seq (PROHIBITED)');
+        if (action.schedule !== undefined) discriminators.push('schedule (PROHIBITED)');
+        if (action.commands !== undefined) discriminators.push('commands (PROHIBITED)');
+
+        return discriminators;
+    }
+
+    validateTriggerActionProhibitedSyntax(action, context) {
+        const prohibited = [
+            { key: 'cue', replacement: 'fire' },
+            { key: 'sequence', replacement: 'fire' },
+            { key: 'seq', replacement: 'fire' },
+            { key: 'hint', replacement: 'fire' },
+            { key: 'playHint', replacement: 'fire' },
+            { key: 'play-hint', replacement: 'fire' },
+            { key: 'fire-cue', replacement: 'fire' },
+            { key: 'fire-seq', replacement: 'fire' }
+        ];
+
+        prohibited.forEach(({ key, replacement }) => {
+            if (action[key] !== undefined) {
+                this.addError(`Trigger action ${context}: Use '${replacement}' instead of '${key}' for execution`);
+            }
+        });
+
+        if (action.type !== undefined) {
+            this.addError(`Trigger action ${context} uses unsupported legacy 'type' syntax - use fire, end, inline zone actions, or raw MQTT publish`);
+        }
+
+        if (action.schedule !== undefined) {
+            this.addError(`Trigger action ${context} cannot execute schedules directly - schedules are phase-only`);
+        }
+
+        if (action.commands !== undefined) {
+            this.addError(`Trigger action ${context} uses unsupported :commands array - use inline action syntax or fire a named sequence`);
+        }
     }
 
     /**

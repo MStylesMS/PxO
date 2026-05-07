@@ -57,7 +57,6 @@ node src/game.js --config /etc/paradox/pxo.ini
 1. `./pxo.ini`
 2. `./config/pxo.ini`
 3. `/etc/paradox/pxo.ini`
-4. Legacy fallback: `./game.ini`, `./config/game.ini`, `/opt/paradox/config/game.ini`
 
 **When to use**:
 
@@ -123,7 +122,7 @@ Behavior:
 - Path must be writable; PxO creates the directory if missing.
 - If path is invalid/unwritable, startup fails (hard fail).
 
-#### `--check`, `-c`
+#### `--check`, `-c`, `--validate`
 
 Validate EDN configuration and exit without starting the game runtime.
 
@@ -135,6 +134,9 @@ node src/game.js --check
 
 # Check a specific EDN file
 node src/game.js -c --edn /path/to/game.edn
+
+# Validate using the longer alias
+node src/game.js --validate --edn /path/to/game.edn
 ```
 
 **Exit code**:

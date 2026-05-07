@@ -71,10 +71,10 @@ const allowedTransitions = {
 
 **Transition Triggers**:
 
-- `ready → intro`: `startGame()` command
+- `ready → intro`: `start()` command
 - `intro → gameplay`: Intro sequence completes
-- `gameplay → paused`: `pauseGame()` command
-- `paused → gameplay`: `resumeGame()` command
+- `gameplay → paused`: `pause()` command
+- `paused → gameplay`: `resume()` command
 - `gameplay → solved`: Puzzle completion or operator override
 - `gameplay → failed`: Timer expires
 - `solved/failed → sleeping`: Completion sequence finishes
@@ -171,10 +171,10 @@ Sequences (Tier 3: Timeline-Based Execution)
   :sequence-name {
     :duration 30  ; Total duration in seconds
     :timeline [
-      {:at 30 :cue :cue-name}  ; Execute cue at T-30 seconds
+      {:at 30 :fire :cue-name}  ; Execute named cue at T-30 seconds
       {:at 25 :zone "zone" :command "action" ...params}  ; Direct command
       {:at 20 :wait 5}  ; Block for 5 seconds
-      {:at 15 :fire-seq :other-sequence}  ; Execute another sequence
+      {:at 15 :fire :other-sequence}  ; Execute another named sequence
     ]
   }
 }
@@ -186,12 +186,12 @@ Sequences (Tier 3: Timeline-Based Execution)
   :intro-sequence {
     :duration 45
     :timeline [
-      {:at 45 :cue :lights-red}
+      {:at 45 :fire :lights-red}
       {:at 40 :zone "mirror" :command "playVideo" :file "intro.mp4"}
       {:at 40 :zone "audio" :command "playAudioFX" :file "intro-music.mp3" :volume 60}
       {:at 10 :wait 5}  ; Wait 5 seconds for synchronization
       {:at 5 :zone "mirror" :command "showBrowser"}
-      {:at 3 :cue :lights-green}
+      {:at 3 :fire :lights-green}
     ]
   }
 }
@@ -215,7 +215,7 @@ Example:
 - Blocking — caller waits for completion
 - Timeline items execute at specified countdown times (`:at` counts down from `:duration`)
 - `:wait` provides explicit blocking delays
-- Can reference other sequences with `:fire-seq`
+- Can reference cues, sequences, and hints with `:fire`
 - Pause/resume support with timer state preservation
 
 **Timing Model**:
@@ -274,11 +274,12 @@ Topics:
 | Zone Type | Purpose | Adapter | Example Commands |
 |-----------|---------|---------|------------------|
 | `mqtt-lights` | Lighting control | `src/adapters/lights.js` | `scene`, `setColor`, `setBrightness` |
+| `mqtt` | Generic Paradox MQTT command envelope | `src/adapters/genericMqtt.js` | `arm`, `unlock`, `showPattern` |
+| `mqtt-raw` | Raw payload publish to a single topic | `src/adapters/genericMqttRaw.js` | payload-only action, e.g. `{:zone "door-lock" :payload "1"}` |
 
 Light zones may also expose retained scene-registry metadata on `{zoneBaseTopic}/scenes` when the room EDN defines `:global :light-scenes`. PxO republishes these scene objects as opaque metadata for operator UIs and other consumers. Only display-oriented keys such as `id`, `label`, and `swatch` are assumed generically; `type` and any additional keys are consumer-defined.
 | `pfx-media` | Video/audio playback | `src/adapters/mirror.js`, `audio.js` | `playVideo`, `playAudioFX`, `stopAudio` |
-| `houdini-clock` | Countdown timer UI | `src/adapters/clock.js` | `show`, `hide`, `setTime` |
-| `system` | System control | `src/adapters/system.js` | `shutdown`, `restart` |
+| `pxc-clock` | Countdown timer UI | `src/adapters/pxc.js` | `show`, `hide`, `setTime` |
 
 ### Zone Adapter Interface
 
@@ -483,15 +484,13 @@ async function runSequence(sequenceDef, context) {
     }
     
     // Execute step based on type
-    if (step.cue) {
-      await executeCue(step.cue);
+    if (step.fire) {
+      await runByName(step.fire, context);
     } else if (step.zone) {
       await executeCommand(step);
     } else if (step.wait) {
       await sleep(step.wait * 1000);
       elapsed += step.wait;
-    } else if (step['fire-seq']) {
-      await runSequence(sequences[step['fire-seq']], context);
     }
   }
 }
@@ -568,8 +567,8 @@ Hints are triggered via MQTT command:
 
 ```json
 {
-  "command": "deliverHint",
-  "hintId": 1
+  "command": "executeHint",
+  "id": "hint-01"
 }
 ```
 
@@ -583,6 +582,12 @@ Execution flow:
   - `text`: Resolve only from `global.command-sequences`, substitute `{{text}}`/`{{duration}}`, and allow operator text override
   - `sequence`: Resolve only from `global.command-sequences`, substitute `{{field}}` values from direct fields and `parameters` map, then execute sequence
 4. Log hint delivery
+
+Schedule execution remains phase-scoped in the current contract:
+
+- Named schedules are valid phase targets only.
+- Schedules cannot be fired directly from triggers, sequences, or hints.
+- Nested schedules are validation errors; authors should use a named sequence when non-phase logic needs ordered multi-step behavior.
 
 Placeholder policy:
 - Missing placeholders are warning-only and substituted with empty values at runtime.
@@ -610,12 +615,12 @@ Published to: `{baseTopic}/commands`
 
 | Command | Parameters | Description |
 |---------|------------|-------------|
-| `startGame` | `mode` (optional) | Start game in specified mode |
-| `pauseGame` | none | Pause gameplay |
-| `resumeGame` | none | Resume from pause |
-| `resetGame` | none | Reset to ready state |
-| `solveGame` | none | Mark game as solved (operator override) |
-| `deliverHint` | `hintId` | Deliver specific hint |
+| `start` | `mode` (optional) | Start game in specified mode |
+| `pause` | none | Pause gameplay |
+| `resume` | none | Resume from pause |
+| `reset` | none | Reset to ready state |
+| `solve` | none | Mark game as solved (operator override) |
+| `executeHint` | `id` | Execute specific hint |
 | `shutdown` | none | Graceful engine shutdown |
 | `reboot` | none | Graceful PxO software restart |
 | `halt` | none | Graceful PxO software halt |
@@ -633,7 +638,7 @@ Control command sequence hooks (resolved from `global.system-sequences`):
 - `wake` → `props-wake-sequence`
 - `machineShutdown` → `machine-shutdown-sequence` (OS-level shutdown)
 - `machineReboot` → `machine-reboot-sequence` (OS-level reboot)
-- `restartAdapters`/`restart-adapters` → `restart-adapters`
+- `restartAdapters` → `restart-adapters`
 
 ### Game State Publishing
 
@@ -700,10 +705,10 @@ Published to: `{baseTopic}/state` at regular intervals (default 1Hz):
 
 ```bash
 # CLI flag
-node src/game.js --config game.edn --mode demo
+node src/game.js --edn game.edn --mode demo
 
 # Environment variable
-GAME_MODE=demo node src/game.js --config game.edn
+GAME_MODE=demo node src/game.js --edn game.edn
 
 # Default from config
 :default-mode :60min
