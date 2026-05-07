@@ -50,10 +50,11 @@ describe('Unified Sequence and Schedule System', () => {
         sm.gameType = 'test';
         sm.sequenceRunner.resolveSequence = () => ({ duration: 3, schedule: [{ at: 3, fire: 'x' }] });
         let executedSchedule = null;
-        sm.executeSchedule = async (schedule, duration) => { executedSchedule = { schedule, duration }; };
+        sm.registerPhaseSchedule = (phaseKey, schedule, duration) => { executedSchedule = { phaseKey, schedule, duration }; };
 
         await sm.executePhase('phase-2', { schedule: 'test-schedule' });
         assert(!!executedSchedule, 'expected schedule to execute');
+        assert(executedSchedule.phaseKey === 'phase-2', 'expected schedule to register against the phase key');
         assert(executedSchedule.duration === 3, 'expected schedule duration to come from schedule definition');
         assert(Array.isArray(executedSchedule.schedule), 'expected schedule array');
     });
@@ -61,7 +62,7 @@ describe('Unified Sequence and Schedule System', () => {
     test('fireByName does not execute schedule definitions directly', async () => {
         const sm = new StateMachine({ cfg, mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }, clock: { fadeIn: () => { }, fadeOut: () => { }, pause: () => { }, resume: () => { }, setTime: () => { } }, lights: { scene: () => { } }, media: {} });
         sm.gameType = 'test';
-        sm.sequenceRunner.resolveSequenceNew = () => ({ duration: 5, schedule: [{ at: 5, fire: 'x' }] });
+        sm.sequenceRunner.resolveSequence = () => ({ duration: 5, schedule: [{ at: 5, fire: 'x' }] });
         sm.fireSequenceByName = jest.fn();
 
         await sm.fireByName('phase-only-schedule');

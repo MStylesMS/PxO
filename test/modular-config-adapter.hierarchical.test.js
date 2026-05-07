@@ -8,18 +8,18 @@ describe('ModularConfigAdapter hierarchical sequences', () => {
             global: {
                 mqtt: { 'game-topic': 'paradox/test', zones: {} },
                 settings: {},
-                sequences: {
+                'system-sequences': {
                     system: {
                         'reset-sequence': {
                             description: 'System reset',
                             sequence: [{ zone: 'mirror', command: 'setImage', file: 'black.png' }]
                         }
-                    },
-                    'game-actions': {
-                        'gameplay-start-sequence': {
-                            description: 'Start gameplay',
-                            sequence: [{ zone: 'picture', command: 'playVideo', file: 'intro.mp4' }]
-                        }
+                    }
+                },
+                'command-sequences': {
+                    'gameplay-start-sequence': {
+                        description: 'Start gameplay',
+                        sequence: [{ zone: 'picture', command: 'playVideo', file: 'intro.mp4' }]
                     }
                 },
                 ...globalOverrides,
@@ -43,7 +43,7 @@ describe('ModularConfigAdapter hierarchical sequences', () => {
         };
     }
 
-    test('promotes input global.sequences into canonical runtime sequence registries only', () => {
+    test('passes through canonical runtime sequence registries only', () => {
         const runtimeConfig = ModularConfigAdapter.transform(createConfig());
 
         expect(runtimeConfig.global['system-sequences']).toEqual({
@@ -51,12 +51,6 @@ describe('ModularConfigAdapter hierarchical sequences', () => {
                 'reset-sequence': {
                     description: 'System reset',
                     sequence: [{ zone: 'mirror', command: 'setImage', file: 'black.png' }]
-                }
-            },
-            'game-actions': {
-                'gameplay-start-sequence': {
-                    description: 'Start gameplay',
-                    sequence: [{ zone: 'picture', command: 'playVideo', file: 'intro.mp4' }]
                 }
             }
         });
@@ -72,14 +66,14 @@ describe('ModularConfigAdapter hierarchical sequences', () => {
         expect(runtimeConfig.game.demo.durations.game).toBeUndefined();
     });
 
-    test('prefers explicit top-level system-sequences over legacy global.sequences', () => {
+    test('ignores legacy global.sequences instead of promoting it', () => {
         const runtimeConfig = ModularConfigAdapter.transform(createConfig({
             global: {
-                'system-sequences': {
+                sequences: {
                     system: {
-                        'reset-sequence': {
-                            description: 'Top-level reset',
-                            sequence: [{ zone: 'mirror', command: 'setImage', file: 'top-level.png' }]
+                        'legacy-reset-sequence': {
+                            description: 'Legacy reset',
+                            sequence: [{ zone: 'mirror', command: 'setImage', file: 'legacy.png' }]
                         }
                     }
                 }
@@ -89,11 +83,18 @@ describe('ModularConfigAdapter hierarchical sequences', () => {
         expect(runtimeConfig.global['system-sequences']).toEqual({
             system: {
                 'reset-sequence': {
-                    description: 'Top-level reset',
-                    sequence: [{ zone: 'mirror', command: 'setImage', file: 'top-level.png' }]
+                    description: 'System reset',
+                    sequence: [{ zone: 'mirror', command: 'setImage', file: 'black.png' }]
                 }
             }
         });
+        expect(runtimeConfig.global['command-sequences']).toEqual({
+            'gameplay-start-sequence': {
+                description: 'Start gameplay',
+                sequence: [{ zone: 'picture', command: 'playVideo', file: 'intro.mp4' }]
+            }
+        });
+        expect(runtimeConfig.global.sequences).toBeUndefined();
     });
 
     test('exposes trigger source registries only through global.inputs', () => {

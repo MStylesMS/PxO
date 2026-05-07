@@ -114,6 +114,35 @@ describe('fireHint behavior', () => {
         );
     });
 
+    test('text hint does not fall back to description metadata for execution text', async () => {
+        const cfg = {
+            global: {
+                mqtt: { 'game-topic': 'paradox/houdini' },
+                'command-sequences': {
+                    'hint-text-seq': {
+                        sequence: [
+                            { zone: 'clock', command: 'hint', text: '{{text}}', duration: '{{duration}}' }
+                        ]
+                    }
+                }
+            }
+        };
+        const mqtt = { publish: jest.fn() };
+        const sm = new StateMachine({ cfg, mqtt });
+        sm.sequenceRunner.runSequence = jest.fn().mockResolvedValue({ ok: true });
+
+        const ok = await sm.executeTextHint({
+            id: 'hint-05',
+            type: 'text',
+            sequence: 'hint-text-seq',
+            description: 'Operator-facing hint description only',
+            duration: 15
+        }, 'test');
+
+        expect(ok).toBe(false);
+        expect(sm.sequenceRunner.runSequence).not.toHaveBeenCalled();
+    });
+
     test('sequence hint uses parameters and warns for missing placeholders only', async () => {
         const cfg = {
             global: {

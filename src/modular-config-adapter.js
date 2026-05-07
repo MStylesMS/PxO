@@ -235,9 +235,9 @@ class ModularConfigAdapter {
         cues: modular.global.cues,
         hints,
         colorScenes: modular.global.lights?.['color-scenes'] || modular.global.lights?.colorScenes || modular.global.colorScenes || modular.global['color-scenes'],
-        'system-sequences': modular.global['system-sequences'] || modular.global.sequences || {},
+        'system-sequences': modular.global['system-sequences'] || {},
         'additional-phases': modular.global['additional-phases'] || {},
-        'command-sequences': modular.global['command-sequences'] || (modular.global.sequences && modular.global.sequences['game-actions']) || {},
+        'command-sequences': modular.global['command-sequences'] || {},
         inputs: inputSources,
         triggers: {
           escapeRoomRules: triggerRules

@@ -98,6 +98,49 @@ class SequenceRunner {
         return undefined;
     }
 
+    getPerModeSequenceRoot(gameMode) {
+        if (!gameMode) return undefined;
+
+        const gameModes = this.cfg.game || this.cfg['game-modes'];
+        if (!gameModes || typeof gameModes !== 'object') return undefined;
+
+        return gameModes[gameMode]?.sequences;
+    }
+
+    resolveSequenceEntry(name, gameMode) {
+        if (!name || Array.isArray(name) || typeof name === 'object') return name;
+
+        const { variants } = this.getSequenceLookupNames(name);
+
+        if (this.stateMachine && this.stateMachine.globalSequences) {
+            const globalSequence = this.lookupSequenceInRoot(this.stateMachine.globalSequences, variants);
+            if (globalSequence) return globalSequence;
+        }
+
+        const perModeRoot = this.getPerModeSequenceRoot(gameMode);
+        if (perModeRoot) {
+            const perModeHit = this.lookupSequenceInRoot(perModeRoot, variants);
+            if (perModeHit) return perModeHit;
+        }
+
+        const systemSeqs = this.cfg.global?.['system-sequences'];
+        const directSystem = this.lookupSequenceInRoot(systemSeqs, variants);
+        if (directSystem) return directSystem;
+
+        if (systemSeqs && typeof systemSeqs === 'object') {
+            for (const group of Object.values(systemSeqs)) {
+                const nested = this.lookupSequenceInRoot(group, variants);
+                if (nested) return nested;
+            }
+        }
+
+        const cmdSeqRoot = this.cfg.global?.['command-sequences'];
+        const cmdHit = this.lookupSequenceInRoot(cmdSeqRoot, variants);
+        if (cmdHit) return cmdHit;
+
+        return undefined;
+    }
+
     // Resolve sequence from the canonical runtime registries.
     resolveSequenceNew(name, gameMode) {
         if (!name) return undefined;
@@ -112,37 +155,7 @@ class SequenceRunner {
             }
             return undefined;
         };
-
-        const { variants } = this.getSequenceLookupNames(name);
-        const tryLookupIn = (root) => this.lookupSequenceInRoot(root, variants, convertSequence);
-
-        // 1) Per-mode sequences (overrides)
-        if (gameMode && this.cfg['game-modes']?.[gameMode]?.sequences) {
-            const perModeRoot = this.cfg['game-modes'][gameMode].sequences;
-            const perModeHit = tryLookupIn(perModeRoot);
-            if (perModeHit) return perModeHit;
-        }
-
-        // 2) Top-level system-sequences (may be flat map or grouped map)
-        const systemSeqs = this.cfg.global?.['system-sequences'];
-        const directSystem = tryLookupIn(systemSeqs);
-        if (directSystem) return directSystem;
-
-        // If system-sequences is grouped by category, search nested groups
-        if (systemSeqs && typeof systemSeqs === 'object') {
-            for (const group of Object.values(systemSeqs)) {
-                const nested = tryLookupIn(group);
-                if (nested) return nested;
-            }
-        }
-
-        // 3) Command-sequences (new name replacing game-actions)
-        const cmdSeqRoot = this.cfg.global?.['command-sequences'];
-        const cmdHit = tryLookupIn(cmdSeqRoot);
-        if (cmdHit) return cmdHit;
-
-
-        return undefined;
+        return convertSequence(this.resolveSequenceEntry(name, gameMode));
     }
 
     // Run a resolved sequence definition.
@@ -359,57 +372,9 @@ class SequenceRunner {
         if (Array.isArray(name)) return { sequence: name };
         if (typeof name === 'object') return name;
 
-        const { variants } = this.getSequenceLookupNames(name);
-
-        // If the state machine has already flattened global sequences,
-        // consult that map first for a fast, authoritative lookup.
-        if (this.stateMachine && this.stateMachine.globalSequences) {
-            const globalSequence = this.lookupSequenceInRoot(this.stateMachine.globalSequences, variants);
-            if (globalSequence) return globalSequence;
-        }
-
-        // Per-mode overrides (cfg.game[mode].sequences)
-        const perModeRoot = gameMode && this.cfg.game && this.cfg.game[gameMode];
-        if (perModeRoot && perModeRoot.sequences) {
-            const hit = this.lookupSequenceInRoot(perModeRoot.sequences, variants);
-            if (hit) return hit;
-        }
-
-        // Primary global sequences.
-        const globalRoot = this.cfg.global || {};
-
-        // Search in hierarchical system-sequences structure.
-        const systemSeqs = globalRoot['system-sequences'] || {};
-
-        const searchInCategory = (category) => {
-            return this.lookupSequenceInRoot(systemSeqs[category] || {}, variants);
-        };
-
-        // Try system sequences first (halt, wake, sleep, etc.)
-        const systemSeq = searchInCategory('system');
-        if (systemSeq) return systemSeq;
-
-        // Try command-sequences (new name; replaces 'game-actions')
-        // Priority: explicit top-level 'command-sequences' -> hierarchical 'system-sequences' group 'game-actions'
-        const cmdSeqsRoot = globalRoot['command-sequences'] || {};
-        const cmdHit = this.lookupSequenceInRoot(cmdSeqsRoot, variants);
-        if (cmdHit) return cmdHit;
-
-        const gameActionSeq = searchInCategory('game-actions');
-        if (gameActionSeq) return gameActionSeq;
-
-        if (systemSeqs && typeof systemSeqs === 'object') {
-            for (const group of Object.values(systemSeqs)) {
-                const nested = this.lookupSequenceInRoot(group, variants);
-                if (nested) return nested;
-            }
-        }
-
-        // Support direct system-sequences lookup when the map is flat.
-        const systemDirect = this.lookupSequenceInRoot(systemSeqs, variants);
-        if (systemDirect) return systemDirect;
-
-        return undefined;
+        const resolved = this.resolveSequenceEntry(name, gameMode);
+        if (!resolved) return undefined;
+        return Array.isArray(resolved) ? { sequence: resolved } : resolved;
     }
 
     resolveCue(name, gameMode) {

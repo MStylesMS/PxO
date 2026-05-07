@@ -280,7 +280,7 @@ class GameStateMachine extends EventEmitter {
 
   // Execute text hint using :hint-text-seq sequence
   async executeTextHint(hint, source = 'direct') {
-    const text = hint.text || hint.description || hint.displayText || '';
+    const text = typeof hint?.text === 'string' ? hint.text.trim() : '';
     if (!text) {
       log.warn('Text hint has no text');
       return false;
@@ -1358,11 +1358,6 @@ class GameStateMachine extends EventEmitter {
     if (!name) return null;
 
     try {
-      const resolved = this.sequenceRunner.resolveSequenceNew(name, this.gameType);
-      if (resolved) return resolved;
-    } catch (_) { /* ignore */ }
-
-    try {
       return this.sequenceRunner.resolveSequence(name, this.gameType);
     } catch (_) { /* ignore */ }
 
@@ -1979,13 +1974,6 @@ class GameStateMachine extends EventEmitter {
     log.info('Cleared all phase-scoped schedules');
   }
 
-  // Compatibility wrapper: executeSchedule can be stubbed by tests. By default
-  // it registers the schedule non-blocking with the unified timer.
-  async executeSchedule(schedule, duration, phaseKey = 'phase') {
-    this.registerPhaseSchedule(phaseKey, schedule, duration);
-    return;
-  }
-
   // Calculate phase duration based on strict mode rules.
   calculatePhaseDuration(phaseConfig, phaseName = 'unknown') {
     if (!phaseConfig) return 0;
@@ -2048,7 +2036,7 @@ class GameStateMachine extends EventEmitter {
         return;
       }
 
-      await this.executeSchedule(resolved.schedule, resolved.duration, phaseKey);
+      this.registerPhaseSchedule(phaseKey, resolved.schedule, resolved.duration);
       return;
     }
   }

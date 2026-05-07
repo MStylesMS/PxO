@@ -614,10 +614,6 @@ async function main(rawArgs = process.argv.slice(2)) {
 
   // The new AdapterRegistry will handle all adapter instantiation.
   // Legacy media registry is no longer needed.
-  // Store UI topics for any code that still needs them during transition
-  cfg.global = cfg.global || {};
-  cfg.global.mqtt = cfg.global.mqtt || {};
-  cfg.global.mqtt.uiTopics = uiTopics;
 
   const sm = new GameStateMachine({ cfg, mqtt });
   sm.init();
@@ -651,7 +647,7 @@ async function main(rawArgs = process.argv.slice(2)) {
   // Wire logger warn/error events to MQTT warnings topic so UI/operators can be notified
   try {
     const { getWarningsTopic } = require('./engineUtils');
-    const warningsTopic = getWarningsTopic(cfg) || (cfg.global.mqtt && cfg.global.mqtt.uiTopics && cfg.global.mqtt.uiTopics.warnings);
+    const warningsTopic = getWarningsTopic(cfg);
 
     if (warningsTopic) {
       // Publish a human-readable warning when logger emits warn/error
