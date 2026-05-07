@@ -28,4 +28,18 @@ describe('PfxAdapter media publishing', () => {
         assert.equal(mqtt.published[1].topic, 'paradox/houdini/mirror/commands');
         assert.deepEqual(mqtt.published[1].message, { command: 'playVideo', file: 'intro_demo.mp4', volumeAdjust: -10 });
     });
+
+    test('publishes canonical file-only payloads for audio commands', () => {
+        const mqtt = makeMockMqtt();
+        const pfx = new PfxAdapter(mqtt, { baseTopic: 'paradox/houdini/audio' });
+
+        pfx.playAudioFX('bell.wav', { volumeAdjust: -5 });
+        pfx.playSpeech('hint.wav', { volume: 80 });
+
+        assert.equal(mqtt.published.length, 2, 'expected two publishes');
+        assert.equal(mqtt.published[0].topic, 'paradox/houdini/audio/commands');
+        assert.deepEqual(mqtt.published[0].message, { command: 'playAudioFX', file: 'bell.wav', volumeAdjust: -5 });
+        assert.equal(mqtt.published[1].topic, 'paradox/houdini/audio/commands');
+        assert.deepEqual(mqtt.published[1].message, { command: 'playSpeech', file: 'hint.wav', volume: 80 });
+    });
 });

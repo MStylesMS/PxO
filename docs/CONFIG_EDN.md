@@ -687,7 +687,7 @@ Game mode variations with duration overrides:
 **Mode Selection**:
 ```bash
 # CLI flag
-node src/game.js --config game.edn --mode demo
+node src/game.js --edn game.edn --mode demo
 
 # Environment variable
 GAME_MODE=demo node src/game.js

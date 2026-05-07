@@ -39,17 +39,17 @@ npm test
 
 ```bash
 # Start with config file
-node src/game.js --config /path/to/game.edn
+node src/game.js --edn /path/to/game.edn
 
 # Or use environment variable
 export PXO_CONFIG_PATH=/path/to/game.edn
 node src/game.js
 
 # Start in specific mode
-node src/game.js --config game.edn --mode demo
+node src/game.js --edn game.edn --mode demo
 
 # Debug mode (verbose logging)
-LOG_LEVEL=debug node src/game.js --config game.edn
+LOG_LEVEL=debug node src/game.js --edn game.edn
 ```
 
 ### Example Configuration
@@ -93,7 +93,7 @@ Create a simple game configuration (`example-game.edn`):
 Run your game:
 
 ```bash
-node src/game.js --config example-game.edn --mode demo
+node src/game.js --edn example-game.edn --mode demo
 ```
 
 ## Architecture Overview
@@ -292,11 +292,11 @@ sudo systemctl start mosquitto
 mosquitto_sub -h localhost -t 'paradox/#' -v
 
 # Terminal 2: Start PxO
-node src/game.js --config game.edn
+node src/game.js --edn game.edn
 
 # Terminal 3: Send a command
 mosquitto_pub -h localhost -t 'paradox/game/commands' \
-  -m '{"command":"startGame","mode":"demo"}'
+  -m '{"command":"start","mode":"demo"}'
 ```
 
 ## Configuration Examples
@@ -389,7 +389,7 @@ sudo systemctl status mosquitto
 npm run validate -- config/game.edn
 
 # Run in debug mode
-LOG_LEVEL=debug node src/game.js --config config/game.edn
+LOG_LEVEL=debug node src/game.js --edn config/game.edn
 ```
 
 ### Commands not reaching zones

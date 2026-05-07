@@ -32,8 +32,15 @@ describe('command contract', () => {
       }
     });
 
-    if (/playAudioFX'?,\s*audio:/.test(adapterSrc)) {
-      throw new Error('Adapter still uses audio: key for playAudioFX');
-    }
+    ['playAudioFX', 'playSpeech'].forEach((commandName) => {
+      const commandIndex = adapterSrc.indexOf(`command: '${commandName}'`);
+      assert(commandIndex >= 0, `Adapter missing ${commandName} command`);
+
+      const nextCommandIndex = adapterSrc.indexOf("command: '", commandIndex + 1);
+      const commandBlock = adapterSrc.slice(commandIndex, nextCommandIndex >= 0 ? nextCommandIndex : undefined);
+      if (/command\.audio\s*=\s*file/.test(commandBlock)) {
+        throw new Error(`Adapter still uses audio: key for ${commandName}`);
+      }
+    });
   });
 });

@@ -110,7 +110,7 @@ function getConfiguredGameplayDurationSeconds(cfg, mode) {
   const game = cfg?.game?.[mode];
   if (!game) return 0;
 
-  const direct = Number(game?.gameplay?.duration);
+  const direct = Number(game?.durations?.gameplay);
   if (Number.isFinite(direct) && direct > 0) return Math.round(direct);
 
   return 0;
@@ -1316,6 +1316,7 @@ module.exports = Object.assign(module.exports || {}, {
   main,
   parseCliArgs,
   _publishMqttMetadata,
+  getConfiguredGameplayDurationSeconds,
   normalizeTriggerStrictMode,
   buildInputSourceMap,
   buildTriggerRules,

@@ -239,22 +239,13 @@ Preferred commands:
 - `sleep`
 - `wake`
 
-Legacy aliases (still accepted):
-- `startGame`
-- `pauseGame`
-- `resumeGame`
-- `solveGame`
-- `failGame`
-- `abortGame`
-- `resetGame`
-- `emergency-stop`
-- `restart-adapters`
+Legacy ingress aliases such as `startGame`, `resetGame`, `solveGame`, `failGame`, and `abortGame` may still normalize internally for compatibility, but new integrations should use the canonical names below.
 
 ### Start Game
 
 ```json
 {
-  "command": "startGame",
+  "command": "start",
   "mode": "60min"
 }
 ```
@@ -267,14 +258,14 @@ Legacy aliases (still accepted):
 **Example**:
 ```bash
 mosquitto_pub -h localhost -t 'paradox/game/commands' \
-  -m '{"command":"startGame","mode":"demo"}'
+  -m '{"command":"start","mode":"demo"}'
 ```
 
 ### Pause Game
 
 ```json
 {
-  "command": "pauseGame"
+  "command": "pause"
 }
 ```
 
@@ -285,14 +276,14 @@ mosquitto_pub -h localhost -t 'paradox/game/commands' \
 **Example**:
 ```bash
 mosquitto_pub -h localhost -t 'paradox/game/commands' \
-  -m '{"command":"pauseGame"}'
+  -m '{"command":"pause"}'
 ```
 
 ### Resume Game
 
 ```json
 {
-  "command": "resumeGame"
+  "command": "resume"
 }
 ```
 
@@ -304,7 +295,7 @@ mosquitto_pub -h localhost -t 'paradox/game/commands' \
 
 ```json
 {
-  "command": "resetGame"
+  "command": "reset"
 }
 ```
 
@@ -340,7 +331,7 @@ mosquitto_pub -h localhost -t 'paradox/game/commands' \
 
 ```json
 {
-  "command": "solveGame"
+  "command": "solve"
 }
 ```
 
@@ -854,7 +845,7 @@ mosquitto_sub -h localhost -t 'paradox/#' -v
 
 ```bash
 mosquitto_pub -h localhost -t 'paradox/game/commands' \
-  -m '{"command":"startGame","mode":"demo"}'
+  -m '{"command":"start","mode":"demo"}'
 ```
 
 ### Monitor Game State
@@ -883,11 +874,11 @@ client.connect("localhost", 1883, 60)
 
 # Start game
 client.publish("paradox/game/commands", 
-               '{"command":"startGame","mode":"60min"}')
+               '{"command":"start","mode":"60min"}')
 
 # Pause game
 client.publish("paradox/game/commands", 
-               '{"command":"pauseGame"}')
+               '{"command":"pause"}')
 
 # Execute hint
 client.publish("paradox/game/commands", 
@@ -927,21 +918,16 @@ client.on('message', (topic, message) => {
 
 | Command | Parameters | Description |
 |---------|------------|-------------|
-| `startGame` | `mode` (optional) | Start game |
 | `start` | `mode` (optional) | Start game |
-| `pauseGame` | none | Pause game |
 | `pause` | none | Pause game |
-| `resumeGame` | none | Resume game |
 | `resume` | none | Resume game |
-| `resetGame` | none | Reset to ready |
 | `reset` | none | Reset to ready |
-| `solveGame` | none | Mark solved |
 | `solve` | none | Mark solved |
-| `fail` / `failGame` | none | Mark failed |
-| `abort` / `abortGame` | none | Immediate abort phase |
+| `fail` | none | Mark failed |
+| `abort` | none | Immediate abort phase |
 | `triggerPhase` | `phase` | Transition to named phase |
 | `executeHint` | `id` | Execute hint by id |
-| `emergencyStop` / `emergency-stop` | none | Preemptive full cleanup + reset |
+| `emergencyStop` | none | Preemptive full cleanup + reset |
 | `shutdown` | none | Shutdown |
 | `reboot` | none | Restart PxO software |
 | `halt` | none | Halt PxO software |

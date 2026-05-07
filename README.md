@@ -103,15 +103,15 @@ node src/game.js --edn game.edn --mode demo
 ```bash
 # Start game
 mosquitto_pub -h localhost -t 'paradox/game/commands' \
-  -m '{"command":"startGame","mode":"demo"}'
+  -m '{"command":"start","mode":"demo"}'
 
 # Pause game
 mosquitto_pub -h localhost -t 'paradox/game/commands' \
-  -m '{"command":"pauseGame"}'
+  -m '{"command":"pause"}'
 
 # Reset game
 mosquitto_pub -h localhost -t 'paradox/game/commands' \
-  -m '{"command":"resetGame"}'
+  -m '{"command":"reset"}'
 ```
 
 ## Architecture
@@ -250,7 +250,7 @@ After=network.target mosquitto.service
 Type=simple
 User=paradox
 WorkingDirectory=/opt/paradox/pxo
-ExecStart=/usr/bin/node src/game.js --config /path/to/game.edn
+ExecStart=/usr/bin/node src/game.js --edn /path/to/game.edn
 Restart=always
 
 [Install]
@@ -269,7 +269,7 @@ See [SETUP.md](docs/SETUP.md) for complete deployment instructions.
 ### Game Control
 
 ```
-paradox/game/commands      # Game control commands (startGame, pauseGame, etc.)
+paradox/game/commands      # Game control commands (start, pause, reset, etc.)
 paradox/game/state         # Current game state (ready, intro, gameplay, etc.)
 paradox/game/state         # Also carries lifecycle/heartbeat updates
 ```
@@ -303,7 +303,7 @@ npm test -- --runTestsByPath test/discovery.test.js
 mosquitto_sub -h localhost -t 'paradox/game/#' -v
 
 # Manual game-flow probe
-node src/game.js --config examples/demo-game.edn --mode demo
+node src/game.js --edn examples/demo-game.edn --mode demo
 ```
 
 ## Raspberry Pi Support

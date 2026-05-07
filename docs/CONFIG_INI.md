@@ -10,7 +10,7 @@ Paradox Orchestrator uses **INI files** for system-level configuration. INI sett
 **Configuration Hierarchy**:
 1. **EDN** (game.edn) — Game logic, sequences, cues, commands
 2. **INI** (pxo.ini) — System settings, MQTT, logging, zones
-3. **CLI/ENV** — Runtime overrides (--mode, --config, --ini)
+3. **CLI/ENV** — Runtime overrides (--mode, --edn, --config)
 
 INI settings override EDN defaults. CLI/ENV flags override INI.
 
@@ -23,11 +23,6 @@ Default INI locations (searched in order):
 ./pxo.ini
 ./config/pxo.ini
 /etc/paradox/pxo.ini
-```
-
-Legacy fallback:
-```
-apps/PxO/game.ini
 ```
 
 Override with CLI flag:
@@ -407,10 +402,10 @@ websocket = false
 
 Settings are resolved in this order (highest priority first):
 
-1. **CLI Flags** — `--mode demo`, `--config game.edn`, `--ini custom.ini`
+1. **CLI Flags** — `--mode demo`, `--edn game.edn`, `--config custom.ini`
 2. **Environment Variables** — `GAME_MODE=demo`, `MQTT_BROKER=192.168.1.100`
-3. **INI File** — `pxo.ini` or `--ini` specified file
-4. **EDN File** — `game.edn` or `--config` specified file
+3. **INI File** — `pxo.ini` or `--config` specified file
+4. **EDN File** — `game.edn` or `--edn` specified file
 5. **Defaults** — Hardcoded defaults in code
 
 **Example**:
@@ -419,10 +414,10 @@ Settings are resolved in this order (highest priority first):
 MQTT_BROKER=192.168.1.50 node src/game.js --mode demo
 
 # Use custom INI
-node src/game.js --ini /etc/paradox/production.ini
+node src/game.js --config /etc/paradox/production.ini
 
 # Override config location
-node src/game.js --config /opt/paradox/rooms/my-room/game.edn
+node src/game.js --edn /opt/paradox/rooms/my-room/game.edn
 ```
 
 ---
@@ -468,7 +463,7 @@ After=network.target mosquitto.service
 Type=simple
 User=paradox
 WorkingDirectory=/opt/paradox/pxo
-ExecStart=/usr/bin/node src/game.js --config /opt/paradox/rooms/my-room/game.edn --ini /etc/paradox/pxo.ini
+ExecStart=/usr/bin/node src/game.js --edn /opt/paradox/rooms/my-room/game.edn --config /etc/paradox/pxo.ini
 Restart=always
 RestartSec=5
 
@@ -536,10 +531,10 @@ directory = /var/log/paradox/pxo
 
 ```bash
 # Development
-node src/game.js --ini config/pxo-dev.ini
+node src/game.js --config config/pxo-dev.ini
 
 # Production
-node src/game.js --ini /etc/paradox/pxo-prod.ini
+node src/game.js --config /etc/paradox/pxo-prod.ini
 ```
 
 ### 5. Use Comments

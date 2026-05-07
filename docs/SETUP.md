@@ -127,7 +127,7 @@ npm run validate -- game.edn
 ### 6. Run Game Engine
 
 ```bash
-node src/game.js --config game.edn --mode demo
+node src/game.js --edn game.edn --mode demo
 ```
 
 ---
@@ -215,7 +215,7 @@ pxo --version
 
 ### INI Configuration
 
-**Location**: `./config/pxo.ini` or `--ini /path/to/pxo.ini`
+**Location**: `./config/pxo.ini` or `--config /path/to/pxo.ini`
 
 **Example**:
 
@@ -248,7 +248,7 @@ See [CONFIG_INI.md](CONFIG_INI.md) for complete reference.
 
 ### EDN Configuration
 
-**Location**: `./game.edn` or `--config /path/to/game.edn`
+**Location**: `./game.edn` or `--edn /path/to/game.edn`
 
 **Minimal Example**:
 
@@ -281,7 +281,7 @@ node src/game.js
 
 ```bash
 # Specify config files
-node src/game.js --config /path/to/game.edn --ini /path/to/pxo.ini
+node src/game.js --edn /path/to/game.edn --config /path/to/pxo.ini
 
 # Override mode
 node src/game.js --mode demo
@@ -297,8 +297,8 @@ MQTT_BROKER=192.168.1.100 node src/game.js
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `--config` | EDN config file | `--config game.edn` |
-| `--ini` | INI config file | `--ini config/pxo.ini` |
+| `--edn` | EDN config file | `--edn game.edn` |
+| `--config` | INI config file | `--config config/pxo.ini` |
 | `--mode` | Game mode | `--mode demo` |
 | `--version` | Show version | `--version` |
 | `--help` | Show help | `--help` |
@@ -350,7 +350,7 @@ Type=simple
 User=paradox
 Group=paradox
 WorkingDirectory=/opt/paradox/pxo
-ExecStart=/usr/bin/node src/game.js --config /opt/paradox/rooms/my-room/game.edn --ini /etc/paradox/pxo.ini
+ExecStart=/usr/bin/node src/game.js --edn /opt/paradox/rooms/my-room/game.edn --config /etc/paradox/pxo.ini
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -629,16 +629,16 @@ mosquitto_sub -h localhost -p 1883 -t 'paradox/game/lights/#' -v
 
 ```bash
 # Start game
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' -m '{"command":"startGame","mode":"demo"}'
+mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' -m '{"command":"start","mode":"demo"}'
 
 # Pause game
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' -m '{"command":"pauseGame"}'
+mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' -m '{"command":"pause"}'
 
 # Resume game
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' -m '{"command":"resumeGame"}'
+mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' -m '{"command":"resume"}'
 
 # Reset game
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' -m '{"command":"resetGame"}'
+mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' -m '{"command":"reset"}'
 ```
 
 ---
@@ -659,7 +659,7 @@ tail -f /opt/paradox/logs/pxo/pxo-*.log
 
 **Common issues**:
 - MQTT broker not running → `sudo systemctl start mosquitto`
-- Config file not found → Check `--config` and `--ini` paths
+- Config file not found → Check `--edn` and `--config` paths
 - Invalid EDN syntax → Run `npm run validate -- game.edn`
 - Permission denied → Check file permissions and user
 

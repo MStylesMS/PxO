@@ -470,7 +470,7 @@ npm run validate -- demo-game.edn
 **Run**:
 
 ```bash
-node src/game.js --config demo-game.edn --mode demo
+node src/game.js --edn demo-game.edn --mode demo
 ```
 
 **Monitor MQTT**:
@@ -487,7 +487,7 @@ mosquitto_sub -h localhost -p 1883 -t 'paradox/game/#' -v
 
 ```bash
 mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
-  -m '{"command":"startGame","mode":"demo"}'
+  -m '{"command":"start","mode":"demo"}'
 ```
 
 **Execute Hint**:
@@ -501,14 +501,14 @@ mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
 
 ```bash
 mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
-  -m '{"command":"solveGame"}'
+  -m '{"command":"solve"}'
 ```
 
 **Reset Game**:
 
 ```bash
 mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
-  -m '{"command":"resetGame"}'
+  -m '{"command":"reset"}'
 ```
 
 **Emergency/Lifecycle Controls**:

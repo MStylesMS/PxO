@@ -1,5 +1,6 @@
 const ModularConfigAdapter = require('../src/modular-config-adapter');
 const {
+  getConfiguredGameplayDurationSeconds,
   normalizeTriggerStrictMode,
   buildInputSourceMap,
   buildTriggerRules,
@@ -91,6 +92,25 @@ describe('trigger source routing helpers', () => {
     expect(normalizeCommand({ command: 'getConfig' })).toBe('getconfig');
     expect(normalizeCommand({ command: 'listHints' })).toBe('listhints');
     expect(normalizeCommand({ command: 'triggerPhase' })).toBe('triggerPhase');
+  });
+
+  test('getConfiguredGameplayDurationSeconds only reads canonical durations map', () => {
+    expect(getConfiguredGameplayDurationSeconds({
+      game: {
+        demo: {
+          durations: { gameplay: 60 },
+          gameplay: { duration: 999 }
+        }
+      }
+    }, 'demo')).toBe(60);
+
+    expect(getConfiguredGameplayDurationSeconds({
+      game: {
+        legacyOnly: {
+          gameplay: { duration: 999 }
+        }
+      }
+    }, 'legacyOnly')).toBe(0);
   });
 
   test('getValueByPath resolves nested payload fields', () => {

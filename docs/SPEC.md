@@ -71,10 +71,10 @@ const allowedTransitions = {
 
 **Transition Triggers**:
 
-- `ready → intro`: `startGame()` command
+- `ready → intro`: `start()` command
 - `intro → gameplay`: Intro sequence completes
-- `gameplay → paused`: `pauseGame()` command
-- `paused → gameplay`: `resumeGame()` command
+- `gameplay → paused`: `pause()` command
+- `paused → gameplay`: `resume()` command
 - `gameplay → solved`: Puzzle completion or operator override
 - `gameplay → failed`: Timer expires
 - `solved/failed → sleeping`: Completion sequence finishes
@@ -615,11 +615,11 @@ Published to: `{baseTopic}/commands`
 
 | Command | Parameters | Description |
 |---------|------------|-------------|
-| `startGame` | `mode` (optional) | Start game in specified mode |
-| `pauseGame` | none | Pause gameplay |
-| `resumeGame` | none | Resume from pause |
-| `resetGame` | none | Reset to ready state |
-| `solveGame` | none | Mark game as solved (operator override) |
+| `start` | `mode` (optional) | Start game in specified mode |
+| `pause` | none | Pause gameplay |
+| `resume` | none | Resume from pause |
+| `reset` | none | Reset to ready state |
+| `solve` | none | Mark game as solved (operator override) |
 | `executeHint` | `id` | Execute specific hint |
 | `shutdown` | none | Graceful engine shutdown |
 | `reboot` | none | Graceful PxO software restart |
@@ -638,7 +638,7 @@ Control command sequence hooks (resolved from `global.system-sequences`):
 - `wake` → `props-wake-sequence`
 - `machineShutdown` → `machine-shutdown-sequence` (OS-level shutdown)
 - `machineReboot` → `machine-reboot-sequence` (OS-level reboot)
-- `restartAdapters`/`restart-adapters` → `restart-adapters`
+- `restartAdapters` → `restart-adapters`
 
 ### Game State Publishing
 
@@ -705,10 +705,10 @@ Published to: `{baseTopic}/state` at regular intervals (default 1Hz):
 
 ```bash
 # CLI flag
-node src/game.js --config game.edn --mode demo
+node src/game.js --edn game.edn --mode demo
 
 # Environment variable
-GAME_MODE=demo node src/game.js --config game.edn
+GAME_MODE=demo node src/game.js --edn game.edn
 
 # Default from config
 :default-mode :60min

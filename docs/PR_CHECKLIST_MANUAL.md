@@ -148,8 +148,8 @@ This implementation is designed to support future automated checks while providi
 #### Game Start Flow (with checklist check)
 ```
 1. User clicks "Start Game" on control page
-2. Control page publishes: paradox/{room}/game/commands {"command": "startGame"}
-3. PxO receives startGame command
+2. Control page publishes: paradox/{room}/game/commands {"command": "start"}
+3. PxO receives start command
 4. PxO checks if checklist exists (checklist.edn loaded?)
    - If no checklist → start game immediately
    - If checklist exists → check last saved state
@@ -1153,7 +1153,7 @@ This implementation is designed to support automated checks in Phase 2:
 #### Game Start Flow (Incomplete Checklist)
 ```
 1. Control page → paradox/houdinis-challenge/game/commands
-   {"command": "startGame"}
+   {"command": "start"}
 
 2. PxO subscribes to checklist/state, filters not-ready items on-the-fly
    (items where enabled=true and ready=false)
