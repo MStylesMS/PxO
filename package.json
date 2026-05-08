@@ -30,7 +30,7 @@
     "pxo"
   ],
   "author": "Mark Stevens <mark@paradoxrooms.com>",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/MStylesMS/PxO.git"
