@@ -604,7 +604,9 @@ mosquitto_pub -h localhost -t 'paradox/game/lights/commands' \
 }
 ```
 
-Shows overlaid web browser (for clock UI, etc.).
+Shows overlaid web browser (for clock UI, etc.). Both PFx (≥ 2.1.0) and PFxE
+auto-manage browser lifecycle at startup, so no explicit enable/disable command
+is needed or available.
 
 **Hide Browser**:
 ```json
@@ -613,31 +615,27 @@ Shows overlaid web browser (for clock UI, etc.).
 }
 ```
 
-**Enable Browser**:
+**Move Browser** (PFxE only):
 ```json
 {
-  "command": "enableBrowser",
-  "url": "http://localhost/clock/index.html"
+  "command": "moveBrowser",
+  "x": 0,
+  "y": 0,
+  "width": 1920,
+  "height": 1080
 }
 ```
 
-Starts browser process in the background (does not force visibility).
-
-**Disable Browser**:
-```json
-{
-  "command": "disableBrowser"
-}
-```
-
-Stops browser process.
-
-**Important**: `verifyBrowser` is not a direct MQTT zone command. It is a PxO sequence-runner command that performs state polling and corrective actions (`enableBrowser`, URL update, show/hide) until the browser matches requested state or times out.
+Animates the browser overlay to the given geometry on PFxE. PFx (≥ 2.1.0)
+emits a warning on the `{baseTopic}/warnings` topic and ignores this command
+because its overlay is always full-screen. Document PFxE geometry in the
+runtime’s own INI or HTML layout instead of relying on this command when
+targeting both runtimes.
 
 **Example**:
 ```bash
 mosquitto_pub -h localhost -t 'paradox/game/mirror/commands' \
-  -m '{"command":"enableBrowser","url":"http://localhost/clock/index.html"}'
+  -m '{"command":"showBrowser"}'
 ```
 
 ### Clock Zone (`pxc-clock`)
@@ -954,6 +952,7 @@ client.on('message', (topic, message) => {
 | `stopAudio` | none | Stop audio |
 | `showBrowser` | none | Show browser overlay |
 | `hideBrowser` | none | Hide browser overlay |
+| `moveBrowser` | `x`, `y`, `width`, `height` (all opt) | Animate overlay geometry (PFxE only; PFx warns and ignores) |
 
 ### Clock Commands
 

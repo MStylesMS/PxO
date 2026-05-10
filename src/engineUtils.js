@@ -89,8 +89,7 @@ const stopAllAcrossZones = (zonesRegistry) => {
     });
 };
 
-// Standard verification timeout constants (ms)
-const VERIFY_BROWSER_TIMEOUT_MS = 20000;
+// Standard verification timeout constant (ms)
 const VERIFY_MEDIA_TIMEOUT_MS = 15000;
 
 // Build normalized verifyMedia options from shorthand input.
@@ -131,6 +130,5 @@ module.exports = {
     publishExecuteHint,
     stopAllAcrossZones,
     buildVerifyMediaOptions,
-    VERIFY_BROWSER_TIMEOUT_MS,
     VERIFY_MEDIA_TIMEOUT_MS,
 };

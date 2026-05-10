@@ -9,7 +9,6 @@ const {
   getCommandsTopic,
   publishExecuteHint,
   stopAllAcrossZones,
-  VERIFY_BROWSER_TIMEOUT_MS,
   VERIFY_MEDIA_TIMEOUT_MS,
 } = require('./engineUtils');
 

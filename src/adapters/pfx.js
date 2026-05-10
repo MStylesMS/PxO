@@ -1,3 +1,14 @@
+/**
+ * PFx / PFxE adapter — PFxE-canonical vocabulary
+ *
+ * This adapter speaks the PFxE command vocabulary, which PFx (≥ 2.1.0) also
+ * accepts. The browser lifecycle in both runtimes is self-managed: PFxE always
+ * has its renderer ready; PFx auto-enables its browser overlay at zone startup.
+ * Therefore this adapter does NOT emit enableBrowser, disableBrowser, or
+ * verifyBrowser. Use showBrowser / hideBrowser / moveBrowser for overlay
+ * visibility. moveBrowser is animated on PFxE and a documented no-op (warned)
+ * on PFx because PFx overlays are always full-screen.
+ */
 const log = require('../logger');
 
 class PfxAdapterBase {
@@ -92,20 +103,16 @@ class PfxAdapterBase {
         this.setVolume(options.volume, options);
         break;
 
-      case 'enableBrowser':
-        this.enableBrowser(options.url);
-        break;
-
-      case 'disableBrowser':
-        this.disableBrowser();
-        break;
-
       case 'showBrowser':
         this.showBrowser();
         break;
 
       case 'hideBrowser':
         this.hideBrowser();
+        break;
+
+      case 'moveBrowser':
+        this.moveBrowser(options);
         break;
 
       case 'sleepScreen':
@@ -152,9 +159,6 @@ class PfxAdapterBase {
         this.requestState();
         break;
 
-      case 'verifyBrowser':
-        return this.verifyBrowser(options.url, options.visible, options.timeout);
-
       case 'verifyImage':
         return this.verifyImage(options, options.timeout);
 
@@ -177,10 +181,9 @@ class PfxAdapterBase {
       'stopVideo',
       'setImage',
       'setVolume',
-      'enableBrowser',
-      'disableBrowser',
       'showBrowser',
       'hideBrowser',
+      'moveBrowser',
       'sleepScreen',
       'wakeScreen',
       'setBrowserUrl',
@@ -192,7 +195,6 @@ class PfxAdapterBase {
       'killPfx',
       'restartPfx',
       'requestState',
-      'verifyBrowser',
       'verifyImage'
     ];
   }
@@ -337,19 +339,7 @@ class PfxAdapterBase {
     this.mqtt.publish(this.commandTopic, command);
   }
 
-  // Browser management methods (only applicable to screen zones)
-  enableBrowser(url) {
-    const command = { command: 'enableBrowser', url: url };
-    log.info(`[MQTT] ${this.commandTopic} → ${JSON.stringify(command)}`);
-    this.mqtt.publish(this.commandTopic, command);
-  }
-
-  disableBrowser() {
-    const command = { command: 'disableBrowser' };
-    log.info(`[MQTT] ${this.commandTopic} → ${JSON.stringify(command)}`);
-    this.mqtt.publish(this.commandTopic, command);
-  }
-
+  // Browser visibility methods (applicable to screen zones)
   showBrowser() {
     const command = { command: 'showBrowser' };
     log.info(`[MQTT] ${this.commandTopic} → ${JSON.stringify(command)}`);
@@ -371,6 +361,13 @@ class PfxAdapterBase {
 
   wakeScreen() {
     const command = { command: 'wakeScreen' };
+    log.info(`[MQTT] ${this.commandTopic} → ${JSON.stringify(command)}`);
+    this.mqtt.publish(this.commandTopic, command);
+  }
+
+  // Animate the browser overlay to a new geometry (PFxE only; PFx warns and ignores)
+  moveBrowser(options = {}) {
+    const command = { command: 'moveBrowser', ...options };
     log.info(`[MQTT] ${this.commandTopic} → ${JSON.stringify(command)}`);
     this.mqtt.publish(this.commandTopic, command);
   }
@@ -460,114 +457,6 @@ class PfxAdapterBase {
     const command = { command: 'getState' };
     log.info(`[MQTT] ${this.commandTopic} → ${JSON.stringify(command)}`);
     this.mqtt.publish(this.commandTopic, command);
-  }
-
-  // Verify browser state and update as needed
-  async verifyBrowser(desiredUrl, desiredVisible = null, timeout = 15000) {
-    log.info(`[PFX-${this.topics.baseTopic}] Verifying browser state - URL: ${desiredUrl}, Visible: ${desiredVisible}`);
-
-    const startTime = Date.now();
-    const pollInterval = 2000; // Check every 2 seconds
-    let changes = { restarted: false, urlChanged: false, visibilityChanged: false };
-    let windowRecoveryRequested = false;
-    let missingWindowIdObserved = false;
-
-    while (Date.now() - startTime < timeout) {
-      // Request fresh state
-      this.requestState();
-      await new Promise(resolve => setTimeout(resolve, 500)); // Wait for state response
-
-      const state = this.getLastState();
-      if (!state) {
-        log.warn(`[PFX-${this.topics.baseTopic}] No state received, continuing to poll...`);
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
-        continue;
-      }
-
-      // Accept either modern flattened state or nested current_state
-      const cs = state.current_state || state;
-      const browserState = cs.browser || {};
-      let allRequirementsMet = true;
-
-      // Check if browser needs to be enabled
-      if (!browserState.enabled) {
-        log.info(`[PFX-${this.topics.baseTopic}] Browser not enabled, enabling with URL: ${desiredUrl}`);
-        this.enableBrowser(desiredUrl);
-        changes.restarted = true;
-        windowRecoveryRequested = true;
-        allRequirementsMet = false;
-      } else {
-        // Require a usable browser window id before reporting verification success.
-        // Without this, verifyBrowser can pass while later showBrowser fails.
-        const rawWindowId = browserState.window_id ?? browserState.windowId;
-        const normalizedWindowId = String(rawWindowId || '').trim().toLowerCase();
-        const hasUsableWindowId = normalizedWindowId && normalizedWindowId !== 'null' && normalizedWindowId !== 'undefined' && normalizedWindowId !== 'not-found';
-
-        if (!hasUsableWindowId) {
-          missingWindowIdObserved = true;
-          if (!windowRecoveryRequested) {
-            log.info(`[PFX-${this.topics.baseTopic}] Browser enabled but window_id is missing, re-enabling browser for recovery`);
-            this.enableBrowser(desiredUrl || browserState.url);
-            changes.restarted = true;
-            windowRecoveryRequested = true;
-          } else {
-            log.info(`[PFX-${this.topics.baseTopic}] Waiting for browser window_id to become available...`);
-          }
-          allRequirementsMet = false;
-        } else {
-          // Window id recovered/reset successfully in this verification cycle.
-          windowRecoveryRequested = false;
-        }
-
-        // Browser is enabled, check URL if provided
-        if (desiredUrl) {
-          const currentUrl = String(browserState.url || '').trim();
-          const targetUrl = String(desiredUrl || '').trim();
-          if (currentUrl !== targetUrl) {
-            log.info(`[PFX-${this.topics.baseTopic}] URL mismatch - Current: ${currentUrl}, Desired: ${targetUrl}`);
-            this.setBrowserUrl(desiredUrl);
-            changes.urlChanged = true;
-            allRequirementsMet = false;
-          }
-        }
-
-        // Check visibility if specified. Support multiple possible fields from PFX
-        if (desiredVisible !== null) {
-          const currentlyVisible = !!(browserState.visible || browserState.focused || browserState.foreground);
-          if (currentlyVisible !== !!desiredVisible) {
-            log.info(`[PFX-${this.topics.baseTopic}] Visibility mismatch - Current: ${currentlyVisible}, Desired: ${desiredVisible}`);
-            if (desiredVisible) {
-              this.showBrowser();
-            } else {
-              this.hideBrowser();
-            }
-            changes.visibilityChanged = true;
-            allRequirementsMet = false;
-          }
-        }
-      }
-
-      if (allRequirementsMet) {
-        log.info(`[PFX-${this.topics.baseTopic}] Browser verification complete`);
-        return { ...changes, success: true, timeElapsed: Date.now() - startTime };
-      }
-
-      // Wait before next poll
-      await new Promise(resolve => setTimeout(resolve, pollInterval));
-    }
-
-    // Timeout reached
-    if (missingWindowIdObserved) {
-      log.warn(`[PFX-${this.topics.baseTopic}] Browser verification timeout reason: missing_window_id`);
-    }
-    log.warn(`[PFX-${this.topics.baseTopic}] Browser verification timeout after ${timeout}ms`);
-    return {
-      ...changes,
-      success: false,
-      timeElapsed: Date.now() - startTime,
-      timedOut: true,
-      missingWindowId: missingWindowIdObserved
-    };
   }
 
   // Enhanced media verification with automatic setImage and retry logic
