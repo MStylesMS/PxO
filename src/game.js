@@ -650,8 +650,11 @@ async function main(rawArgs = process.argv.slice(2)) {
     const warningsTopic = getWarningsTopic(cfg);
 
     if (warningsTopic) {
-      // Publish a human-readable warning when logger emits warn/error
+      // Publish a human-readable warning when logger emits warn/error.
+      // Guard: skip publish if MQTT is not connected to prevent a feedback loop
+      // where the "disconnected" log.warn itself tries to publish and re-triggers.
       const publishWarningFromLog = (entry) => {
+        if (!mqtt.isConnected) return;
         try {
           const payload = {
             timestamp: entry.timestamp,
