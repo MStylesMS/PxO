@@ -585,6 +585,7 @@ async function main(rawArgs = process.argv.slice(2)) {
     };
 
     log.info(`Logging to: ${logFile}`);
+    log.info(`Config: INI=${iniConfigPath ? path.resolve(iniConfigPath) : '(default search)'} EDN=${resolvedEdnPath}`);
   }
 
   log.info('Loading configuration in EDN format');
