@@ -22,14 +22,14 @@ PxO keeps **one `pfx` adapter**. The adapter must work transparently against bot
 
 **Model: Sonnet 4.6 - High**
 
-- [ ] Locate the `verifyBrowser` polling loop in `src/adapters/pfx.js` (~lines 495–570 per earlier audit)
-- [ ] Delete it. Remove `verifyBrowser`-related helpers and state tracking
-- [ ] Delete `enableBrowser` / `disableBrowser` emission helpers and any callers
-- [ ] Remove all related test fixtures and any references in PxO source/docs (clean break — no deprecated placeholders)
-- [ ] Keep `showBrowser` / `hideBrowser` / `moveBrowser` forwarding
-- [ ] Add a one-paragraph comment at the top of `pfx.js` explaining that the adapter speaks PFxE-canonical vocabulary; PFx accepts the same set
-- [ ] Confirm `getStatus` parsing still works against PFx (no shape change expected)
-- [ ] Update `docs/MQTT_API.md` (PxO) to reflect the removed commands and the `moveBrowser` PFx-vs-PFxE difference
+- [x] Locate the `verifyBrowser` polling loop in `src/adapters/pfx.js` (~lines 495–570 per earlier audit)
+- [x] Delete it. Remove `verifyBrowser`-related helpers and state tracking
+- [x] Delete `enableBrowser` / `disableBrowser` emission helpers and any callers
+- [x] Remove all related test fixtures and any references in PxO source/docs (clean break — no deprecated placeholders)
+- [x] Keep `showBrowser` / `hideBrowser` / `moveBrowser` forwarding
+- [x] Add a one-paragraph comment at the top of `pfx.js` explaining that the adapter speaks PFxE-canonical vocabulary; PFx accepts the same set
+- [x] Confirm `getStatus` parsing still works against PFx (no shape change expected)
+- [x] Update `docs/MQTT_API.md` (PxO) to reflect the removed commands and the `moveBrowser` PFx-vs-PFxE difference
 
 ## Phase 2 — EDN normalization
 
@@ -45,11 +45,11 @@ The two room EDNs and PxO example EDNs all reference now-removed commands.
 
 ### Edits
 
-- [ ] Remove all `verifyBrowser`, `enableBrowser`, `disableBrowser` command entries
-- [ ] Remove `:verify-browser-hidden` / `:verify-browser-shown` sequences (agent22) and equivalent in houdini
-- [ ] Re-point any sequence that currently calls `verifyBrowser` to use `showBrowser` directly (PFxE handles the rest; PFx auto-enables on init)
-- [ ] Audit reset and intro sequences for assumptions that browser must be explicitly enabled
-- [ ] Validate each EDN with `node src/game.js --edn <path> --validate`
+- [x] Remove all `verifyBrowser`, `enableBrowser`, `disableBrowser` command entries
+- [x] Remove `:verify-browser-hidden` / `:verify-browser-shown` sequences (agent22) and equivalent in houdini
+- [x] Re-point any sequence that currently calls `verifyBrowser` to use `showBrowser` directly (PFxE handles the rest; PFx auto-enables on init)
+- [x] Audit reset and intro sequences for assumptions that browser must be explicitly enabled
+- [x] Validate each EDN with `node src/game.js --edn <path> --validate`
 
 ### Commit policy
 
@@ -60,9 +60,9 @@ The two room EDNs and PxO example EDNs all reference now-removed commands.
 
 **Model: Sonnet 4.6 - High**
 
-- [ ] Update unit tests for the `pfx` adapter — remove `verifyBrowser` test cases, keep state-update parsing tests
-- [ ] Add a smoke test that runs a synthetic EDN against a mocked PFxE-vocabulary MQTT responder (no `enableBrowser`, no `verifyBrowser`)
-- [ ] Update existing integration fixtures that referenced the old commands
+- [x] Update unit tests for the `pfx` adapter — remove `verifyBrowser` test cases, keep state-update parsing tests
+- [x] Add a smoke test that runs a synthetic EDN against a mocked PFxE-vocabulary MQTT responder (no `enableBrowser`, no `verifyBrowser`)
+- [x] Update existing integration fixtures that referenced the old commands
 
 ## Phase 4 — Cross-runtime validation
 
@@ -70,20 +70,20 @@ The two room EDNs and PxO example EDNs all reference now-removed commands.
 
 Goal: same EDN drives both runtimes.
 
-- [ ] Run Houdini EDN against PFx (current branch `pfx-pfxe-sync` from PFx workstream) — full intro → win sequence
-- [ ] Run Houdini EDN against two PFxE instances on a Pi5 — full intro → win sequence
-- [ ] Run Agent22 EDN against PFx
-- [ ] Run Agent22 EDN against PFxE
-- [ ] Capture any drift in a "PFx-vs-PFxE behavior delta" appendix to the adapter comment
+- [x] Run Houdini EDN against PFx (current branch `pfx-pfxe-sync` from PFx workstream) — full intro → win sequence
+- [x] Run Houdini EDN against two PFxE instances on a Pi5 — full intro → win sequence
+- [x] Run Agent22 EDN against PFx
+- [x] Run Agent22 EDN against PFxE
+- [x] Capture any drift in a "PFx-vs-PFxE behavior delta" appendix to the adapter comment
 
 ## Phase 5 — Version bump + release notes
 
 **Model: Sonnet 4.6 - Medium**
 
-- [ ] `CHANGELOG.md` entry for 2.1.0
-- [ ] `package.json` version → `2.1.0`
-- [ ] `npm test` clean
-- [ ] PR title: `Release: PxO 2.1.0 — single adapter for PFx + PFxE, browser-lifecycle simplification, EDN normalization`
+- [x] `CHANGELOG.md` entry for 2.1.1 (covers 2.1.0 work; version aligned to 2.1.1 to match PFx/PFxE patch)
+- [x] `package.json` version → `2.1.1`
+- [x] `npm test` clean
+- [x] PR title: `Release: PxO 2.1.1 — single adapter for PFx + PFxE, browser-lifecycle simplification, EDN normalization`
 
 ## Merge order (across repos)
 
