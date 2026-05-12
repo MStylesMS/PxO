@@ -465,21 +465,20 @@ Named shortcuts that execute immediately (fire-and-forget):
 
 ### Browser Commands In Cues
 
-Use `enableBrowser` in cues when you want fire-and-forget browser startup:
+Both PFx (≥ 2.1.0) and PFxE auto-manage browser lifecycle at startup. Use
+`showBrowser` and `hideBrowser` to control overlay visibility:
 
 ```clojure
 :cues {
-  :enable-clock-browser {
-    :zone "mirror"
-    :command "enableBrowser"
-    :url "http://localhost/clock/index.html"
-  }
   :show-clock-browser {:zone "mirror" :command "showBrowser"}
   :hide-clock-browser {:zone "mirror" :command "hideBrowser"}
 }
 ```
 
-`verifyBrowser` is not a direct zone MQTT command. It is handled by PxO sequence execution and should be used inside sequence steps (see below), not as a raw command sent to a media zone.
+`moveBrowser` animates the overlay to a geometry on PFxE. On PFx the command
+is accepted and produces a warning; the overlay remains full-screen. Define
+PFxE overlay geometry in the renderer’s INI or HTML layout rather than via
+`moveBrowser` when targeting both runtimes.
 
 For clock zones, use `:command "show"` and `:command "hide"` for immediate visibility changes. Use `:command "fadeIn"` or `:command "fadeOut"` with `:fadeTime` in seconds for timed fades in EDN. The adapter also accepts legacy fade-time fields and forwards them to PxC's runtime fade duration handling.
 
@@ -549,17 +548,11 @@ Timeline-based execution with explicit duration:
 {:at 15 :fire :other-sequence}
 ```
 
-**5. Browser Verification (Blocking)**:
+**5. Visibility Control**:
 ```clojure
-{:at 20 :zone "mirror" :command "verifyBrowser" :url "http://localhost/clock/index.html" :visible false :timeout 15000}
+{:at 5 :zone "mirror" :command "showBrowser"}
+{:at 5 :zone "mirror" :command "hideBrowser"}
 ```
-
-`verifyBrowser` behavior:
-- Requests adapter state and verifies browser readiness
-- Calls `enableBrowser` if browser is not running
-- Updates URL/visibility if they differ
-- Polls until state matches or timeout is reached
-- Blocks sequence progress until complete (or timeout/failure)
 
 **Timing Model**:
 - `:at` counts down from `:duration`

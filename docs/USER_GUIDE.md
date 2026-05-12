@@ -625,34 +625,26 @@ Trigger sequences from within sequences:
 }
 ```
 
-### Browser Readiness Pattern
+### Browser Overlay Pattern
 
-Use this two-step approach for browser-backed displays (clock, overlays, web UIs):
-
-1. Start browser process with `enableBrowser` (usually in a cue or reset sequence)
-2. Use `verifyBrowser` in a sequence step before first `showBrowser`
+Both PFx (≥ 2.1.0) and PFxE auto-manage browser lifecycle at startup — no
+explicit enable/disable step is needed. To control overlay visibility, use
+`showBrowser` and `hideBrowser`:
 
 ```clojure
-:cues {
-  :enable-clock-browser {
-    :zone "mirror"
-    :command "enableBrowser"
-    :url "http://localhost/clock/index.html"
-  }
-}
-
 :sequences {
-  :prepare-clock-browser {
-    :duration 3
+  :show-clock {
+    :duration 2
     :timeline [
-      {:at 3 :fire :enable-clock-browser}
-      {:at 2 :zone "mirror" :command "verifyBrowser" :url "http://localhost/clock/index.html" :visible false :timeout 15000}
+      {:at 2 :zone "mirror" :command "showBrowser"}
     ]
   }
 }
 ```
 
-Use `enableBrowser` for fire-and-forget startup. Use `verifyBrowser` when sequence timing depends on browser readiness.
+`moveBrowser` animates the overlay geometry on PFxE. On PFx the command is
+accepted but produces a warning and has no visual effect (PFx overlays are
+always full-screen).
 
 ---
 

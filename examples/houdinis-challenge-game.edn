@@ -155,11 +155,6 @@
                                            :sequence [{:zone "picture" :command "verifyImage" :file "intro.mp4"}]}
                        :set-picture-intro-short {:description "Verify picture shows intro short video as image"
                                                  :sequence [{:zone "picture" :command "verifyImage" :file "intro_short.mp4"}]}
-                       :enable-clock {:description "Enable and verify clock browser on mirror"
-                                      :sequence [{:zone "mirror" :command "verifyBrowser" :url "http://localhost/clock/index.html" :visible false}]}
-                       :disable-clock {:description "Disable clock browser on mirror"
-                                       :sequence [{:zone "mirror" :command "disableBrowser"}]}
-
                        ;; Easter egg videos in magic mirror
                        :hint-mm-first {:description "First appearance of Houdini in Magic Mirror. Leaves clock up."
                                        :sequence [{:fire :lights-green}
@@ -342,11 +337,10 @@
                                                             {:at 55 :fire :fail-video}
                                                             {:at 30 :fire :lights-bright-white}]}
 
-                       :standard-reset {:description "Enhanced demo reset with media and browser verification"
+                       :standard-reset {:description "Reset mirror and picture to initial state"
                                         :sequence [{:fire :stop-all-audio}
                                                    {:fire :set-mirror-black}
                                                    {:fire :set-picture-intro}
-                                                   {:fire :enable-clock}
                                                    {:fire :hide-clock}
                                                    {:fire :hide-browser}
                                                    {:fire :lights-soft-white}]}
@@ -471,11 +465,10 @@
                                   :reset {:description "Cleanup and return to ready" :duration 0 :sequence "demo-reset"}} ;; End of phases
 
                          ;; Per-mode sequence overrides - demonstrate Priority 3 feature
-                         :sequences {:demo-reset {:description "Enhanced demo reset with media and browser verification"
+                         :sequences {:demo-reset {:description "Reset to demo-ready state"
                                                   :sequence [{:fire :stop-all-audio}
                                                              {:fire :set-mirror-black}
                                                              {:fire :set-picture-intro-short}
-                                                             {:fire :enable-clock}
                                                              {:fire :hide-clock}
                                                              {:fire :hide-browser}
                                                              {:fire :lights-soft-white}]} ;; End of demo-reset sequence 

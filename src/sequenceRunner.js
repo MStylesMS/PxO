@@ -3,7 +3,6 @@ const { secondsToMMSS } = require('./util');
 const {
     getCommandsTopic,
     stopAllAcrossZones,
-    VERIFY_BROWSER_TIMEOUT_MS,
     VERIFY_MEDIA_TIMEOUT_MS,
 } = require('./engineUtils');
 
@@ -292,35 +291,6 @@ class SequenceRunner {
             }
             const body = (typeof payload === 'string') ? payload : JSON.stringify(payload);
             this.mqtt.publish(topic, body);
-            return;
-        }
-
-        if (command === 'verifyBrowser') {
-            const url = resolvedStep.url;
-            const visible = resolvedStep.visible !== undefined ? resolvedStep.visible : null;
-            const browserTimeout = resolvedStep.timeout || VERIFY_BROWSER_TIMEOUT_MS;
-            const zones = this.extractZones(resolvedStep);
-            if (zones.length === 0) {
-                log.warn('verifyBrowser step missing :zone or :zones');
-                return;
-            }
-            for (const z of zones) {
-                try {
-                    const result = await this.zones.execute(z, 'verifyBrowser', { url, visible, timeout: browserTimeout });
-                    if (result && result.success === false) {
-                        const errorMsg = `Browser verification failed on zone '${z}' after ${browserTimeout}ms timeout`;
-                        log.warn(errorMsg);
-                        this.publishWarning('browser_verification_failed', errorMsg, { zone: z, timeout: browserTimeout });
-                        throw new Error(errorMsg);
-                    }
-                    this.publishEvent('sequence_verify_browser_ok', { zone: z, url, visible });
-                } catch (e) {
-                    const errorMsg = `SequenceRunner: verifyBrowser failed on ${z}: ${e.message}`;
-                    log.warn(errorMsg);
-                    this.publishWarning('browser_verification_error', errorMsg, { zone: z, error: e.message });
-                    throw e;
-                }
-            }
             return;
         }
 
@@ -654,10 +624,8 @@ class SequenceRunner {
                 case 'stopAll':
                 case 'hideBrowser':
                 case 'showBrowser':
-                case 'enableBrowser':
-                case 'disableBrowser':
+                case 'moveBrowser':
                 case 'stopAudio':
-                case 'verifyBrowser':
                     break;
                 case 'verifyImage':
                     if (!step.file) warnings.push(`Sequence ${name}[${idx}]: verifyImage requires :file`);
@@ -808,43 +776,12 @@ class SequenceRunner {
             case 'showBrowser':
                 await this.executeOnZones('showBrowser', {}, step);
                 return;
-            case 'enableBrowser':
-                if (step.url) {
-                    await this.executeOnZones('enableBrowser', { url: step.url }, step);
-                } else {
-                    log.warn('enableBrowser step missing required url parameter');
-                }
-                return;
-            case 'disableBrowser':
-                await this.executeOnZones('disableBrowser', {}, step);
+            case 'moveBrowser':
+                await this.executeOnZones('moveBrowser', step, step);
                 return;
             case 'stopAudio': {
                 const fadeTime = step.fadeTime;
                 await this.executeOnZones('stopAudio', { fadeTime }, step);
-                return;
-            }
-            case 'verifyBrowser': {
-                const url = step.url;
-                const visible = step.visible !== undefined ? step.visible : null;
-                const browserTimeout = step.timeout || VERIFY_BROWSER_TIMEOUT_MS; // standardized default
-                for (const z of this.extractZones(step)) {
-                    try {
-                        const result = await this.zones.execute(z, 'verifyBrowser', { url, visible, timeout: browserTimeout });
-                        if (result && result.success === false) {
-                            const errorMsg = `Browser verification failed on zone '${z}' after ${browserTimeout}ms timeout`;
-                            log.warn(errorMsg);
-                            this.publishWarning('browser_verification_failed', errorMsg, { zone: z, timeout: browserTimeout });
-                            throw new Error(errorMsg);
-                        }
-                        // success path: emit a light-weight event for observability
-                        this.publishEvent('sequence_verify_browser_ok', { zone: z, url, visible });
-                    } catch (e) {
-                        const errorMsg = `SequenceRunner: verifyBrowser failed on ${z}: ${e.message}`;
-                        log.warn(errorMsg);
-                        this.publishWarning('browser_verification_error', errorMsg, { zone: z, error: e.message });
-                        throw e;
-                    }
-                }
                 return;
             }
             case 'verifyImage': {

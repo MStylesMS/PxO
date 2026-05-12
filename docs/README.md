@@ -154,7 +154,9 @@ This separates software process controls from OS power controls and prop/adapter
 }
 ```
 
-For browser-backed overlays (clock/UI), use `enableBrowser` for fire-and-forget startup, and use `verifyBrowser` in sequence steps when progression must wait for browser readiness.
+For browser-backed overlays (clock/UI), use `showBrowser` and `hideBrowser`
+to control visibility. Both PFx (≥ 2.1.0) and PFxE auto-manage browser
+lifecycle at startup — no explicit `enableBrowser` step is needed.
 
 ### Zone-Based Architecture
 

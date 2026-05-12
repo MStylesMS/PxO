@@ -76,6 +76,10 @@ class MqttClient extends EventEmitter {
     });
   }
 
+  get isConnected() {
+    return this.client !== null && this.client.connected === true;
+  }
+
   disconnect() {
     if (this.client) {
       log.info('Disconnecting MQTT client');
@@ -86,7 +90,7 @@ class MqttClient extends EventEmitter {
 
   publish(topic, payloadObj, opts = {}) {
     if (!this.client) {
-      log.warn('Skipping publish while MQTT is disconnected:', topic);
+      log.debug('Skipping publish while MQTT is disconnected:', topic);
       return false;
     }
     const data = typeof payloadObj === 'string' ? payloadObj : JSON.stringify(payloadObj);
