@@ -18,7 +18,7 @@ PxO uses a **three-tier command model**: Commands (atomic zone operations) → C
 
 ## Paradox Family
 
-PxO is the game engine in a seven-product family. Commands flow PxO → PFx (media) and PxO → PxB (radio devices) over MQTT; inputs flow from PFx / PxB / Pio / PxT → PxO.
+PxO is the game engine in the Paradox family. Commands flow PxO → PFx (media) and PxO → PxB (radio devices) over MQTT; inputs flow from PFx / PxB / Pio / PxT → PxO.
 
 - **PFx** — media/audio/lights/relays controller
 - **PxO** — this project (game orchestration engine)
@@ -26,6 +26,7 @@ PxO is the game engine in a seven-product family. Commands flow PxO → PFx (med
 - **PxT** — player terminal kiosk
 - **Pio** — GPIO-to-MQTT bridge (C++)
 - **PxB** — Z-Wave / Zigbee / Thread to MQTT bridge (Node.js)
+- **PxP** — Paradox Prime operator/admin hub (configures & manages this app; not part of a running game)
 - Rooms: `agent22`, `houdinis-challenge` — EDN game packages consumed by this engine
 
 Z-Wave and Zigbee sensor events reach PxO via PxB node event topics (schema identical to PFx InputZone events), not from PFx.
