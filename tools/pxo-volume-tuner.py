@@ -287,13 +287,25 @@ def build_play_payload(item: MediaItem, work_vol: Optional[int], work_adj: Optio
 # Terminal / keyboard helpers
 # ---------------------------------------------------------------------------
 
-def _getch_raw() -> str:
-    """Read one character from stdin (raw mode, blocking)."""
+def get_single_key(prompt: str, valid_chars: str) -> str:
+    """
+    Display prompt and return the first keypress that is in valid_chars,
+    immediately — no Enter required.  Case-insensitive.  Ctrl-C raises
+    KeyboardInterrupt.
+    """
+    valid = set(valid_chars.lower())
+    print(prompt, end='', flush=True)
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
-        return sys.stdin.read(1)
+        while True:
+            ch = sys.stdin.read(1)
+            if ch == '\x03':
+                raise KeyboardInterrupt
+            if ch.lower() in valid:
+                print(ch.upper())  # echo the choice
+                return ch.lower()
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
@@ -348,74 +360,98 @@ def tune_item(item: MediaItem, broker: str, port: int) -> bool:
     print(f"  Topic   : {item.topic}")
     print()
 
-    choice = ask_line("  [P]lay  [S]kip  [Q]uit → ").strip().lower()
+    choice = get_single_key("  [P]lay  [S]kip  [Q]uit → ", "psq")
 
     if choice == 'q':
         return False
-    if choice == 's' or choice not in ('p', ''):
+    if choice == 's':
         item.skipped = True
         return True
 
-    # --- Play loop -----------------------------------------------------------
+    # --- Play / volume-adjust loop -------------------------------------------
     work_vol = item.volume
     work_adj = item.adjust_volume
     manually_stopped = False
+    needs_play = True   # play before showing the first volume prompt
+
+    # Whether this cue uses :adjustVolume semantics (kept throughout the session)
+    using_adjust = item.adjust_volume is not None and item.volume is None
 
     while True:
-        payload = build_play_payload(item, work_vol, work_adj)
-        print(f"\n  ▶ {json.dumps(payload)}")
-        manually_stopped = False  # reset each time we (re)start playback
-        if not mqtt_pub(broker, port, item.topic, payload):
-            print("  ✗ mosquitto_pub failed — check broker settings.")
+        if needs_play:
+            payload = build_play_payload(item, work_vol, work_adj)
+            print(f"\n  ▶ {json.dumps(payload)}")
+            manually_stopped = False
+            if not mqtt_pub(broker, port, item.topic, payload):
+                print("  ✗ mosquitto_pub failed — check broker settings.")
 
-        print(f"  Playing [{item.vol_display(work_vol, work_adj)}]"
-              "  — SPACE to stop, ENTER when done: ", end='', flush=True)
+            print(f"  Playing [{item.vol_display(work_vol, work_adj)}]"
+                  "  — SPACE to stop, ENTER when done: ", end='', flush=True)
+            action = wait_for_space_or_enter()
+            print()
 
-        action = wait_for_space_or_enter()
-        print()  # newline after inline prompt
-
-        if action == 'space':
-            mqtt_pub(broker, port, item.topic, stop_payload_for(item.command))
-            manually_stopped = True
-            print("  ■ Stopped.")
+            if action == 'space':
+                mqtt_pub(broker, port, item.topic, stop_payload_for(item.command))
+                manually_stopped = True
+                print("  ■ Stopped.")
 
         # --- Volume prompt ---------------------------------------------------
         cur_display = item.vol_display(work_vol, work_adj)
+        if using_adjust:
+            range_hint = "-50..+50"
+            type_hint  = "adjustVolume"
+        else:
+            range_hint = "0-150"
+            type_hint  = "volume"
         raw = ask_line(
-            f"  New volume 0-100, 'd' for default, ENTER to keep [{cur_display}]: "
+            f"  {type_hint} {range_hint}, 'd'=default, 's'=skip item, ENTER=accept [{cur_display}]: "
         ).strip()
 
         if raw == '':
-            # Keep working volume — record if different from original
+            # Accept current working value
             _apply_working_vol(item, work_vol, work_adj)
+            break
+
+        if raw.lower() == 's':
+            # Abandon any changes and move on to next item
+            item.skipped = True
+            manually_stopped = True  # suppress auto-stop message
             break
 
         if raw.lower() == 'd':
             item.remove_volume = True
             item.new_volume = None
             item.new_adjust_volume = None
-            print("  ✓ Will remove :volume (revert to default).")
+            print("  ✓ Will remove setting (revert to default).")
             break
 
         try:
             n = int(raw)
         except ValueError:
-            print(f"  ! '{raw}' is not a number — keeping current.")
-            _apply_working_vol(item, work_vol, work_adj)
-            break
+            print(f"  ! '{raw}' — enter {range_hint}, 'd', 's', or ENTER to accept.")
+            needs_play = False  # re-ask without replaying
+            continue
 
-        if not (0 <= n <= 100):
-            print(f"  ! {n} is out of range 0-100 — keeping current.")
-            _apply_working_vol(item, work_vol, work_adj)
-            break
+        if using_adjust:
+            if not (-50 <= n <= 50):
+                print(f"  ! {n} is out of range {range_hint}.")
+                needs_play = False
+                continue
+            work_adj = n
+            work_vol = None
+        else:
+            if not (0 <= n <= 150):
+                print(f"  ! {n} is out of range {range_hint}.")
+                needs_play = False
+                continue
+            work_vol = n
+            work_adj = None
 
-        # New value accepted — replay at new volume
-        work_vol = n
-        work_adj = None
-        print(f"  ↺ Replaying at volume={n}…")
+        # New valid value — replay before asking again
+        needs_play = True
+        print(f"  ↺ Replaying at {type_hint}={n}…")
 
-    # Always stop before moving on — in case the user pressed ENTER without
-    # pressing SPACE (let it play, then accepted the volume).
+    # Stop before moving to next item
     if not manually_stopped:
         stop = stop_payload_for(item.command)
         print(f"  ■ Stopping {item.command[4:].lower()} before next item…")
@@ -553,7 +589,7 @@ def print_summary(items: list[MediaItem], write_mode: bool) -> None:
             status  = "skipped"
             new_v   = "—"
         elif item.changed:
-            status  = "✓ changed" + (" (written)" if write_mode else " (dry-run)")
+            status  = "✓ written" if write_mode else "✓ changed (not saved)"
             new_v   = item.new_vol_display()
         else:
             status  = "unchanged"
@@ -586,8 +622,10 @@ def parse_args():
                    help="MQTT broker host (default: 127.0.0.1)")
     p.add_argument("-p", "--port", type=int, default=1883,
                    help="MQTT broker port (default: 1883)")
+    p.add_argument("-n", "--no-write", action="store_true",
+                   help="Do not write changes back to the EDN file (review / dry-run only)")
     p.add_argument("-w", "--write", action="store_true",
-                   help="Write accepted volume changes back to the EDN file")
+                   help="Write changes without prompting (for scripted / automated use)")
     p.add_argument("-t", "--topic",
                    help="Override MQTT base topic for zone (e.g. paradox/agent22/tv)")
     p.add_argument("--dry-run", action="store_true",
@@ -647,19 +685,28 @@ def main():
 
     # Write-back
     written = 0
+    changed_count = sum(1 for i in items if i.changed and not i.skipped)
+
+    do_write = False
     if args.write:
+        do_write = True
+    elif args.no_write:
+        do_write = False
+    elif changed_count:
+        print(f"\n  {changed_count} change(s) made.")
+        answer = ask_line(f"  Save changes to {os.path.basename(edn_file)}? [Y/n] ").strip().lower()
+        do_write = answer in ('', 'y', 'yes')
+
+    if do_write:
         written = write_changes(edn_file, items)
         if written:
-            print(f"\n  {written} line(s) updated in {edn_file}")
+            print(f"  {written} line(s) updated in {edn_file}")
         else:
-            print("\n  No lines needed updating.")
-    else:
-        changed = sum(1 for i in items if i.changed and not i.skipped)
-        if changed:
-            print(f"\n  {changed} change(s) pending."
-                  "  Re-run with --write to save them.")
+            print("  No lines needed updating (pattern mismatch — check output above).")
+    elif changed_count and not args.no_write and not args.write:
+        print("  Changes not saved.  Re-run with --write to save without the prompt.")
 
-    print_summary(items, write_mode=args.write and written > 0)
+    print_summary(items, write_mode=do_write and written > 0)
 
 
 if __name__ == "__main__":
