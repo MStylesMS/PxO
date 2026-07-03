@@ -1,6 +1,6 @@
 {
   "name": "paradox-orchestrator",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Paradox Orchestrator (PxO) — Zone-based game engine for escape rooms and interactive experiences",
   "main": "src/game.js",
   "bin": {

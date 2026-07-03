@@ -387,8 +387,8 @@ function orderIssuesByFilePosition(issues, lines) {
     });
 }
 
-function addIssue(list, level, message, context = '', lineHint = null) {
-  list.push({ level, message, context, lineHint });
+function addIssue(list, level, message, context = '', lineHint = null, meta = null) {
+  list.push({ level, message, context, lineHint, meta });
 }
 
 function extractEntityFromContext(context) {
@@ -602,8 +602,182 @@ function validateStrayTopLevelStepFields(modularConfig, issues) {
   checkRegistry(global['system-sequences'], 'global.system-sequences');
 }
 
+// ── Reference validation ──────────────────────────────────────────────────
+// Checks that anything which *uses* a named cue/sequence, light scene, or
+// media file actually points at something defined somewhere. It is fine for
+// light-scenes, media, cues, hints, sequences, etc. to be defined but never
+// used - only the reverse (a reference to something that is never defined)
+// is flagged here, as a warning.
+
+function isTemplatedString(value) {
+  return typeof value === 'string' && value.includes('{{');
+}
+
+function isSimpleIdentifierToken(value) {
+  // Matches bare identifier-style values (e.g. "intro-video"), not literal
+  // file paths (which contain '/' or a '.' extension) or template strings.
+  return typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_-]*$/.test(value);
+}
+
+function collectSequenceNamesFlat(sequences, into) {
+  if (!sequences || typeof sequences !== 'object') return into;
+
+  Object.entries(sequences).forEach(([key, value]) => {
+    if (key.startsWith('_')) return;
+    if (!value || typeof value !== 'object') return;
+
+    const isSeqDef = Array.isArray(value)
+      || Array.isArray(value.sequence)
+      || Array.isArray(value.timeline)
+      || Array.isArray(value.schedule);
+
+    if (isSeqDef) {
+      into.add(key);
+    } else {
+      // Category/group containing nested named sequences.
+      collectSequenceNamesFlat(value, into);
+    }
+  });
+
+  return into;
+}
+
+function collectFireTargets(scope, into) {
+  if (!scope || typeof scope !== 'object') return into;
+
+  if (scope.cues && typeof scope.cues === 'object') {
+    Object.keys(scope.cues).forEach((name) => into.add(name));
+  }
+
+  ['sequences', 'system-sequences', 'command-sequences'].forEach((key) => {
+    if (scope[key]) collectSequenceNamesFlat(scope[key], into);
+  });
+
+  return into;
+}
+
+function collectLightSceneIds(globalConfig) {
+  const ids = new Set();
+  const lightScenes = globalConfig && globalConfig['light-scenes'];
+  if (!lightScenes || typeof lightScenes !== 'object') return ids;
+
+  Object.entries(lightScenes).forEach(([key, def]) => {
+    if (def && typeof def === 'object' && typeof def.id === 'string' && def.id.trim()) {
+      ids.add(def.id);
+    } else {
+      ids.add(key);
+    }
+  });
+
+  return ids;
+}
+
+function collectMediaKeys(globalConfig) {
+  const keys = new Set();
+  const media = globalConfig && globalConfig.media;
+  if (!media || typeof media !== 'object') return keys;
+
+  Object.keys(media).forEach((k) => keys.add(k));
+  return keys;
+}
+
+function getConfiguredZoneType(globalConfig, zoneName) {
+  const zone = globalConfig && globalConfig.mqtt && globalConfig.mqtt.zones && globalConfig.mqtt.zones[zoneName];
+  return zone && zone.type;
+}
+
+function isLightsZoneCommand(node, globalConfig) {
+  const zoneNames = Array.isArray(node && node.zones)
+    ? node.zones
+    : (node && node.zone ? [node.zone] : []);
+
+  if (zoneNames.length === 0) return false;
+  return zoneNames.some((zoneName) => getConfiguredZoneType(globalConfig, zoneName) === 'mqtt-lights');
+}
+
+function walkForUndefinedReferences(node, contextPath, globalConfig, fireTargets, lightSceneIds, mediaKeys, issues) {
+  if (Array.isArray(node)) {
+    node.forEach((item, idx) => {
+      walkForUndefinedReferences(item, `${contextPath}[${idx}]`, globalConfig, fireTargets, lightSceneIds, mediaKeys, issues);
+    });
+    return;
+  }
+
+  if (!node || typeof node !== 'object') return;
+
+  // :fire must reference a defined cue or sequence (global or mode-local).
+  if (typeof node.fire === 'string' && node.fire.trim() && !isTemplatedString(node.fire)) {
+    if (!fireTargets.has(node.fire)) {
+      addIssue(
+        issues,
+        'warning',
+        `References '${node.fire}' via :fire but no cue or sequence with that name is defined`,
+        `${contextPath}.fire`,
+        null,
+        { kind: 'fire', name: node.fire, field: 'fire' }
+      );
+    }
+  }
+
+  // Lighting "scene" commands must reference a defined light scene id.
+  if (node.command === 'scene' && typeof node.name === 'string' && node.name.trim() && !isTemplatedString(node.name)) {
+    if (lightSceneIds.size > 0 && isLightsZoneCommand(node, globalConfig) && !lightSceneIds.has(node.name)) {
+      addIssue(
+        issues,
+        'warning',
+        `References light scene '${node.name}' but it is not defined under global.light-scenes`,
+        `${contextPath}.name`,
+        null,
+        { kind: 'scene', name: node.name, field: 'name' }
+      );
+    }
+  }
+
+  // Media file references (bare identifier-style values only; literal paths are skipped).
+  ['file', 'speech-file', 'video-file', 'image-file'].forEach((key) => {
+    const value = node[key];
+    if (mediaKeys.size > 0 && isSimpleIdentifierToken(value) && !mediaKeys.has(value)) {
+      addIssue(
+        issues,
+        'warning',
+        `References media '${value}' via :${key} but it is not defined under global.media`,
+        `${contextPath}.${key}`,
+        null,
+        { kind: 'media', name: value, field: key }
+      );
+    }
+  });
+
+  Object.entries(node).forEach(([key, value]) => {
+    if (key.startsWith('_')) return;
+    walkForUndefinedReferences(value, `${contextPath}.${key}`, globalConfig, fireTargets, lightSceneIds, mediaKeys, issues);
+  });
+}
+
+function validateReferences(modularConfig, issues) {
+  const global = (modularConfig && modularConfig.global) || {};
+  const gameModes = modularConfig['game-modes'] || {};
+
+  const globalFireTargets = collectFireTargets(global, new Set());
+  const lightSceneIds = collectLightSceneIds(global);
+  const mediaKeys = collectMediaKeys(global);
+
+  walkForUndefinedReferences(global, 'global', global, globalFireTargets, lightSceneIds, mediaKeys, issues);
+
+  Object.entries(gameModes).forEach(([modeKey, mode]) => {
+    if (!mode || typeof mode !== 'object') return;
+    // Mode-local cues/sequences extend (not replace) the global fire-target registry.
+    const modeFireTargets = collectFireTargets(mode, new Set(globalFireTargets));
+    walkForUndefinedReferences(mode, `game-modes.${modeKey}`, global, modeFireTargets, lightSceneIds, mediaKeys, issues);
+  });
+}
+
 function printSummary({ filePath, stats, errors, warnings }) {
   const pass = errors.length === 0;
+  const referenceWarnings = warnings.filter((w) => w.meta && w.meta.kind);
+  const otherWarnings = warnings.filter((w) => !(w.meta && w.meta.kind));
+
+  const refLabel = { fire: ':cue or :sequence', scene: 'light scene', media: 'media file' };
 
   console.log('EDN Validation Summary');
   console.log('======================');
@@ -640,12 +814,25 @@ function printSummary({ filePath, stats, errors, warnings }) {
   }
   console.log('');
 
-  console.log('Warnings (informational)');
-  console.log('------------------------');
-  if (warnings.length === 0) {
+  console.log('Missing References');
+  console.log('-------------------');
+  if (referenceWarnings.length === 0) {
     console.log('None');
   } else {
-    warnings.forEach((w, i) => {
+    referenceWarnings.forEach((w) => {
+      const lineText = Number.isFinite(w.line) && w.line !== Number.MAX_SAFE_INTEGER ? `L${w.line}` : 'L?';
+      const label = refLabel[w.meta.kind] || w.meta.kind;
+      console.log(`${lineText} '${w.meta.name}' no ${label} found for :${w.meta.field}`);
+    });
+  }
+  console.log('');
+
+  console.log('Warnings (informational)');
+  console.log('------------------------');
+  if (otherWarnings.length === 0) {
+    console.log('None');
+  } else {
+    otherWarnings.forEach((w, i) => {
       const lineText = Number.isFinite(w.line) && w.line !== Number.MAX_SAFE_INTEGER ? `L${w.line}` : 'L?';
       const contextText = w.context ? ` (${w.context})` : '';
       const entityText = w.entity ? ` [${w.entity.kind}:${w.entity.name}]` : '';
@@ -707,6 +894,7 @@ function validateEdnFile(filePathInput) {
 
   if (modularConfig) {
     validateStrayTopLevelStepFields(modularConfig, issues);
+    validateReferences(modularConfig, issues);
 
     try {
       legacyConfig = ModularConfigAdapter.transform(modularConfig);
