@@ -235,7 +235,9 @@ class ModularConfigAdapter {
         cues: modular.global.cues,
         hints,
         colorScenes: modular.global.lights?.['color-scenes'] || modular.global.lights?.colorScenes || modular.global.colorScenes || modular.global['color-scenes'],
-        sequences: modular.global.sequences || {},
+        // Pass through gameplay :global :sequences when present. Do not invent an empty
+        // object, and never promote this registry into system-/command-sequences.
+        ...(modular.global.sequences ? { sequences: modular.global.sequences } : {}),
         'system-sequences': modular.global['system-sequences'] || {},
         'additional-phases': modular.global['additional-phases'] || {},
         'command-sequences': modular.global['command-sequences'] || {},

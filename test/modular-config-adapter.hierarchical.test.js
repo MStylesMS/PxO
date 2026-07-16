@@ -66,20 +66,24 @@ describe('ModularConfigAdapter hierarchical sequences', () => {
         expect(runtimeConfig.game.demo.durations.game).toBeUndefined();
     });
 
-    test('ignores legacy global.sequences instead of promoting it', () => {
+    test('passes through global.sequences without promoting it into control registries', () => {
+        const gameplaySequences = {
+            system: {
+                'legacy-reset-sequence': {
+                    description: 'Legacy reset',
+                    sequence: [{ zone: 'mirror', command: 'setImage', file: 'legacy.png' }]
+                }
+            }
+        };
         const runtimeConfig = ModularConfigAdapter.transform(createConfig({
             global: {
-                sequences: {
-                    system: {
-                        'legacy-reset-sequence': {
-                            description: 'Legacy reset',
-                            sequence: [{ zone: 'mirror', command: 'setImage', file: 'legacy.png' }]
-                        }
-                    }
-                }
+                sequences: gameplaySequences
             }
         }));
 
+        // Gameplay sequences remain under global.sequences for room configs that
+        // still define them there; they must not be merged into control registries.
+        expect(runtimeConfig.global.sequences).toEqual(gameplaySequences);
         expect(runtimeConfig.global['system-sequences']).toEqual({
             system: {
                 'reset-sequence': {
@@ -94,7 +98,7 @@ describe('ModularConfigAdapter hierarchical sequences', () => {
                 sequence: [{ zone: 'picture', command: 'playVideo', file: 'intro.mp4' }]
             }
         });
-        expect(runtimeConfig.global.sequences).toBeUndefined();
+        expect(runtimeConfig.global.actions).toBeUndefined();
     });
 
     test('exposes trigger source registries only through global.inputs', () => {
