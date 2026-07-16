@@ -6,7 +6,7 @@ PxO is a **modular, MQTT-based game orchestration engine** for escape rooms and 
 
 ## Tech Stack
 
-- **Runtime**: Node.js 18+
+- **Runtime**: Node.js **24 LTS** (Active). Develop and deploy against Node 24. Existing installs on Node 18/20 must be upgraded to Node 24 LTS before running current app versions.
 - **Game Config**: EDN (Extensible Data Notation)
 - **System Config**: INI format
 - **Communication**: MQTT (zone-based topics)
