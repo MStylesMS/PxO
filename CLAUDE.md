@@ -1,4 +1,3 @@
-# Paradox Orchestrator (PxO)
+﻿# Paradox Orchestrator (PxO)
 
-Read [AI-INSTRUCTIONS.md](AI-INSTRUCTIONS.md) for quick project context.
-Read [AI-DETAILED-OVERVIEW.md](AI-DETAILED-OVERVIEW.md) for comprehensive architecture and development guidance.
+Read [AI-INSTRUCTIONS.md](AI-INSTRUCTIONS.md) for project context.
