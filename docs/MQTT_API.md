@@ -91,6 +91,9 @@ Captured:
 - Phase transitions and top-level gameplay/control sequence lifecycle events
 - Trigger/sensor topic changes used by gameplay triggers
 - Optional PxT chat topics from INI (`chat_to_player`, `chat_from_player`)
+- When those topics are set, PxO also keeps an in-memory chat buffer (cap 200) and
+  publishes a retained snapshot to `{chatTopicRoot}/chat/history` for late-joining
+  operator UIs. The buffer is cleared when a new gameplay session starts.
 
 Excluded:
 

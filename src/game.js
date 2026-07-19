@@ -956,6 +956,54 @@ async function main(rawArgs = process.argv.slice(2)) {
     log.warn('Gameplay chat logging disabled: both INI fields chat_to_player and chat_from_player are required');
   }
 
+  // Live chat history for GM/player UIs (retained MQTT snapshot). JSONL remains archival.
+  const CHAT_HISTORY_MAX = 200;
+  let chatHistory = [];
+  let chatHistoryTopic = null;
+  if (chatToPlayerTopic) {
+    const toSuffix = '/chat/to-players';
+    const altSuffix = '/chat/to-player';
+    if (chatToPlayerTopic.endsWith(toSuffix)) {
+      chatHistoryTopic = `${chatToPlayerTopic.slice(0, -toSuffix.length)}/chat/history`;
+    } else if (chatToPlayerTopic.endsWith(altSuffix)) {
+      chatHistoryTopic = `${chatToPlayerTopic.slice(0, -altSuffix.length)}/chat/history`;
+    } else {
+      const idx = chatToPlayerTopic.lastIndexOf('/chat/');
+      if (idx >= 0) chatHistoryTopic = `${chatToPlayerTopic.slice(0, idx)}/chat/history`;
+    }
+  }
+
+  function publishChatHistory() {
+    if (!chatHistoryTopic) return;
+    mqtt.publish(chatHistoryTopic, {
+      ts: Date.now(),
+      messages: chatHistory.slice()
+    }, { retain: true });
+  }
+
+  function clearChatHistory(reason) {
+    if (!chatHistoryTopic) return;
+    chatHistory = [];
+    publishChatHistory();
+    if (reason) log.info(`Cleared chat history (${reason})`);
+  }
+
+  function appendChatHistory(payload) {
+    if (!chatHistoryTopic) return;
+    if (!payload || typeof payload !== 'object') return;
+    const author = String(payload.author == null ? '' : payload.author).trim() || 'unknown';
+    const message = String(payload.message == null ? '' : payload.message).trim();
+    if (!message) return;
+    const ts = Number(payload.ts);
+    chatHistory.push({
+      ts: Number.isFinite(ts) && ts > 0 ? ts : Date.now(),
+      author,
+      message
+    });
+    while (chatHistory.length > CHAT_HISTORY_MAX) chatHistory.shift();
+    publishChatHistory();
+  }
+
   const gameplayControlSequenceAllowlist = new Set([
     'intro-to-gameplay-sequence',
     'pause-sequence',
@@ -980,11 +1028,16 @@ async function main(rawArgs = process.argv.slice(2)) {
     try {
       log.debug(`Received MQTT message on ${topic}:`, payload);
 
-      if (chatLoggingEnabled && gameplayLogger) {
-        if (topic === chatToPlayerTopic) {
-          gameplayLogger.chat('chat_to_player', topic, payload);
-        } else if (topic === chatFromPlayerTopic) {
-          gameplayLogger.chat('chat_from_player', topic, payload);
+      if (chatLoggingEnabled) {
+        if (topic === chatToPlayerTopic || topic === chatFromPlayerTopic) {
+          appendChatHistory(payload);
+          if (gameplayLogger) {
+            gameplayLogger.chat(
+              topic === chatToPlayerTopic ? 'chat_to_player' : 'chat_from_player',
+              topic,
+              payload
+            );
+          }
         }
       }
 
@@ -1212,6 +1265,8 @@ async function main(rawArgs = process.argv.slice(2)) {
               gameplayLogger.event('phase_transition', eventData);
               if (eventData.to === 'gameplay') {
                 gameplayLogger.commitPendingRun({ mode: sm.currentGameMode || sm.gameType });
+                // New gameplay session: wipe prior game transcript for late-joining UIs
+                clearChatHistory('gameplay_started');
               }
               if (gameplayLogger.pending && eventData.from === 'intro' && eventData.to !== 'gameplay') {
                 gameplayLogger.discardPending('intro_ended_without_gameplay');
@@ -1246,6 +1301,9 @@ async function main(rawArgs = process.argv.slice(2)) {
   if (chatLoggingEnabled) {
     mqtt.subscribe(chatToPlayerTopic);
     mqtt.subscribe(chatFromPlayerTopic);
+    // Align retained broker snapshot with empty in-memory buffer after process start
+    publishChatHistory();
+    log.info(`Chat history enabled → ${chatHistoryTopic}`);
   }
 
   // Initialize trigger subscriptions
@@ -1259,6 +1317,7 @@ async function main(rawArgs = process.argv.slice(2)) {
     publishHintsRegistry();
     publishUiConfig();
     publishLightScenes();
+    if (chatLoggingEnabled) publishChatHistory();
     initializeTriggers(); // Re-subscribe to triggers after reconnect
   });
 
