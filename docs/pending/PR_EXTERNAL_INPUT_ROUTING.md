@@ -3,7 +3,7 @@
 Status: Draft implementation plan with initial code slice started.
 
 ## Goal
-Enable PxO to consume external gameplay-driving inputs from multiple producer apps (PFx, Pio, and others) using a consistent, maintainable EDN model.
+Enable PxO to consume external gameplay-driving inputs from multiple producer apps (PFx, PxIO, and others) using a consistent, maintainable EDN model.
 
 The runtime should support both:
 - Canonical room topics (preferred)
@@ -13,7 +13,7 @@ without requiring PxO to route through PFx.
 
 ## Architecture Boundary
 - PxO is the gameplay consumer and router.
-- PFx, Pio, and other apps are peer producer/consumer interfaces to the external world.
+- PFx, PxIO, and other apps are peer producer/consumer interfaces to the external world.
 - All interactions flow through MQTT (or WS bridge), not app-to-app direct coupling.
 
 ## Deliverable 1: Topic Contract for Producer Apps
@@ -55,8 +55,8 @@ Proposed shape:
                :kind :event
                :description "Front door contact"}
 
-  :gpio-door {:topic "paradox/houdini/pio/gpio/door"
-              :producer :pio
+  :gpio-door {:topic "paradox/houdini/pxio/gpio/door"
+              :producer :pxio
               :kind :raw
               :description "Direct GPIO reed"}
 }
@@ -67,7 +67,7 @@ Proposed shape:
               :actions [{:type :cue :cue :door-open-cue}
                         {:type :game :command "executeHint" :id "hint-door"}]}
 
-  :gpio-open {:topic "paradox/houdini/pio/gpio/door"
+  :gpio-open {:topic "paradox/houdini/pxio/gpio/door"
               :condition {:value "1"}
               :actions [{:type :game :command "solve"}]}
 }
@@ -105,7 +105,7 @@ Implemented in `src/game.js`:
 ### Phase 2: EDN and Docs
 - [ ] Document `:inputs` in `docs/CONFIG_EDN.md`
 - [ ] Document external input consumption policy in `docs/MQTT_API.md`
-- [ ] Add complete working examples for PFx canonical and Pio raw paths
+- [ ] Add complete working examples for PFx canonical and PxIO raw paths
 
 ### Phase 3: Trigger Tooling
 - [x] Add startup diagnostics listing active trigger subscriptions and source bindings
@@ -123,17 +123,17 @@ Implemented in `src/game.js`:
 2. PFx second
    - Align producer event/state/schema payload discipline
    - Improve capability-scoped retained state for sensors and outputs
-3. Pio last (likely minimal)
-   - Pio already has usable MQTT bridge topics and contracts
+3. PxIO last (likely minimal)
+   - PxIO already has usable MQTT bridge topics and contracts
    - Optional only: schema richness, canonical aliases, metadata alignment
 
-## Pio Impact Assessment
+## PxIO Impact Assessment
 Expected requirement: minimal to none for initial rollout.
 
 Optional future alignment:
 - Add richer schema payload metadata
 - Add canonical room-level alias topics if desired
-- Keep existing Pio IO topic model compatible with PxO raw subscriptions
+- Keep existing PxIO IO topic model compatible with PxO raw subscriptions
 
 ## Risks and Mitigations
 - Risk: Trigger config sprawl with raw topics.

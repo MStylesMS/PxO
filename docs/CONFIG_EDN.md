@@ -189,7 +189,7 @@ Example:
 
 ### Input Source Registry (External Producer Inputs)
 
-PxO can consume gameplay-driving input topics from multiple producer apps (for example PFx and Pio).
+PxO can consume gameplay-driving input topics from multiple producer apps (for example PFx and PxIO).
 
 ### Light Scene Registry Metadata
 
@@ -236,8 +236,8 @@ To keep trigger rules maintainable, define named input sources in `:inputs` and 
                :kind :event
                :description "Normalized PFx contact events"}
 
-  :gpio-door {:topic "paradox/houdini/pio/gpio/door"
-              :producer :pio
+  :gpio-door {:topic "paradox/houdini/pxio/gpio/door"
+              :producer :pxio
               :kind :raw
               :description "Direct GPIO reed switch"}
 }
