@@ -638,6 +638,28 @@ mosquitto_pub -h localhost -t 'paradox/game/mirror/commands' \
   -m '{"command":"showBrowser"}'
 ```
 
+**Sleep Screen** (monitor off / blank via PFx `monitor_control_method`):
+```json
+{
+  "command": "sleepScreen"
+}
+```
+
+**Wake Screen** (monitor on via PFx `monitor_control_method`):
+```json
+{
+  "command": "wakeScreen"
+}
+```
+
+PFx applies the zone's configured method (`xrandr`, `dpms`, `cec`, `ddc`, or `none`). With method `none`, these commands no-op. When a method is configured, `setImage` / `playVideo` on PFx also auto-wake before playback.
+
+**Example**:
+```bash
+mosquitto_pub -h localhost -t 'paradox/houdini/picture/commands' \
+  -m '{"command":"sleepScreen"}'
+```
+
 ### Clock Zone (`pxc-clock`)
 
 **Show Clock**:
@@ -950,6 +972,9 @@ client.on('message', (topic, message) => {
 | `playVideo` | `file`, `loop` (opt) | Play video |
 | `playAudioFX` | `file`, `volume` (opt), `loop` (opt) | Play audio |
 | `stopAudio` | none | Stop audio |
+| `setImage` | `file` | Show still image |
+| `sleepScreen` | none | Monitor off/blank via PFx `monitor_control_method` |
+| `wakeScreen` | none | Monitor on via PFx `monitor_control_method` |
 | `showBrowser` | none | Show browser overlay |
 | `hideBrowser` | none | Hide browser overlay |
 | `moveBrowser` | `x`, `y`, `width`, `height` (all opt) | Animate overlay geometry (PFxE only; PFx warns and ignores) |

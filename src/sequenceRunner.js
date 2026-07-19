@@ -626,6 +626,8 @@ class SequenceRunner {
                 case 'showBrowser':
                 case 'moveBrowser':
                 case 'stopAudio':
+                case 'sleepScreen':
+                case 'wakeScreen':
                     break;
                 case 'verifyImage':
                     if (!step.file) warnings.push(`Sequence ${name}[${idx}]: verifyImage requires :file`);
@@ -784,6 +786,12 @@ class SequenceRunner {
                 await this.executeOnZones('stopAudio', { fadeTime }, step);
                 return;
             }
+            case 'sleepScreen':
+                await this.executeOnZones('sleepScreen', {}, step);
+                return;
+            case 'wakeScreen':
+                await this.executeOnZones('wakeScreen', {}, step);
+                return;
             case 'verifyImage': {
                 const timeout = step.timeout || VERIFY_MEDIA_TIMEOUT_MS;
                 const file = step.file;

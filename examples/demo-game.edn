@@ -38,6 +38,10 @@
         :type "pfx-media"
         :baseTopic "paradox/demo/mirror"
       }
+      :picture {
+        :type "pfx-media"
+        :baseTopic "paradox/demo/picture"
+      }
       :audio {
         :type "pfx-media"
         :baseTopic "paradox/demo/audio"
@@ -98,6 +102,12 @@
       :stop-all-mirror {:zone "mirror" :command "stopAudio"}
       :stop-all-audio {:zone "audio" :command "stopAudio"}
       :show-clock {:zone "mirror" :command "showBrowser"}
+
+      ; Monitor power (PFx monitor_control_method on the zone)
+      :mirror-off {:zone "mirror" :command "sleepScreen" :description "Blank/power-off mirror display"}
+      :mirror-on {:zone "mirror" :command "wakeScreen" :description "Wake mirror display"}
+      :picture-off {:zone "picture" :command "sleepScreen" :description "Power-off picture TV"}
+      :picture-on {:zone "picture" :command "wakeScreen" :description "Power-on picture TV"}
       
       ; Victory/failure
       :victory-lights {:zone "lights" :command "scene" :scene "rainbow"}

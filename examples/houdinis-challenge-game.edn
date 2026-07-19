@@ -69,6 +69,12 @@
                   :stop-all-audio {:zones ["mirror" "picture" "audio"] :command "stopAudio" :description "Stop all audio, but skip images/videos to avoid screen flicker"}
                   :fade-out-all-media {:zones ["mirror" "picture" "audio"] :command "stopAll" :fadeTime 3 :description "Stop all audio with 3 second fadeout"}
 
+                  ;; Monitor power (requires PFx monitor_control_method on the zone)
+                  :picture-off {:zone "picture" :command "sleepScreen" :description "Power off / blank picture TV"}
+                  :picture-on {:zone "picture" :command "wakeScreen" :description "Power on / wake picture TV"}
+                  :mirror-off {:zone "mirror" :command "sleepScreen" :description "Blank / sleep mirror display"}
+                  :mirror-on {:zone "mirror" :command "wakeScreen" :description "Wake mirror display"}
+
                   ;; Lighting control cues
                   :lights-green {:zone "lights" :command "scene" :name "green" :description "Change lights to green - success/go indicator"}
                   :lights-soft-white {:zone "lights" :command "scene" :name "softWhite" :description "Change lights to soft white - normal state"}
