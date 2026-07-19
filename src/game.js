@@ -1171,16 +1171,20 @@ async function main(rawArgs = process.argv.slice(2)) {
                 return;
               }
 
-              if (startCommand && gameplayLogger) {
-                const mode = inferStartMode(commandName, normalizedPayload, cfg, sm);
-                const gameplayDurationSec = getConfiguredGameplayDurationSeconds(cfg, mode);
-                gameplayLogger.beginPendingRun({
-                  startCommand: commandName,
-                  mode,
-                  topic,
-                  gameplayDurationSec,
-                  tsMs: Date.now()
-                });
+              if (startCommand) {
+                // New game: drop between-game / prior-run chat for late-joining UIs
+                clearChatHistory('game_started');
+                if (gameplayLogger) {
+                  const mode = inferStartMode(commandName, normalizedPayload, cfg, sm);
+                  const gameplayDurationSec = getConfiguredGameplayDurationSeconds(cfg, mode);
+                  gameplayLogger.beginPendingRun({
+                    startCommand: commandName,
+                    mode,
+                    topic,
+                    gameplayDurationSec,
+                    tsMs: Date.now()
+                  });
+                }
               } else if (gameplayLogger && (gameplayLogger.pending || gameplayLogger.session)) {
                 gameplayLogger.commandApplied(commandName, normalizedPayload, topic, { source: 'state_machine' });
               }
@@ -1265,8 +1269,6 @@ async function main(rawArgs = process.argv.slice(2)) {
               gameplayLogger.event('phase_transition', eventData);
               if (eventData.to === 'gameplay') {
                 gameplayLogger.commitPendingRun({ mode: sm.currentGameMode || sm.gameType });
-                // New gameplay session: wipe prior game transcript for late-joining UIs
-                clearChatHistory('gameplay_started');
               }
               if (gameplayLogger.pending && eventData.from === 'intro' && eventData.to !== 'gameplay') {
                 gameplayLogger.discardPending('intro_ended_without_gameplay');
