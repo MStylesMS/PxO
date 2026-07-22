@@ -8,16 +8,16 @@
 
 ## Features
 
-- 🎮 **State Machine-Driven Game Flow** — Explicit state transitions (ready → intro → gameplay → solved/failed)
-- ⚡ **Three-Tier Configuration Model** — Commands → Cues → Sequences for clean execution semantics
-- 📡 **Zone-Based MQTT Architecture** — Independent zones (lights, displays, audio) communicate via standardized topics
-- ⏱️ **Timeline-Based Sequence Execution** — Precise timing control with blocking semantics and `:wait` support
-- 🔧 **EDN & INI Configuration** — Type-safe EDN for game logic, INI for system settings
-- 💡 **Extensible Zone Adapters** — Easy integration with hardware controllers (ParadoxFX, custom devices)
-- 🔌 **Direct Zone Communication** — UI components can send commands directly to zones for optimal performance
-- 🎯 **Mode Support** — Multiple game modes (60min, 30min, demo) with per-mode overrides
-- 📝 **Comprehensive Logging** — File rotation, configurable log levels, debugging support
-- 🧪 **Test Coverage** — Unit, contract, and E2E tests included
+- ðŸŽ® **State Machine-Driven Game Flow** â€” Explicit state transitions (ready â†’ intro â†’ gameplay â†’ solved/failed)
+- âš¡ **Three-Tier Configuration Model** â€” Commands â†’ Cues â†’ Sequences for clean execution semantics
+- ðŸ“¡ **Zone-Based MQTT Architecture** â€” Independent zones (lights, displays, audio) communicate via standardized topics
+- â±ï¸ **Timeline-Based Sequence Execution** â€” Precise timing control with blocking semantics and `:wait` support
+- ðŸ”§ **EDN & INI Configuration** â€” Type-safe EDN for game logic, INI for system settings
+- ðŸ’¡ **Extensible Zone Adapters** â€” Easy integration with hardware controllers (ParadoxFX, custom devices)
+- ðŸ”Œ **Direct Zone Communication** â€” UI components can send commands directly to zones for optimal performance
+- ðŸŽ¯ **Mode Support** â€” Multiple game modes (60min, 30min, demo) with per-mode overrides
+- ðŸ“ **Comprehensive Logging** â€” File rotation, configurable log levels, debugging support
+- ðŸ§ª **Test Coverage** â€” Unit, contract, and E2E tests included
 
 ## Quick Start
 
@@ -59,9 +59,9 @@ Create a simple game configuration (`example-game.edn`):
 ```clojure
 {
   :zones {
-    :lights {:type "mqtt-lights" :baseTopic "paradox/game/lights"}
-    :display {:type "pfx-media" :baseTopic "paradox/game/display"}
-    :audio {:type "pfx-media" :baseTopic "paradox/game/audio"}
+    :lights {:type "mqtt-lights" :baseTopic "paradox/houdini/lights"}
+    :display {:type "pfx-media" :baseTopic "paradox/houdini/display"}
+    :audio {:type "pfx-media" :baseTopic "paradox/houdini/audio"}
   }
   
   :cues {
@@ -101,7 +101,7 @@ node src/game.js --edn example-game.edn --mode demo
 ### State Machine
 
 ```text
-ready → intro → gameplay → paused/solved/failed → sleeping/resetting
+ready â†’ intro â†’ gameplay â†’ paused/solved/failed â†’ sleeping/resetting
 ```
 
 Each state has explicit entry/exit handlers and allowed transitions.
@@ -110,9 +110,9 @@ Each state has explicit entry/exit handlers and allowed transitions.
 
 ```text
 Commands (atomic operations)
-    ↓
+    â†“
 Cues (named shortcuts, fire-and-forget)
-    ↓
+    â†“
 Sequences (timeline-based execution with blocking semantics)
 ```
 
@@ -155,8 +155,8 @@ This separates software process controls from OS power controls and prop/adapter
 ```
 
 For browser-backed overlays (clock/UI), use `showBrowser` and `hideBrowser`
-to control visibility. Both PFx (≥ 2.1.0) and PFxE auto-manage browser
-lifecycle at startup — no explicit `enableBrowser` step is needed.
+to control visibility. Both PFx (â‰¥ 2.1.0) and PFxE auto-manage browser
+lifecycle at startup â€” no explicit `enableBrowser` step is needed.
 
 ### Zone-Based Architecture
 
@@ -164,10 +164,10 @@ Each zone is an independent adapter that communicates via MQTT:
 
 | Zone Type | Purpose | Example Topics |
 | ----------- | --------- | ---------------- |
-| `mqtt-lights` | Lighting control | `paradox/game/lights/commands` |
-| `pfx-media` | Video/audio playback | `paradox/game/display/commands` |
-| `houdini-clock` | Countdown timer UI | `paradox/game/clock/commands` |
-| `system` | System commands | `paradox/game/system/commands` |
+| `mqtt-lights` | Lighting control | `paradox/houdini/lights/commands` |
+| `pfx-media` | Video/audio playback | `paradox/houdini/display/commands` |
+| `houdini-clock` | Countdown timer UI | `paradox/houdini/clock/commands` |
+| `system` | System commands | `paradox/houdini/system/commands` |
 
 **MQTT Communication Pattern**:
 
@@ -180,14 +180,14 @@ Each zone is an independent adapter that communicates via MQTT:
 
 ## Documentation
 
-- **[Functional Specification](docs/SPEC.md)** — Detailed architecture, state machine, and configuration model
-- **[MQTT API Reference](docs/MQTT_API.md)** — Complete MQTT topic and message format documentation
-- **[EDN Configuration Guide](docs/CONFIG_EDN.md)** — Game configuration with EDN format
-- **[INI Configuration Guide](docs/CONFIG_INI.md)** — System settings with INI format
-- **[Testing Guide](docs/TESTING.md)** — Jest entry points, focused runs, and validation workflow
-- **[Setup Instructions](docs/SETUP.md)** — Installation and deployment guide
-- **[User Guide](docs/USER_GUIDE.md)** — Tutorial: building your first game
-- **[AI Agent Instructions](docs/AI_AGENT_INSTRUCTIONS.md)** — Development guidelines for AI coding agents
+- **[Functional Specification](docs/SPEC.md)** â€” Detailed architecture, state machine, and configuration model
+- **[MQTT API Reference](docs/MQTT_API.md)** â€” Complete MQTT topic and message format documentation
+- **[EDN Configuration Guide](docs/CONFIG_EDN.md)** â€” Game configuration with EDN format
+- **[INI Configuration Guide](docs/CONFIG_INI.md)** â€” System settings with INI format
+- **[Testing Guide](docs/TESTING.md)** â€” Jest entry points, focused runs, and validation workflow
+- **[Setup Instructions](docs/SETUP.md)** â€” Installation and deployment guide
+- **[User Guide](docs/USER_GUIDE.md)** â€” Tutorial: building your first game
+- **[AI Agent Instructions](docs/AI_AGENT_INSTRUCTIONS.md)** â€” Development guidelines for AI coding agents
 
 Historical PR notes, migration sketches, and deferred idea documents live under `archive/` and are not part of the canonical reference set.
 
@@ -253,8 +253,8 @@ After=network.target mosquitto.service
 [Service]
 Type=simple
 User=paradox
-WorkingDirectory=/opt/paradox/games/your-game
-Environment="PXO_CONFIG_PATH=/opt/paradox/games/your-game/config/game.edn"
+WorkingDirectory=/opt/paradox/houdinis/your-game
+Environment="PXO_CONFIG_PATH=/opt/paradox/houdinis/your-game/config/game.edn"
 ExecStart=/usr/bin/node /opt/paradox/engines/paradox-orchestrator/src/game.js
 Restart=on-failure
 RestartSec=5s
@@ -267,14 +267,14 @@ See [SETUP.md](docs/SETUP.md) for complete deployment instructions.
 
 ## Example Games
 
-- **[Houdini's Challenge](https://github.com/MStylesMS/houdinis-challenge)** — Full escape room game using PxO
+- **[Houdini's Challenge](https://github.com/MStylesMS/houdinis-challenge)** â€” Full escape room game using PxO
 
 ## Integration with Hardware
 
 PxO is designed to work with:
 
-- **[ParadoxFX](https://github.com/MStylesMS/ParadoxFX)** — Multi-zone media controller for audio/video/lights
-- **[HoudiniClock](https://github.com/MStylesMS/houdiniclock)** — React-based countdown timer UI
+- **[ParadoxFX](https://github.com/MStylesMS/ParadoxFX)** â€” Multi-zone media controller for audio/video/lights
+- **[HoudiniClock](https://github.com/MStylesMS/houdiniclock)** â€” React-based countdown timer UI
 - Custom MQTT-enabled hardware controllers
 
 ## MQTT Broker Setup
@@ -297,7 +297,7 @@ mosquitto_sub -h localhost -t 'paradox/#' -v
 node src/game.js --edn game.edn
 
 # Terminal 3: Send a command
-mosquitto_pub -h localhost -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -t 'paradox/houdini/commands' \
   -m '{"command":"start","mode":"demo"}'
 ```
 
@@ -446,4 +446,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-**Paradox Orchestrator** — Power your interactive experiences with confidence.
+**Paradox Orchestrator** â€” Power your interactive experiences with confidence.

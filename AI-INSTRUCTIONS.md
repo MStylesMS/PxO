@@ -1,4 +1,4 @@
-# Paradox Orchestrator (PxO) — AI Instructions
+# Paradox Orchestrator (PxO) â€” AI Instructions
 
 PxO is a **modular, MQTT-based game orchestration engine** for escape rooms and interactive experiences. It manages game state, executes timed sequences, coordinates multiple zones (lights, displays, audio), and provides a flexible configuration system using EDN and INI formats.
 
@@ -10,24 +10,24 @@ PxO is a **modular, MQTT-based game orchestration engine** for escape rooms and 
 - **Game Config**: EDN (Extensible Data Notation)
 - **System Config**: INI format
 - **Communication**: MQTT (zone-based topics)
-- **State Machine**: `ready → intro → gameplay → paused/solved/failed → sleeping/resetting`
+- **State Machine**: `ready â†’ intro â†’ gameplay â†’ paused/solved/failed â†’ sleeping/resetting`
 
 ## Architecture Summary
 
-PxO uses a **three-tier command model**: Commands (atomic zone operations) → Cues (named shortcuts, fire-and-forget) → Sequences (timeline-based with blocking semantics). Each zone (lights, mirror, picture, audio, clock, system) is an independent adapter communicating via MQTT. The state machine manages game flow with explicit transitions, entry/exit handlers, and timer preservation on pause/resume.
+PxO uses a **three-tier command model**: Commands (atomic zone operations) â†’ Cues (named shortcuts, fire-and-forget) â†’ Sequences (timeline-based with blocking semantics). Each zone (lights, mirror, picture, audio, clock, system) is an independent adapter communicating via MQTT. The state machine manages game flow with explicit transitions, entry/exit handlers, and timer preservation on pause/resume.
 
 ## Paradox Family
 
-PxO is the game engine in the Paradox family. Commands flow PxO → PFx (media) and PxO → PxB (radio devices) over MQTT; inputs flow from PFx / PxB / PxIO / PxT → PxO.
+PxO is the game engine in the Paradox family. Commands flow PxO â†’ PFx (media) and PxO â†’ PxB (radio devices) over MQTT; inputs flow from PFx / PxB / PxIO / PxT â†’ PxO.
 
-- **PFx** — media/audio/lights/relays controller
-- **PxO** — this project (game orchestration engine)
-- **PxC** — configurable clock app framework
-- **PxT** — player terminal kiosk
-- **PxIO** — GPIO-to-MQTT bridge (C++)
-- **PxB** — Z-Wave / Zigbee / Thread to MQTT bridge (Node.js)
-- **PxP** — Paradox Prime operator/admin hub (configures & manages this app; not part of a running game)
-- Rooms: `agent22`, `houdinis-challenge` — EDN game packages consumed by this engine
+- **PFx** â€” media/audio/lights/relays controller
+- **PxO** â€” this project (game orchestration engine)
+- **PxC** â€” configurable clock app framework
+- **PxT** â€” player terminal kiosk
+- **PxIO** â€” GPIO-to-MQTT bridge (C++)
+- **PxB** â€” Z-Wave / Zigbee / Thread to MQTT bridge (Node.js)
+- **PxP** â€” Paradox Prime operator/admin hub (configures & manages this app; not part of a running game)
+- Rooms: `agent22`, `houdinis-challenge` â€” EDN game packages consumed by this engine
 
 Z-Wave and Zigbee sensor events reach PxO via PxB node event topics (schema identical to PFx InputZone events), not from PFx.
 
@@ -36,9 +36,9 @@ Z-Wave and Zigbee sensor events reach PxO via PxB node event topics (schema iden
 - **MQTT topic structure is sacred**: `{baseTopic}/{commands|events|state|warnings}`
 - **Command format**: `{"zone": "name", "command": "action", ...params}`
 - **EDN backward compatibility**: existing game configs must continue working; new features must be opt-in with defaults
-- **Sequence runner is blocking by design** — long sequences delay state transitions
-- **Zone adapter contract**: constructor, executeCommand, handleStateUpdate — all adapters follow this pattern
-- **Never bypass the MQTT wrapper** — use `this.mqtt.publish()`, not raw client
+- **Sequence runner is blocking by design** â€” long sequences delay state transitions
+- **Zone adapter contract**: constructor, executeCommand, handleStateUpdate â€” all adapters follow this pattern
+- **Never bypass the MQTT wrapper** â€” use `this.mqtt.publish()`, not raw client
 
 ## Documentation-First Development
 
@@ -58,3 +58,7 @@ Before significant changes, review relevant docs. If a change conflicts with doc
 | [docs/SETUP.md](docs/SETUP.md) | Installation and deployment |
 | [README.md](README.md) | User-facing overview and quick start |
 | Parent system: [/opt/paradox/AI-INSTRUCTIONS.md](/opt/paradox/AI-INSTRUCTIONS.md) | System-wide context (when in Paradox workspace) |
+
+## Suite standards
+
+Suite-wide contracts live in [../PxH/docs/standards/](../PxH/docs/standards/) (folder, not a single file). Read those before changing MQTT topics or shared conventions. If you change a standard, update the file under PxH `docs/standards/` first and propagate to other repos' docs in the same work.

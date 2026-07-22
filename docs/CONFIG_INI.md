@@ -1,4 +1,4 @@
-# Paradox Orchestrator (PxO) — INI Configuration Guide
+# Paradox Orchestrator (PxO) â€” INI Configuration Guide
 
 **Version**: 1.0.0  
 **Last Updated**: October 2025
@@ -8,9 +8,9 @@
 Paradox Orchestrator uses **INI files** for system-level configuration. INI settings handle MQTT broker connection, logging, zone topic mappings, and runtime behavior.
 
 **Configuration Hierarchy**:
-1. **EDN** (game.edn) — Game logic, sequences, cues, commands
-2. **INI** (pxo.ini) — System settings, MQTT, logging, zones
-3. **CLI/ENV** — Runtime overrides (--mode, --edn, --config)
+1. **EDN** (game.edn) â€” Game logic, sequences, cues, commands
+2. **INI** (pxo.ini) â€” System settings, MQTT, logging, zones
+3. **CLI/ENV** â€” Runtime overrides (--mode, --edn, --config)
 
 INI settings override EDN defaults. CLI/ENV flags override INI.
 
@@ -85,7 +85,7 @@ username = paradox
 password = secret123
 
 # Base topic prefix (optional)
-base_topic = paradox/game
+base_topic = paradox/houdini
 
 # Connection options
 keepalive = 60
@@ -99,13 +99,13 @@ retain = false
 ```
 
 **Required**:
-- `broker` — MQTT broker address
-- `port` — MQTT broker port
+- `broker` â€” MQTT broker address
+- `port` â€” MQTT broker port
 
 **Optional**:
-- `username` / `password` — Authentication
-- `client_id` — Defaults to `pxo-<random>`
-- `base_topic` — Global topic prefix
+- `username` / `password` â€” Authentication
+- `client_id` â€” Defaults to `pxo-<random>`
+- `base_topic` â€” Global topic prefix
 - Connection tuning: `keepalive`, `reconnect_period`, etc.
 
 ---
@@ -146,11 +146,11 @@ timestamp_format = YYYY-MM-DD HH:mm:ss.SSS
 ```
 
 **Log Levels** (least to most verbose):
-- `error` — Errors only
-- `warn` — Warnings + errors
-- `info` — Info + warnings + errors (default)
-- `debug` — Debug + info + warnings + errors
-- `trace` — All messages
+- `error` â€” Errors only
+- `warn` â€” Warnings + errors
+- `info` â€” Info + warnings + errors (default)
+- `debug` â€” Debug + info + warnings + errors
+- `trace` â€” All messages
 
 **File Rotation**:
 - New file created daily (-%DATE% pattern)
@@ -220,15 +220,15 @@ Rules:
 	- `fail`: startup exits on invalid/duplicate sources, unknown source references, or unresolved trigger topics
 
 **Heartbeat**:
-- `heartbeat_ms` — Interval for state heartbeat publishing to MQTT
+- `heartbeat_ms` â€” Interval for state heartbeat publishing to MQTT
 
 **Auto-Reset**:
-- `auto_reset_enabled` — Automatically reset game after completion
-- `auto_reset_delay` — Delay (seconds) before reset
+- `auto_reset_enabled` â€” Automatically reset game after completion
+- `auto_reset_delay` â€” Delay (seconds) before reset
 
 **State Persistence** (optional):
-- `persist_state` — Save/restore state on restart
-- `state_file` — JSON file for state storage
+- `persist_state` â€” Save/restore state on restart
+- `state_file` â€” JSON file for state storage
 
 ---
 
@@ -239,11 +239,11 @@ Zone-specific MQTT topic overrides:
 ```ini
 [zones]
 # Override base topics from EDN
-lights = paradox/game/lights
-mirror = paradox/game/mirror
-audio = paradox/game/audio
-clock = paradox/game/clock
-system = paradox/game/system
+lights = paradox/houdini/lights
+mirror = paradox/houdini/mirror
+audio = paradox/houdini/audio
+clock = paradox/houdini/clock
+system = paradox/houdini/system
 
 # Zone-specific settings
 lights.adapter = mqtt-lights
@@ -265,30 +265,30 @@ Per-zone configuration sections:
 
 ```ini
 [zones.lights]
-base_topic = paradox/game/lights
+base_topic = paradox/houdini/lights
 adapter = mqtt-lights
 enabled = true
 timeout = 10000
 
 [zones.mirror]
-base_topic = paradox/game/mirror
+base_topic = paradox/houdini/mirror
 adapter = pfx-media
 enabled = true
 media_root = /opt/paradox/media
 default_volume = 80
 
 [zones.clock]
-base_topic = paradox/game/clock
+base_topic = paradox/houdini/clock
 adapter = houdini-clock
 enabled = true
 ui_url = http://localhost:3000
 ```
 
 **Common Settings**:
-- `base_topic` — MQTT base topic
-- `adapter` — Zone adapter type
-- `enabled` — Enable/disable zone
-- `timeout` — Command timeout (ms)
+- `base_topic` â€” MQTT base topic
+- `adapter` â€” Zone adapter type
+- `enabled` â€” Enable/disable zone
+- `timeout` â€” Command timeout (ms)
 
 **Adapter-Specific Settings**:
 - `pfx-media`: `media_root`, `default_volume`
@@ -357,11 +357,11 @@ hint_delay = 5
 sequence_timeout = 300
 
 [zones]
-lights = paradox/game/lights
-mirror = paradox/game/mirror
-audio = paradox/game/audio
-clock = paradox/game/clock
-system = paradox/game/system
+lights = paradox/houdini/lights
+mirror = paradox/houdini/mirror
+audio = paradox/houdini/audio
+clock = paradox/houdini/clock
+system = paradox/houdini/system
 
 [zones.lights]
 adapter = mqtt-lights
@@ -402,11 +402,11 @@ websocket = false
 
 Settings are resolved in this order (highest priority first):
 
-1. **CLI Flags** — `--mode demo`, `--edn game.edn`, `--config custom.ini`
-2. **Environment Variables** — `GAME_MODE=demo`, `MQTT_BROKER=192.168.1.100`
-3. **INI File** — `pxo.ini` or `--config` specified file
-4. **EDN File** — `game.edn` or `--edn` specified file
-5. **Defaults** — Hardcoded defaults in code
+1. **CLI Flags** â€” `--mode demo`, `--edn game.edn`, `--config custom.ini`
+2. **Environment Variables** â€” `GAME_MODE=demo`, `MQTT_BROKER=192.168.1.100`
+3. **INI File** â€” `pxo.ini` or `--config` specified file
+4. **EDN File** â€” `game.edn` or `--edn` specified file
+5. **Defaults** â€” Hardcoded defaults in code
 
 **Example**:
 ```bash
@@ -506,9 +506,9 @@ node src/game.js
 
 ### 3. Version Control
 
-- ✅ **Commit**: `pxo.ini.example` (template with defaults)
-- ❌ **Don't commit**: `pxo.ini` (local settings)
-- ❌ **Don't commit**: Files with credentials
+- âœ… **Commit**: `pxo.ini.example` (template with defaults)
+- âŒ **Don't commit**: `pxo.ini` (local settings)
+- âŒ **Don't commit**: Files with credentials
 
 ### 4. Development vs Production
 
@@ -588,7 +588,7 @@ reconnect_period = 5000  # Retry every 5 seconds
 
 **Test MQTT manually**:
 ```bash
-mosquitto_sub -h localhost -p 1883 -t 'paradox/game/#' -v
+mosquitto_sub -h localhost -p 1883 -t 'paradox/houdini/#' -v
 ```
 
 ### Logging Not Working
@@ -610,7 +610,7 @@ chmod 755 /opt/paradox/logs/pxo
 
 ```ini
 [zones.lights]
-base_topic = paradox/game/lights  # Must match zone adapter topic
+base_topic = paradox/houdini/lights  # Must match zone adapter topic
 enabled = true  # Check if zone is enabled
 timeout = 10000  # Increase if commands timeout
 ```

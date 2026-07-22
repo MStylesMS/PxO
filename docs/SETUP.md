@@ -1,11 +1,11 @@
-# Paradox Orchestrator (PxO) — Setup & Deployment Guide
+# Paradox Orchestrator (PxO) â€” Setup & Deployment Guide
 
 **Version**: 1.0.0  
 **Last Updated**: October 2025
 
 ## Overview
 
-This guide covers installation, configuration, and deployment of Paradox Orchestrator (PxO) — a zone-based game engine for escape rooms and interactive experiences.
+This guide covers installation, configuration, and deployment of Paradox Orchestrator (PxO) â€” a zone-based game engine for escape rooms and interactive experiences.
 
 **Prerequisites**:
 - Node.js 18+ or 20+ LTS
@@ -88,8 +88,8 @@ default_mode = demo
 ```clojure
 {
   :zones {
-    :lights {:type "mqtt-lights" :baseTopic "paradox/game/lights"}
-    :mirror {:type "pfx-media" :baseTopic "paradox/game/mirror"}
+    :lights {:type "mqtt-lights" :baseTopic "paradox/houdini/lights"}
+    :mirror {:type "pfx-media" :baseTopic "paradox/houdini/mirror"}
   }
   
   :cues {
@@ -203,14 +203,14 @@ pxo --version
 
 ```
 /opt/paradox/pxo/
-├── src/                    # Source code
-├── config/                 # Configuration files
-│   ├── pxo.ini            # System settings (local, not in git)
-│   └── pxo.ini.example    # Example config
-├── game.edn               # Game configuration (or in /rooms/...)
-├── media/                 # Media files
-├── logs/                  # Log files
-└── package.json           # Dependencies
+â”œâ”€â”€ src/                    # Source code
+â”œâ”€â”€ config/                 # Configuration files
+â”‚   â”œâ”€â”€ pxo.ini            # System settings (local, not in git)
+â”‚   â””â”€â”€ pxo.ini.example    # Example config
+â”œâ”€â”€ game.edn               # Game configuration (or in /rooms/...)
+â”œâ”€â”€ media/                 # Media files
+â”œâ”€â”€ logs/                  # Log files
+â””â”€â”€ package.json           # Dependencies
 ```
 
 ### INI Configuration
@@ -238,10 +238,10 @@ auto_reset_enabled = true
 auto_reset_delay = 300
 
 [zones]
-lights = paradox/game/lights
-mirror = paradox/game/mirror
-audio = paradox/game/audio
-clock = paradox/game/clock
+lights = paradox/houdini/lights
+mirror = paradox/houdini/mirror
+audio = paradox/houdini/audio
+clock = paradox/houdini/clock
 ```
 
 See [CONFIG_INI.md](CONFIG_INI.md) for complete reference.
@@ -537,11 +537,11 @@ broker = localhost
 port = 1883
 
 [zones.lights]
-baseTopic = paradox/game/lights
+baseTopic = paradox/houdini/lights
 type = lights
 
 [zones.mirror]
-baseTopic = paradox/game/mirror
+baseTopic = paradox/houdini/mirror
 type = media
 media_root = /opt/paradox/media
 ```
@@ -598,7 +598,7 @@ sudo systemctl reload nginx
 [mqtt]
 broker = localhost
 port = 1883
-baseTopic = paradox/game/clock
+baseTopic = paradox/houdini/clock
 ```
 
 ---
@@ -619,26 +619,26 @@ npm run validate:ini -- config/pxo.ini
 
 ```bash
 # Monitor all game topics
-mosquitto_sub -h localhost -p 1883 -t 'paradox/game/#' -v
+mosquitto_sub -h localhost -p 1883 -t 'paradox/houdini/#' -v
 
 # Monitor specific zone
-mosquitto_sub -h localhost -p 1883 -t 'paradox/game/lights/#' -v
+mosquitto_sub -h localhost -p 1883 -t 'paradox/houdini/lights/#' -v
 ```
 
 ### Manual Testing
 
 ```bash
 # Start game
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' -m '{"command":"start","mode":"demo"}'
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' -m '{"command":"start","mode":"demo"}'
 
 # Pause game
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' -m '{"command":"pause"}'
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' -m '{"command":"pause"}'
 
 # Resume game
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' -m '{"command":"resume"}'
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' -m '{"command":"resume"}'
 
 # Reset game
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' -m '{"command":"reset"}'
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' -m '{"command":"reset"}'
 ```
 
 ---
@@ -658,10 +658,10 @@ tail -f /opt/paradox/logs/pxo/pxo-*.log
 ```
 
 **Common issues**:
-- MQTT broker not running → `sudo systemctl start mosquitto`
-- Config file not found → Check `--edn` and `--config` paths
-- Invalid EDN syntax → Run `npm run validate -- game.edn`
-- Permission denied → Check file permissions and user
+- MQTT broker not running â†’ `sudo systemctl start mosquitto`
+- Config file not found â†’ Check `--edn` and `--config` paths
+- Invalid EDN syntax â†’ Run `npm run validate -- game.edn`
+- Permission denied â†’ Check file permissions and user
 
 ### MQTT Connection Failed
 
@@ -698,7 +698,7 @@ curl http://localhost:3000/health
 
 ```bash
 # Watch zone topics
-mosquitto_sub -h localhost -p 1883 -t 'paradox/game/lights/#' -v
+mosquitto_sub -h localhost -p 1883 -t 'paradox/houdini/lights/#' -v
 ```
 
 **Verify config**:
@@ -708,7 +708,7 @@ mosquitto_sub -h localhost -p 1883 -t 'paradox/game/lights/#' -v
 :zones {
   :lights {
     :type "mqtt-lights"
-    :baseTopic "paradox/game/lights"  ; Must match adapter topic
+    :baseTopic "paradox/houdini/lights"  ; Must match adapter topic
   }
 }
 ```

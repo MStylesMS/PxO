@@ -1,4 +1,4 @@
-# Paradox Orchestrator (PxO) — EDN Configuration Guide
+# Paradox Orchestrator (PxO) â€” EDN Configuration Guide
 
 **Version**: 1.0.0  
 **Last Updated**: October 2025
@@ -12,7 +12,7 @@ Paradox Orchestrator uses **EDN (Extensible Data Notation)** for game configurat
 - **Type Safety**: Keywords (`:keyword`) prevent typos
 - **Comments**: Native comment support (`;` for line comments)
 - **Rich Types**: Vectors `[]`, maps `{}`, sets `#{}`
-- **Keyword References**: `:intro-video` → resolved to actual value
+- **Keyword References**: `:intro-video` â†’ resolved to actual value
 - **Readable**: Clean syntax, no quoting required for most values
 
 ---
@@ -321,23 +321,23 @@ Define zone adapters and MQTT topics:
 :zones {
   :lights {
     :type "pfx-lights"
-    :baseTopic "paradox/game/lights"
+    :baseTopic "paradox/houdini/lights"
   }
   :mirror {
     :type "pfx-media"
-    :baseTopic "paradox/game/mirror"
+    :baseTopic "paradox/houdini/mirror"
   }
   :audio {
     :type "pfx-media"
-    :baseTopic "paradox/game/audio"
+    :baseTopic "paradox/houdini/audio"
   }
   :clock {
     :type "houdini-clock"
-    :baseTopic "paradox/game/clock"
+    :baseTopic "paradox/houdini/clock"
   }
   :system {
     :type "system"
-    :baseTopic "paradox/game/system"
+    :baseTopic "paradox/houdini/system"
   }
 }
 ```
@@ -347,11 +347,11 @@ Define zone adapters and MQTT topics:
 - `:baseTopic`: MQTT base topic
 
 **Zone Types**:
-- `mqtt-lights` — Lighting control (generic MQTT; works with PFx, ESP8266, PxB)
-- `pfx-media` — Video/audio playback (ParadoxFX)
-- `pxc-clock` — Countdown timer UI (PxC clock surface)
-- `mqtt` — Generic MQTT passthrough zone (`{baseTopic}/commands`, `{baseTopic}/events`)
-- `mqtt-raw` — Raw MQTT payload zone (publishes `:payload`/`:message` directly to `:baseTopic`)
+- `mqtt-lights` â€” Lighting control (generic MQTT; works with PFx, ESP8266, PxB)
+- `pfx-media` â€” Video/audio playback (ParadoxFX)
+- `pxc-clock` â€” Countdown timer UI (PxC clock surface)
+- `mqtt` â€” Generic MQTT passthrough zone (`{baseTopic}/commands`, `{baseTopic}/events`)
+- `mqtt-raw` â€” Raw MQTT payload zone (publishes `:payload`/`:message` directly to `:baseTopic`)
 
 Example raw device zones:
 
@@ -465,7 +465,7 @@ Named shortcuts that execute immediately (fire-and-forget):
 
 ### Browser Commands In Cues
 
-Both PFx (≥ 2.1.0) and PFxE auto-manage browser lifecycle at startup. Use
+Both PFx (â‰¥ 2.1.0) and PFxE auto-manage browser lifecycle at startup. Use
 `showBrowser` and `hideBrowser` to control overlay visibility:
 
 ```clojure
@@ -477,7 +477,7 @@ Both PFx (≥ 2.1.0) and PFxE auto-manage browser lifecycle at startup. Use
 
 `moveBrowser` animates the overlay to a geometry on PFxE. On PFx the command
 is accepted and produces a warning; the overlay remains full-screen. Define
-PFxE overlay geometry in the renderer’s INI or HTML layout rather than via
+PFxE overlay geometry in the rendererâ€™s INI or HTML layout rather than via
 `moveBrowser` when targeting both runtimes.
 
 For clock zones, use `:command "show"` and `:command "hide"` for immediate visibility changes. Use `:command "fadeIn"` or `:command "fadeOut"` with `:fadeTime` in seconds for timed fades in EDN. The adapter also accepts legacy fade-time fields and forwards them to PxC's runtime fade duration handling.
@@ -523,8 +523,8 @@ Timeline-based execution with explicit duration:
 ```
 
 **Required Fields**:
-- `:duration` — Total sequence duration in seconds
-- `:timeline` — Array of timed steps
+- `:duration` â€” Total sequence duration in seconds
+- `:timeline` â€” Array of timed steps
 
 **Timeline Step Types**:
 
@@ -558,7 +558,7 @@ Timeline-based execution with explicit duration:
 - `:at` counts down from `:duration`
 - `:at 30` with `:duration 45` executes 15 seconds after start (45-30=15)
 
-**Execution**: Blocking — caller waits for sequence completion.
+**Execution**: Blocking â€” caller waits for sequence completion.
 
 ---
 
@@ -576,10 +576,10 @@ Map game phases to sequence arrays:
 ```
 
 **Phase Names** (must match state machine):
-- `:intro` — Introduction/briefing phase
-- `:gameplay` — Active gameplay phase
-- `:solved` — Victory phase
-- `:failed` — Failure phase
+- `:intro` â€” Introduction/briefing phase
+- `:gameplay` â€” Active gameplay phase
+- `:solved` â€” Victory phase
+- `:failed` â€” Failure phase
 
 **Execution**: Sequences run in array order (blocking).
 
@@ -724,7 +724,7 @@ Game-mode hint list behavior (`game-modes.<mode>.hints`):
 
 **Required Fields**:
 - Hint ID is the map key (example `:hint-03`)
-- `:type` — Hint type (`text`, `speech`, `audioFx`, `background`, `video`, `image`, `action`, `sequence`)
+- `:type` â€” Hint type (`text`, `speech`, `audioFx`, `background`, `video`, `image`, `action`, `sequence`)
 
 **Type-Specific Fields**:
 
@@ -805,10 +805,10 @@ Variables are expanded at runtime from context (hint parameters, sequence parame
 {
   ;; Zone definitions
   :zones {
-    :lights {:type "mqtt-lights" :baseTopic "paradox/game/lights"}
-    :mirror {:type "pfx-media" :baseTopic "paradox/game/mirror"}
-    :audio {:type "pfx-media" :baseTopic "paradox/game/audio"}
-    :clock {:type "houdini-clock" :baseTopic "paradox/game/clock"}
+    :lights {:type "mqtt-lights" :baseTopic "paradox/houdini/lights"}
+    :mirror {:type "pfx-media" :baseTopic "paradox/houdini/mirror"}
+    :audio {:type "pfx-media" :baseTopic "paradox/houdini/audio"}
+    :clock {:type "houdini-clock" :baseTopic "paradox/houdini/clock"}
   }
   
   ;; Media files

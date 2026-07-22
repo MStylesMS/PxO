@@ -1,4 +1,4 @@
-# Paradox Orchestrator (PxO) — Functional Specification
+# Paradox Orchestrator (PxO) â€” Functional Specification
 
 **Version**: 1.0.0  
 **Last Updated**: October 2025
@@ -9,7 +9,7 @@ Paradox Orchestrator (PxO) is a modular, MQTT-based game orchestration engine de
 
 ### Design Principles
 
-- **Generic Engine**: No game-specific logic in source code — all game behavior defined in configuration
+- **Generic Engine**: No game-specific logic in source code â€” all game behavior defined in configuration
 - **Zone-Based Architecture**: Independent adapters for different device types (lights, media, controllers)
 - **MQTT Communication**: Standardized topic structure for reliable, distributed control
 - **Reliable Operation**: Designed for live entertainment environments with minimal downtime
@@ -18,7 +18,7 @@ Paradox Orchestrator (PxO) is a modular, MQTT-based game orchestration engine de
 ### Key Features
 
 - State machine with explicit transitions
-- Three-tier configuration model (Commands → Cues → Sequences)
+- Three-tier configuration model (Commands â†’ Cues â†’ Sequences)
 - Timeline-based sequence execution with precise timing
 - EDN and INI configuration support
 - Extensible zone adapter system
@@ -32,12 +32,12 @@ Paradox Orchestrator (PxO) is a modular, MQTT-based game orchestration engine de
 ### States
 
 ```
-ready → intro → gameplay → paused → gameplay
-                      ↓        ↓
+ready â†’ intro â†’ gameplay â†’ paused â†’ gameplay
+                      â†“        â†“
                   solved   failed
-                      ↓        ↓
+                      â†“        â†“
                 sleeping  sleeping
-                      ↓        ↓
+                      â†“        â†“
                   ready    ready
 ```
 
@@ -71,14 +71,14 @@ const allowedTransitions = {
 
 **Transition Triggers**:
 
-- `ready → intro`: `start()` command
-- `intro → gameplay`: Intro sequence completes
-- `gameplay → paused`: `pause()` command
-- `paused → gameplay`: `resume()` command
-- `gameplay → solved`: Puzzle completion or operator override
-- `gameplay → failed`: Timer expires
-- `solved/failed → sleeping`: Completion sequence finishes
-- `sleeping → ready`: Auto-reset or operator command
+- `ready â†’ intro`: `start()` command
+- `intro â†’ gameplay`: Intro sequence completes
+- `gameplay â†’ paused`: `pause()` command
+- `paused â†’ gameplay`: `resume()` command
+- `gameplay â†’ solved`: Puzzle completion or operator override
+- `gameplay â†’ failed`: Timer expires
+- `solved/failed â†’ sleeping`: Completion sequence finishes
+- `sleeping â†’ ready`: Auto-reset or operator command
 
 ### State Handler Methods
 
@@ -100,9 +100,9 @@ async onIntroExit() { ... }
 
 ```
 Commands (Tier 1: Atomic Operations)
-    ↓
+    â†“
 Cues (Tier 2: Named Shortcuts)
-    ↓
+    â†“
 Sequences (Tier 3: Timeline-Based Execution)
 ```
 
@@ -156,7 +156,7 @@ Sequences (Tier 3: Timeline-Based Execution)
 ```
 
 **Cue Execution**:
-- Non-blocking — returns immediately
+- Non-blocking â€” returns immediately
 - All commands in array execute in parallel
 - No timing control (use sequences for that)
 - Can be triggered from sequences or commands
@@ -198,7 +198,7 @@ Sequences (Tier 3: Timeline-Based Execution)
 ```
 
 **Sequence Execution**:
-- Blocking — caller waits for completion
+- Blocking â€” caller waits for completion
 - Timeline items execute at specified countdown times (`:at` counts down from `:duration`)
 - `:wait` provides explicit blocking delays
 - Can reference cues, sequences, and hints with `:fire`
@@ -207,12 +207,12 @@ Sequences (Tier 3: Timeline-Based Execution)
 **Timing Model**:
 ```
 Duration: 30 seconds
-:at 30 → Execute at start (T=0)
-:at 25 → Execute after 5 seconds (T=5)
-:at 20 → Execute after 10 seconds (T=10)
-:at 15 → Execute after 15 seconds (T=15)
-:at  5 → Execute after 25 seconds (T=25)
-:at  0 → Execute at end (T=30)
+:at 30 â†’ Execute at start (T=0)
+:at 25 â†’ Execute after 5 seconds (T=5)
+:at 20 â†’ Execute after 10 seconds (T=10)
+:at 15 â†’ Execute after 15 seconds (T=15)
+:at  5 â†’ Execute after 25 seconds (T=25)
+:at  0 â†’ Execute at end (T=30)
 ```
 
 ---
@@ -248,11 +248,11 @@ Zone: "mirror" (type: pfx-media)
 Base Topic: paradox/houdini/mirror
 
 Topics:
-  paradox/houdini/mirror/commands   → PxO publishes commands here
-  paradox/houdini/mirror/events     → Mirror device publishes discrete events here
-  paradox/houdini/mirror/state      → Mirror device publishes state here
-  paradox/houdini/mirror/state      → Mirror device also publishes health here
-  paradox/houdini/mirror/warnings   → Mirror device publishes errors here
+  paradox/houdini/mirror/commands   â†’ PxO publishes commands here
+  paradox/houdini/mirror/events     â†’ Mirror device publishes discrete events here
+  paradox/houdini/mirror/state      â†’ Mirror device publishes state here
+  paradox/houdini/mirror/state      â†’ Mirror device also publishes health here
+  paradox/houdini/mirror/warnings   â†’ Mirror device publishes errors here
 ```
 
 ### Standard Zone Types
@@ -334,10 +334,10 @@ this.mqtt.subscribe(`${zoneConfig.baseTopic}/state`);
 {
   ;; Zone definitions
   :zones {
-    :lights {:type "mqtt-lights" :baseTopic "paradox/game/lights"}
-    :mirror {:type "pfx-media" :baseTopic "paradox/game/mirror"}
-    :audio {:type "pfx-media" :baseTopic "paradox/game/audio"}
-    :clock {:type "houdini-clock" :baseTopic "paradox/game/clock"}
+    :lights {:type "mqtt-lights" :baseTopic "paradox/houdini/lights"}
+    :mirror {:type "pfx-media" :baseTopic "paradox/houdini/mirror"}
+    :audio {:type "pfx-media" :baseTopic "paradox/houdini/audio"}
+    :clock {:type "houdini-clock" :baseTopic "paradox/houdini/clock"}
   }
   
   ;; Media file references
@@ -406,9 +406,9 @@ max_files = 10
 max_size_mb = 10
 
 [zones]
-lights_base_topic = paradox/game/lights
-mirror_base_topic = paradox/game/mirror
-audio_base_topic = paradox/game/audio
+lights_base_topic = paradox/houdini/lights
+mirror_base_topic = paradox/houdini/mirror
+audio_base_topic = paradox/houdini/audio
 
 [game]
 heartbeat_interval_ms = 1000
@@ -617,14 +617,14 @@ Published to: `{baseTopic}/commands`
 | `restartAdapters` | none | Restart prop/media adapters |
 
 Control command sequence hooks (resolved from `global.system-sequences`):
-- `shutdown` → `software-shutdown-sequence` (fallback: imperative software shutdown)
-- `reboot` → `software-restart-sequence` (fallback: imperative software reboot/restart)
-- `halt` → `software-halt-sequence` (fallback: graceful halt)
-- `sleep` → `props-sleep-sequence`
-- `wake` → `props-wake-sequence`
-- `machineShutdown` → `machine-shutdown-sequence` (OS-level shutdown)
-- `machineReboot` → `machine-reboot-sequence` (OS-level reboot)
-- `restartAdapters` → `restart-adapters`
+- `shutdown` â†’ `software-shutdown-sequence` (fallback: imperative software shutdown)
+- `reboot` â†’ `software-restart-sequence` (fallback: imperative software reboot/restart)
+- `halt` â†’ `software-halt-sequence` (fallback: graceful halt)
+- `sleep` â†’ `props-sleep-sequence`
+- `wake` â†’ `props-wake-sequence`
+- `machineShutdown` â†’ `machine-shutdown-sequence` (OS-level shutdown)
+- `machineReboot` â†’ `machine-reboot-sequence` (OS-level reboot)
+- `restartAdapters` â†’ `restart-adapters`
 
 ### Game State Publishing
 
@@ -716,18 +716,18 @@ Inheritance: Modes inherit from global config, overriding only specified keys.
 
 ### Log Levels
 
-- `error` — Critical failures requiring immediate attention
-- `warn` — Unexpected conditions that don't prevent operation
-- `info` — Normal operational messages (state changes, commands)
-- `debug` — Detailed diagnostic information
+- `error` â€” Critical failures requiring immediate attention
+- `warn` â€” Unexpected conditions that don't prevent operation
+- `info` â€” Normal operational messages (state changes, commands)
+- `debug` â€” Detailed diagnostic information
 
 ### Log Files
 
 Location: `/opt/paradox/logs/pxo/` (configurable in INI)
 
 Files:
-- `pxo-YYYY-MM-DD.log` — Daily log file
-- `pxo-latest.log` — Symlink to current log
+- `pxo-YYYY-MM-DD.log` â€” Daily log file
+- `pxo-latest.log` â€” Symlink to current log
 - Automatic rotation and cleanup
 
 ### Gameplay Analytics JSONL Log
@@ -790,14 +790,14 @@ JavaScript timers (setTimeout/setInterval) have ~10ms variance:
 
 ### MQTT Publishing
 
-- Async operation — no blocking
+- Async operation â€” no blocking
 - QoS 1 for critical commands
 - QoS 0 for frequent updates (heartbeat)
 - Don't assume immediate delivery
 
 ### Sequence Execution
 
-- Blocking by design — long sequences delay state transitions
+- Blocking by design â€” long sequences delay state transitions
 - Avoid deeply nested sequences
 - Use cues for parallel, fire-and-forget operations
 

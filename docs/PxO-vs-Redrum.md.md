@@ -380,8 +380,8 @@ For game designers (your primary audience), **switching to JavaScript makes much
 // game.js (or game.mjs)
 export default {
   zones: {
-    lights: { type: "pfx-lights", baseTopic: "paradox/game/lights" },
-    mirror: { type: "pfx-media", baseTopic: "paradox/game/mirror" }
+    lights: { type: "pfx-lights", baseTopic: "paradox/houdini/lights" },
+    mirror: { type: "pfx-media", baseTopic: "paradox/houdini/mirror" }
   },
 
   puzzleLogic: {

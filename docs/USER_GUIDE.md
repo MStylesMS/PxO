@@ -1,11 +1,11 @@
-# Paradox Orchestrator (PxO) — User Guide
+# Paradox Orchestrator (PxO) â€” User Guide
 
 **Version**: 1.0.0  
 **Last Updated**: October 2025
 
 ## Introduction
 
-Welcome to **Paradox Orchestrator (PxO)** — a zone-based game engine for escape rooms and interactive experiences.
+Welcome to **Paradox Orchestrator (PxO)** â€” a zone-based game engine for escape rooms and interactive experiences.
 
 This guide will walk you through building your first game, from basic concepts to advanced features.
 
@@ -35,19 +35,19 @@ Create `demo-game.edn`:
   :zones {
     :lights {
       :type "mqtt-lights"
-      :baseTopic "paradox/game/lights"
+      :baseTopic "paradox/houdini/lights"
     }
     :mirror {
       :type "pfx-media"
-      :baseTopic "paradox/game/mirror"
+      :baseTopic "paradox/houdini/mirror"
     }
     :audio {
       :type "pfx-media"
-      :baseTopic "paradox/game/audio"
+      :baseTopic "paradox/houdini/audio"
     }
     :clock {
       :type "houdini-clock"
-      :baseTopic "paradox/game/clock"
+      :baseTopic "paradox/houdini/clock"
     }
   }
 }
@@ -156,8 +156,8 @@ Cues are fire-and-forget shortcuts:
 
 **Cue Types**:
 1. **Direct command**: `{:zone "..." :command "..."}`
-2. **Command reference**: `:play-intro` → resolves to `:play-intro-video`
-3. **Multi-command**: `[{...} {...}]` → all execute in parallel
+2. **Command reference**: `:play-intro` â†’ resolves to `:play-intro-video`
+3. **Multi-command**: `[{...} {...}]` â†’ all execute in parallel
 
 ---
 
@@ -198,10 +198,10 @@ Sequences execute timeline-based actions:
 ```
 
 **Timing Model**:
-- `:duration 30` → sequence lasts 30 seconds
-- `:at 30` → execute at T=0 (30-30=0)
-- `:at 27` → execute at T=3 (30-27=3)
-- `:at 5` → execute at T=25 (30-5=25)
+- `:duration 30` â†’ sequence lasts 30 seconds
+- `:at 30` â†’ execute at T=0 (30-30=0)
+- `:at 27` â†’ execute at T=3 (30-27=3)
+- `:at 5` â†’ execute at T=25 (30-5=25)
 
 **Think countdown**: `:at` counts down from `:duration`.
 
@@ -283,10 +283,10 @@ Sequences execute timeline-based actions:
 ```
 
 **Phase Names** (must match state machine):
-- `:intro` — Introduction/briefing
-- `:gameplay` — Active gameplay
-- `:solved` — Victory
-- `:failed` — Failure/timeout
+- `:intro` â€” Introduction/briefing
+- `:gameplay` â€” Active gameplay
+- `:solved` â€” Victory
+- `:failed` â€” Failure/timeout
 
 ---
 
@@ -316,13 +316,13 @@ Sequences execute timeline-based actions:
 ```
 
 **Hint Types**:
-- `text` — Text only (sent to MQTT, displayed by UI)
-- `speech` — Spoken hint audio
-- `audioFx` — Sound effect / one-shot audio cue
-- `background` — Looping background audio
-- `video` — Video playback
-- `image` — Still image display
-- `action` — Execute sequence
+- `text` â€” Text only (sent to MQTT, displayed by UI)
+- `speech` â€” Spoken hint audio
+- `audioFx` â€” Sound effect / one-shot audio cue
+- `background` â€” Looping background audio
+- `video` â€” Video playback
+- `image` â€” Still image display
+- `action` â€” Execute sequence
 
 ---
 
@@ -346,9 +346,9 @@ Sequences execute timeline-based actions:
 ```
 
 **Mode Settings**:
-- `:intro-duration` — Intro sequence duration override
-- `:game-duration` — Gameplay duration override
-- `:hint-interval` — Seconds between automatic hints
+- `:intro-duration` â€” Intro sequence duration override
+- `:game-duration` â€” Gameplay duration override
+- `:hint-interval` â€” Seconds between automatic hints
 
 ---
 
@@ -359,10 +359,10 @@ Sequences execute timeline-based actions:
 ```clojure
 {
   :zones {
-    :lights {:type "mqtt-lights" :baseTopic "paradox/game/lights"}
-    :mirror {:type "pfx-media" :baseTopic "paradox/game/mirror"}
-    :audio {:type "pfx-media" :baseTopic "paradox/game/audio"}
-    :clock {:type "houdini-clock" :baseTopic "paradox/game/clock"}
+    :lights {:type "mqtt-lights" :baseTopic "paradox/houdini/lights"}
+    :mirror {:type "pfx-media" :baseTopic "paradox/houdini/mirror"}
+    :audio {:type "pfx-media" :baseTopic "paradox/houdini/audio"}
+    :clock {:type "houdini-clock" :baseTopic "paradox/houdini/clock"}
   }
   
   :media {
@@ -476,7 +476,7 @@ node src/game.js --edn demo-game.edn --mode demo
 **Monitor MQTT**:
 
 ```bash
-mosquitto_sub -h localhost -p 1883 -t 'paradox/game/#' -v
+mosquitto_sub -h localhost -p 1883 -t 'paradox/houdini/#' -v
 ```
 
 ---
@@ -486,28 +486,28 @@ mosquitto_sub -h localhost -p 1883 -t 'paradox/game/#' -v
 **Start Game**:
 
 ```bash
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' \
   -m '{"command":"start","mode":"demo"}'
 ```
 
 **Execute Hint**:
 
 ```bash
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' \
   -m '{"command":"executeHint","id":"hint-01"}'
 ```
 
 **Solve Game**:
 
 ```bash
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' \
   -m '{"command":"solve"}'
 ```
 
 **Reset Game**:
 
 ```bash
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' \
   -m '{"command":"reset"}'
 ```
 
@@ -515,35 +515,35 @@ mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
 
 ```bash
 # Halt PxO software
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' \
   -m '{"command":"halt"}'
 
 # Restart PxO software
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' \
   -m '{"command":"reboot"}'
 
 # Shutdown PxO software
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' \
   -m '{"command":"shutdown"}'
 
 # Put props/adapters to sleep
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' \
   -m '{"command":"sleep"}'
 
 # Wake props/adapters
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' \
   -m '{"command":"wake"}'
 
 # Reboot controller OS
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' \
   -m '{"command":"machineReboot"}'
 
 # Shutdown controller OS
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' \
   -m '{"command":"machineShutdown"}'
 
 # Restart adapters
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/commands' \
   -m '{"command":"restartAdapters"}'
 ```
 
@@ -627,7 +627,7 @@ Trigger sequences from within sequences:
 
 ### Browser Overlay Pattern
 
-Both PFx (≥ 2.1.0) and PFxE auto-manage browser lifecycle at startup — no
+Both PFx (â‰¥ 2.1.0) and PFxE auto-manage browser lifecycle at startup â€” no
 explicit enable/disable step is needed. To control overlay visibility, use
 `showBrowser` and `hideBrowser`:
 
@@ -760,11 +760,11 @@ Test zones independently:
 
 ```bash
 # Test lights
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/lights/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/lights/commands' \
   -m '{"command":"scene","name":"red"}'
 
 # Test media
-mosquitto_pub -h localhost -p 1883 -t 'paradox/game/mirror/commands' \
+mosquitto_pub -h localhost -p 1883 -t 'paradox/houdini/mirror/commands' \
   -m '{"command":"playVideo","file":"media/test.mp4"}'
 ```
 
@@ -797,7 +797,7 @@ LOG_LEVEL=debug node src/game.js
 mosquitto_sub -h localhost -p 1883 -t 'paradox/#' -v
 
 # Watch specific zone
-mosquitto_sub -h localhost -p 1883 -t 'paradox/game/lights/#' -v
+mosquitto_sub -h localhost -p 1883 -t 'paradox/houdini/lights/#' -v
 ```
 
 ### 5. Use Validation
@@ -895,7 +895,7 @@ Build and test sequences independently before combining.
 
 ### 4. Use Modes for Variations
 
-Don't duplicate sequences — use modes:
+Don't duplicate sequences â€” use modes:
 
 ```clojure
 :modes {
@@ -907,8 +907,8 @@ Don't duplicate sequences — use modes:
 
 ### 5. Version Control
 
-- ✅ Commit: `game.edn`, `pxo.ini.example`
-- ❌ Don't commit: `pxo.ini` (local settings)
+- âœ… Commit: `game.edn`, `pxo.ini.example`
+- âŒ Don't commit: `pxo.ini` (local settings)
 
 ---
 
@@ -917,19 +917,19 @@ Don't duplicate sequences — use modes:
 ### Sequences Don't Run
 
 - Check phase mapping: `:phases {:intro [:intro-sequence]}`
-- Validate timeline `:at` values (must be ≤ `:duration`)
+- Validate timeline `:at` values (must be â‰¤ `:duration`)
 - Enable debug logging: `LOG_LEVEL=debug`
 
 ### Zone Commands Ignored
 
 - Verify zone adapter is running (`systemctl status pfx.service`)
 - Check MQTT topic matches: `baseTopic` in EDN = adapter topic
-- Monitor MQTT: `mosquitto_sub -t 'paradox/game/#' -v`
+- Monitor MQTT: `mosquitto_sub -t 'paradox/houdini/#' -v`
 
 ### Timing Issues
 
 - Timing model: `:at` counts down from `:duration`
-- `:at 30` with `:duration 45` → executes at T=15 seconds
+- `:at 30` with `:duration 45` â†’ executes at T=15 seconds
 
 ### Hints Not Delivered
 

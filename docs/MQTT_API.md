@@ -1,7 +1,11 @@
-# Paradox Orchestrator (PxO) — MQTT API Reference
+# Paradox Orchestrator (PxO) - MQTT API Reference
 
 **Version**: 1.0.0  
-**Last Updated**: October 2025
+**Last Updated**: 2026-07-22
+
+**Suite contract:** see [`apps/PxH/docs/standards/MQTT-CONTRACT.md`](../../PxH/docs/standards/MQTT-CONTRACT.md).
+Examples below use `paradox/houdini` as a concrete `<room>` root. SpyCatcher rooms use a two-segment
+root such as `paradox/spycatcher/moscow` (i.e. `<room>` = `spycatcher/moscow`).
 
 ## Overview
 
@@ -9,10 +13,10 @@ Paradox Orchestrator (PxO) uses MQTT for all zone communication following standa
 
 ### Communication Model
 
-- **Commands**: Game orchestrator → Zones (`{baseTopic}/commands`)
-- **Events**: Zones → Game orchestrator/consumers (`{baseTopic}/events`)
-- **State**: Zones → Game orchestrator (`{baseTopic}/state`)
-- **Warnings**: Zones → Monitoring systems (`{baseTopic}/warnings`)
+- **Commands**: Game orchestrator -> Zones (`{baseTopic}/commands`)
+- **Events**: Zones -> Game orchestrator/consumers (`{baseTopic}/events`)
+- **State**: Zones -> Game orchestrator (`{baseTopic}/state`)
+- **Warnings**: Zones -> Monitoring systems (`{baseTopic}/warnings`)
 
 PxO can also subscribe to external producer topics for gameplay triggers (for example PFx input events or PxIO GPIO topics). These are configured in EDN trigger/source definitions, not hardcoded in the runtime topic list.
 
@@ -34,12 +38,12 @@ Each zone follows this pattern:
 
 **Example**:
 ```
-paradox/game/lights/commands   → PxO publishes commands here
-paradox/game/lights/events     → Lights device publishes discrete events here
-paradox/game/lights/state      → Lights device publishes state here
-paradox/game/lights/state      → Lights device also publishes health here
-paradox/game/lights/warnings   → Lights device publishes errors here
-paradox/game/lights/scenes     → PxO publishes retained light scene registry here
+paradox/houdini/lights/commands   -> PxO publishes commands here
+paradox/houdini/lights/events     -> Lights device publishes discrete events here
+paradox/houdini/lights/state      -> Lights device publishes state here
+paradox/houdini/lights/state      -> Lights device also publishes health here
+paradox/houdini/lights/warnings   -> Lights device publishes errors here
+paradox/houdini/lights/scenes     -> PxO publishes retained light scene registry here
 ```
 
 ### Game Control Topics
@@ -57,12 +61,12 @@ Game orchestrator uses these topics:
 
 **Example**:
 ```
-paradox/game/commands   → External systems send commands here
-paradox/game/state      → PxO publishes game state here
-paradox/game/state      → PxO also publishes heartbeat here
-paradox/game/events     → PxO publishes events here
-paradox/game/discovery  → PxO publishes retained zone inventory here
-paradox/game/schema     → PxO publishes retained command schema here
+paradox/houdini/commands   -> External systems send commands here
+paradox/houdini/state      -> PxO publishes game state here
+paradox/houdini/state      -> PxO also publishes heartbeat here
+paradox/houdini/events     -> PxO publishes events here
+paradox/houdini/discovery  -> PxO publishes retained zone inventory here
+paradox/houdini/schema     -> PxO publishes retained command schema here
 ```
 
 ### External Trigger Source Topics
@@ -75,8 +79,8 @@ Recommended pattern:
 
 Examples:
 ```
-paradox/houdini/inputs/front-door/events   → PFx-produced normalized sensor events
-paradox/houdini/pxio/gpio/door              → PxIO-produced direct GPIO state
+paradox/houdini/inputs/front-door/events   -> PFx-produced normalized sensor events
+paradox/houdini/pxio/gpio/door              -> PxIO-produced direct GPIO state
 ```
 
 PxO does not require PFx as a proxy for PxIO or other producer apps. All integrations are broker-based.
@@ -153,14 +157,14 @@ Published **retained** to `{baseTopic}/discovery` at startup. Describes the full
 {
   "application": "pxo",
   "timestamp": "2025-10-24T10:30:00.000Z",
-  "gameTopic": "paradox/game",
-  "commandsTopic": "paradox/game/commands",
-  "stateTopic": "paradox/game/state",
+  "gameTopic": "paradox/houdini",
+  "commandsTopic": "paradox/houdini/commands",
+  "stateTopic": "paradox/houdini/state",
   "zones": [
     {
       "name": "lights",
       "type": "lights",
-      "baseTopic": "paradox/game/lights"
+      "baseTopic": "paradox/houdini/lights"
     }
   ]
 }
@@ -173,7 +177,7 @@ Published **retained** to `{baseTopic}/schema` at startup. Describes all support
 ```json
 {
   "application": "pxo",
-  "commandsTopic": "paradox/game/commands",
+  "commandsTopic": "paradox/houdini/commands",
   "commands": [
     { "command": "start",       "description": "Start or resume the game" },
     { "command": "pause",       "description": "Pause the countdown timer" },
@@ -260,7 +264,7 @@ Legacy ingress aliases such as `startGame`, `resetGame`, `solveGame`, `failGame`
 
 **Example**:
 ```bash
-mosquitto_pub -h localhost -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -t 'paradox/houdini/commands' \
   -m '{"command":"start","mode":"demo"}'
 ```
 
@@ -278,7 +282,7 @@ mosquitto_pub -h localhost -t 'paradox/game/commands' \
 
 **Example**:
 ```bash
-mosquitto_pub -h localhost -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -t 'paradox/houdini/commands' \
   -m '{"command":"pause"}'
 ```
 
@@ -559,7 +563,7 @@ Scene names are commonly listed in the retained `{baseTopic}/scenes` registry fo
 
 **Example**:
 ```bash
-mosquitto_pub -h localhost -t 'paradox/game/lights/commands' \
+mosquitto_pub -h localhost -t 'paradox/houdini/lights/commands' \
   -m '{"command":"scene","name":"green"}'
 ```
 
@@ -637,7 +641,7 @@ targeting both runtimes.
 
 **Example**:
 ```bash
-mosquitto_pub -h localhost -t 'paradox/game/mirror/commands' \
+mosquitto_pub -h localhost -t 'paradox/houdini/mirror/commands' \
   -m '{"command":"showBrowser"}'
 ```
 
@@ -739,7 +743,7 @@ Hides clock instantly (equivalent to `fadeOut` with duration `0`).
 
 **Example**:
 ```bash
-mosquitto_pub -h localhost -t 'paradox/game/clock/commands' \
+mosquitto_pub -h localhost -t 'paradox/houdini/clock/commands' \
   -m '{"command":"setTime","seconds":3600}'
 ```
 
@@ -867,20 +871,20 @@ mosquitto_sub -h localhost -t 'paradox/#' -v
 ### Publish Test Command
 
 ```bash
-mosquitto_pub -h localhost -t 'paradox/game/commands' \
+mosquitto_pub -h localhost -t 'paradox/houdini/commands' \
   -m '{"command":"start","mode":"demo"}'
 ```
 
 ### Monitor Game State
 
 ```bash
-mosquitto_sub -h localhost -t 'paradox/game/state' -v
+mosquitto_sub -h localhost -t 'paradox/houdini/state' -v
 ```
 
 ### Monitor Zone Commands
 
 ```bash
-mosquitto_sub -h localhost -t 'paradox/game/+/commands' -v
+mosquitto_sub -h localhost -t 'paradox/houdini/+/commands' -v
 ```
 
 ---
@@ -896,15 +900,15 @@ client = mqtt.Client()
 client.connect("localhost", 1883, 60)
 
 # Start game
-client.publish("paradox/game/commands", 
+client.publish("paradox/houdini/commands", 
                '{"command":"start","mode":"60min"}')
 
 # Pause game
-client.publish("paradox/game/commands", 
+client.publish("paradox/houdini/commands", 
                '{"command":"pause"}')
 
 # Execute hint
-client.publish("paradox/game/commands", 
+client.publish("paradox/houdini/commands", 
                '{"command":"executeHint","id":"hint-01"}')
 ```
 
@@ -916,10 +920,10 @@ const client = mqtt.connect('mqtt://localhost:1883');
 
 client.on('connect', () => {
   // Subscribe to game state
-  client.subscribe('paradox/game/state');
+  client.subscribe('paradox/houdini/state');
   
   // Subscribe to all zone states
-  client.subscribe('paradox/game/+/state');
+  client.subscribe('paradox/houdini/+/state');
 });
 
 client.on('message', (topic, message) => {
@@ -927,7 +931,7 @@ client.on('message', (topic, message) => {
   console.log(`${topic}: ${JSON.stringify(data)}`);
   
   // Update UI based on state
-  if (topic === 'paradox/game/state') {
+  if (topic === 'paradox/houdini/state') {
     updateGameState(data);
   }
 });
