@@ -4,7 +4,7 @@
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/MStylesMS/PxO/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D24.0.0-brightgreen.svg)](https://nodejs.org/)
 
 **Mirrors:** [GitHub (primary)](https://github.com/MStylesMS/PxO) | [GitLab](https://gitlab.gnurdle.com/paradox/pxo)
 
@@ -43,7 +43,7 @@ node src/game.js --version
 
 ### Prerequisites
 
-- **Node.js** 18+ or 20+ LTS
+- **Node.js** 24 LTS
 - **MQTT Broker** (Mosquitto recommended)
 
 ```bash

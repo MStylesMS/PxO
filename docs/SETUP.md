@@ -8,7 +8,7 @@
 This guide covers installation, configuration, and deployment of Paradox Orchestrator (PxO) â€” a zone-based game engine for escape rooms and interactive experiences.
 
 **Prerequisites**:
-- Node.js 18+ or 20+ LTS
+- Node.js 24 LTS
 - MQTT broker (Mosquitto recommended)
 - Linux/macOS/Windows (Raspberry Pi 4/5 supported)
 
@@ -153,12 +153,12 @@ node src/game.js --edn game.edn --mode demo
 **Debian/Ubuntu/Raspberry Pi OS**:
 
 ```bash
-# Install Node.js 20.x LTS
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Install Node.js 24.x LTS
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # Verify installation
-node --version  # v20.x.x
+node --version  # v24.x.x
 npm --version   # 10.x.x
 ```
 
@@ -166,17 +166,17 @@ npm --version   # 10.x.x
 
 ```bash
 # Via Homebrew
-brew install node@20
+brew install node@24
 
 # Or via Node Version Manager (nvm)
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-nvm install 20
-nvm use 20
+nvm install 24
+nvm use 24
 ```
 
 **Windows**:
 
-Download from [https://nodejs.org/](https://nodejs.org/) (20.x LTS)
+Download from [https://nodejs.org/](https://nodejs.org/) (24.x LTS)
 
 ### PxO Installation
 
@@ -740,7 +740,7 @@ LOG_LEVEL=debug node src/game.js
 
 ## Production Checklist
 
-- [ ] Node.js 18+ installed
+- [ ] Node.js 24 LTS installed
 - [ ] MQTT broker (Mosquitto) installed and running
 - [ ] PxO installed in `/opt/paradox/pxo`
 - [ ] Config files created (`pxo.ini`, `game.edn`)
