@@ -1276,6 +1276,13 @@ class GameStateMachine extends EventEmitter {
               if (action.name) options.name = action.name;
               if (action.scene) options.scene = action.scene;
 
+              // Generic MQTT / GPIO / prop fields (PxIO write/read, terminal msgs, etc.)
+              if (action.target !== undefined) options.target = action.target;
+              if (action.value !== undefined) options.value = action.value;
+              if (action.title !== undefined) options.title = action.title;
+              if (action.variant !== undefined) options.variant = action.variant;
+              if (action.pin !== undefined) options.pin = action.pin;
+
               // Execute command through adapter registry
               log.debug(`executeCueAction: calling zones.execute(zone='${zoneName}', command='${command}', options=${JSON.stringify(options)})`);
               await this.zones.execute(zoneName, command, options);
