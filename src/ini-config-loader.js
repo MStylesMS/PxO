@@ -58,6 +58,7 @@ function loadIniConfig(configPath) {
             global: {
                 log_directory: null,
                 log_level: 'info',
+                game_name: null,
                 game_logging: false,
                 game_log_path: null,
                 chat_to_player: null,
@@ -77,6 +78,10 @@ function loadIniConfig(configPath) {
         const mqttBroker = normalizeBrokerUrl(config.mqtt?.broker || null, mqttPort);
         const logDirectory = config.global?.log_directory || config.logging?.directory || null;
         const logLevel = config.global?.log_level || config.logging?.level || 'info';
+        const gameNameRaw = config.global?.game_name || config.logging?.game_name || null;
+        const gameName = gameNameRaw != null && String(gameNameRaw).trim() !== ''
+            ? String(gameNameRaw).trim()
+            : null;
         const gameLogging = parseBoolean(config.global?.game_logging ?? config.logging?.game_logging ?? false);
         const gameLogPath = config.global?.game_log_path || config.logging?.game_log_path || null;
         const chatToPlayer = config.global?.chat_to_player || config.logging?.chat_to_player || null;
@@ -87,6 +92,7 @@ function loadIniConfig(configPath) {
             global: {
                 log_directory: logDirectory,
                 log_level: logLevel,
+                game_name: gameName,
                 game_logging: gameLogging,
                 game_log_path: gameLogPath,
                 chat_to_player: chatToPlayer,
@@ -104,6 +110,7 @@ function loadIniConfig(configPath) {
             global: {
                 log_directory: null,
                 log_level: 'info',
+                game_name: null,
                 game_logging: false,
                 game_log_path: null,
                 chat_to_player: null,

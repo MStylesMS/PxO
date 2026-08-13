@@ -194,6 +194,9 @@ INI keys (recommended under `[global]`, also accepted under `[logging]`):
 
 ```ini
 [global]
+# Optional display name for gameplay JSONL session_header (defaults to EDN basename)
+game_name = Houdini's Challenge
+
 # Enable gameplay analytics logging (accepted true values: true, on, yes, 1)
 game_logging = true
 
@@ -210,6 +213,9 @@ trigger_source_strict = warn
 
 Rules:
 
+- `game_name` is optional; when omitted, `session_header.payload.game_name` uses the EDN file basename (`edn_base`).
+- JSONL lines include `t_sec` (elapsed seconds from gameplay start) alongside `wall_time` and `game_time_remaining`. See [MQTT_API.md](MQTT_API.md) Gameplay Analytics Capture.
+- Filename stem `{ednBase}_{yyyy-mm-dd_HH-mm-ss}` pairs with PxS `.speech.jsonl` when both write to the same log directory.
 - `game_logging` is enabled only when `game_log_path` resolves to a writable directory.
 - PxO will create `game_log_path` if it does not exist.
 - If gameplay logging is enabled but path validation fails, PxO startup fails (hard fail).

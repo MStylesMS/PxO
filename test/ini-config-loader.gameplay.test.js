@@ -11,6 +11,7 @@ describe('INI loader gameplay logging fields', () => {
 
         fs.writeFileSync(iniPath, [
             '[global]',
+            'game_name=Agent 22',
             'game_logging=on',
             'game_log_path=/tmp/pxo-gameplay',
             'chat_to_player=paradox/test/chat/to-player',
@@ -22,6 +23,7 @@ describe('INI loader gameplay logging fields', () => {
 
         const cfg = loadIniConfig(iniPath);
 
+        expect(cfg.global.game_name).toBe('Agent 22');
         expect(cfg.global.game_logging).toBe(true);
         expect(cfg.global.game_log_path).toBe('/tmp/pxo-gameplay');
         expect(cfg.global.chat_to_player).toBe('paradox/test/chat/to-player');
@@ -33,6 +35,7 @@ describe('INI loader gameplay logging fields', () => {
         const missingPath = path.join(os.tmpdir(), 'pxo-ini-does-not-exist.ini');
         const cfg = loadIniConfig(missingPath);
 
+        expect(cfg.global.game_name).toBe(null);
         expect(cfg.global.game_logging).toBe(false);
         expect(cfg.global.game_log_path).toBe(null);
         expect(cfg.global.chat_to_player).toBe(null);

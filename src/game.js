@@ -619,10 +619,15 @@ async function main(rawArgs = process.argv.slice(2)) {
   const sm = new GameStateMachine({ cfg, mqtt });
   sm.init();
 
+  const gameplayGameName =
+    (iniConfig.global?.game_name && String(iniConfig.global.game_name).trim()) ||
+    ednBase;
+
   const gameplayLogger = gameplayLogDirectory
     ? new GameplayLogger({
       logDir: gameplayLogDirectory,
       ednBase,
+      gameName: gameplayGameName,
       logger: log,
       getCurrentMode: () => sm.currentGameMode || sm.gameType || null,
       getClockState: () => {

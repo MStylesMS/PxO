@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const path = require('path');
 
 function pad2(n) {
@@ -34,6 +34,15 @@ function formatRemaining(remainingMs) {
     return `${pad2(minutes)}:${pad2(seconds)}.${pad2(hund)}`;
 }
 
+/**
+ * Elapsed seconds from gameplay start (one decimal place), shared axis with PxS speech logs.
+ */
+function formatElapsedSec(startTsMs, tsMs) {
+    if (!Number.isFinite(startTsMs) || !Number.isFinite(tsMs)) return 0;
+    const sec = Math.max(0, (tsMs - startTsMs) / 1000);
+    return Math.round(sec * 10) / 10;
+}
+
 function toBoolean(value) {
     if (typeof value === 'boolean') return value;
     if (typeof value === 'number') return value !== 0;
@@ -45,12 +54,14 @@ class GameplayLogger {
     constructor({
         logDir,
         ednBase,
+        gameName,
         getClockState,
         getCurrentMode,
         logger
     }) {
         this.logDir = logDir;
         this.ednBase = ednBase || 'game';
+        this.gameName = (gameName && String(gameName).trim()) || this.ednBase;
         this.getClockState = getClockState;
         this.getCurrentMode = getCurrentMode;
         this.log = logger || console;
@@ -120,36 +131,43 @@ class GameplayLogger {
         };
 
         const headerMode = this.session.mode || null;
+        const gameplayStartedAt = new Date(startTsMs).toISOString();
         this._writeLine({
             event_type: 'session_header',
             wall_time: formatWallTime(startTsMs),
             game_time_remaining: formatRemaining(this.pending.gameplayDurationMs),
+            t_sec: 0,
             payload: {
                 reason,
+                game_name: this.gameName,
                 edn_base: this.ednBase,
                 mode: headerMode,
+                gameplay_started_at: gameplayStartedAt,
                 file_name: path.basename(filePath),
                 start_command: this.pending.startCommand
             }
-        });
+        }, startTsMs);
 
         this._writeLine({
             event_type: 'session_config',
             wall_time: formatWallTime(startTsMs),
             game_time_remaining: formatRemaining(this.pending.gameplayDurationMs),
+            t_sec: 0,
             payload: {
                 schema_version: 1,
                 timing_reference: 'game_time_remaining',
                 game_time_format: 'MM:SS.hh',
-                wall_time_format: 'HH:MM:SS.hh'
+                wall_time_format: 'HH:MM:SS.hh',
+                elapsed_field: 't_sec',
+                elapsed_unit: 'seconds_from_gameplay_start'
             }
-        });
+        }, startTsMs);
 
         this.lastMode = headerMode;
         this.lastEdnIdentity = this.ednBase;
 
         for (const entry of this.pending.buffer) {
-            this._writeLine(entry);
+            this._writeLine(entry, entry._tsMs);
         }
 
         this.pending = null;
@@ -225,11 +243,13 @@ class GameplayLogger {
             event_type: eventType,
             wall_time: formatWallTime(tsMs),
             game_time_remaining: formatRemaining(this._getRemainingMs()),
-            payload: payload || {}
+            payload: payload || {},
+            // Kept on buffered records so commit can compute t_sec from the real event time.
+            _tsMs: tsMs
         };
 
         if (this.session) {
-            this._writeLine(record);
+            this._writeLine(record, tsMs);
             return;
         }
 
@@ -244,6 +264,16 @@ class GameplayLogger {
         }
 
         // no active run
+    }
+
+    _sessionStartMs() {
+        if (this.session && Number.isFinite(this.session.startedAtMs)) {
+            return this.session.startedAtMs;
+        }
+        if (this.pending && Number.isFinite(this.pending.startTsMs)) {
+            return this.pending.startTsMs;
+        }
+        return null;
     }
 
     _getRemainingMs() {
@@ -264,9 +294,15 @@ class GameplayLogger {
         return 0;
     }
 
-    _writeLine(record) {
+    _writeLine(record, tsMs = Date.now()) {
         if (!this.session || !this.session.filePath) return;
-        fs.appendFileSync(this.session.filePath, `${JSON.stringify(record)}\n`);
+        const startMs = this._sessionStartMs();
+        const out = { ...record };
+        delete out._tsMs;
+        if (out.t_sec === undefined || out.t_sec === null) {
+            out.t_sec = formatElapsedSec(startMs, tsMs);
+        }
+        fs.appendFileSync(this.session.filePath, `${JSON.stringify(out)}\n`);
     }
 }
 
@@ -274,5 +310,6 @@ module.exports = {
     GameplayLogger,
     formatWallTime,
     formatRemaining,
-    formatFileTimestamp
+    formatFileTimestamp,
+    formatElapsedSec
 };

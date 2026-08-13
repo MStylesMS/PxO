@@ -89,6 +89,34 @@ PxO does not require PFx as a proxy for PxIO or other producer apps. All integra
 
 When gameplay analytics logging is enabled, PxO captures selected MQTT-driven gameplay signals into a separate JSONL file stream.
 
+**Filename** (local wall time at accepted start / gameplay commit stem):
+
+```text
+{ednBase}_{yyyy-mm-dd_HH-mm-ss}.jsonl
+```
+
+Paradox Speech (PxS) writes a sibling speech archive with the **same stem**:
+
+```text
+{ednBase}_{yyyy-mm-dd_HH-mm-ss}.speech.jsonl
+```
+
+**Every JSONL line** includes (in addition to existing fields):
+
+| Field | Meaning |
+|-------|---------|
+| `wall_time` | Local wall `HH:MM:SS.hh` |
+| `game_time_remaining` | Countdown `MM:SS.hh` |
+| `t_sec` | Elapsed seconds from gameplay start (float, one decimal; `0` on header/commit) |
+
+**`session_header` payload** (first line) is enriched with:
+
+- `game_name` — display name from INI `global.game_name` when set, else `edn_base`
+- `edn_base`
+- `mode`
+- `gameplay_started_at` — ISO-8601 UTC of gameplay start
+- `file_name`, `start_command`, `reason` (as before)
+
 Captured:
 
 - Inbound commands to `{baseTopic}/commands` and their outcomes

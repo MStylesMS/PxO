@@ -4,6 +4,20 @@ All notable changes to PxO are documented here.
 
 ---
 
+## Unreleased
+
+### Added
+
+- Gameplay JSONL lines now include **`t_sec`** (elapsed seconds from gameplay start) alongside `wall_time` and `game_time_remaining`, matching the PxS speech-log time axis.
+- `session_header` payload enrichment: `game_name`, `gameplay_started_at` (ISO UTC), plus existing `edn_base` / `mode`.
+- Optional INI `[global] game_name` for display name in analytics headers (defaults to EDN basename).
+
+### Docs
+
+- `docs/CONFIG_INI.md` and `docs/MQTT_API.md` document stem pairing with PxS `.speech.jsonl` and the `t_sec` field.
+
+---
+
 ## [2.1.1] — 2026-05-12
 
 ### Summary
