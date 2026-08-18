@@ -427,6 +427,14 @@ function normalizeTriggerEndCommand(endValue) {
   return aliases[normalized] || null;
 }
 
+function normalizeTriggerCompleteTarget(completeValue) {
+  const normalized = String(completeValue || '').trim().toLowerCase();
+  if (normalized === 'intro' || normalized === 'closing' || normalized === 'reset') {
+    return normalized;
+  }
+  return null;
+}
+
 async function executeTriggerAction(action, triggerName, { sm, log: logger = log } = {}) {
   if (!action || typeof action !== 'object') {
     logger.warn(`Invalid trigger action in ${triggerName}: expected object`);
@@ -463,6 +471,25 @@ async function executeTriggerAction(action, triggerName, { sm, log: logger = log
     return true;
   }
 
+  if (action.complete !== undefined) {
+    const target = normalizeTriggerCompleteTarget(action.complete);
+    if (!target) {
+      logger.warn(`Trigger ${triggerName} has invalid complete action '${action.complete}'; use intro, closing, or reset`);
+      return false;
+    }
+
+    if (typeof sm.completePhase !== 'function') {
+      logger.warn(`Trigger ${triggerName} complete '${target}' skipped: state machine has no completePhase`);
+      return false;
+    }
+
+    const ok = await sm.completePhase(target);
+    if (ok) {
+      logger.info(`Executed trigger complete '${target}' for ${triggerName}`);
+    }
+    return Boolean(ok);
+  }
+
   const rawMqttAction = action.publish || action.command === 'publish';
   const zoneAction = Boolean(
     action.zone
@@ -476,7 +503,7 @@ async function executeTriggerAction(action, triggerName, { sm, log: logger = log
     return true;
   }
 
-  logger.warn(`Unsupported trigger action in ${triggerName}; use fire, end, zone/zones action, or raw MQTT publish`);
+  logger.warn(`Unsupported trigger action in ${triggerName}; use fire, end, complete, zone/zones action, or raw MQTT publish`);
   return false;
 }
 
@@ -1390,6 +1417,7 @@ module.exports = Object.assign(module.exports || {}, {
   doesTriggerConditionMatch,
   normalizeCommand,
   normalizeTriggerEndCommand,
+  normalizeTriggerCompleteTarget,
   executeTriggerAction,
   conditionEntryMatches,
   normalizeEventToken,

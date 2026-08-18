@@ -167,13 +167,17 @@ class ModularConfigAdapter {
             return null;
           }
 
-          const trigger = definition.trigger && typeof definition.trigger === 'object'
-            ? { ...definition.trigger }
-            : {
-              topic: definition.topic,
-              source: definition.source,
-              condition: definition.condition
-            };
+          // Outer :source/:topic/:condition apply when using either the documented
+          // sibling form or a nested :trigger map. Nested keys win on conflict.
+          const nestedTrigger = definition.trigger && typeof definition.trigger === 'object'
+            ? definition.trigger
+            : null;
+          const trigger = {
+            topic: definition.topic,
+            source: definition.source,
+            condition: definition.condition,
+            ...(nestedTrigger || {})
+          };
 
           const actions = Array.isArray(definition.actions) ? definition.actions : [];
           const whenPhase = definition.whenPhase

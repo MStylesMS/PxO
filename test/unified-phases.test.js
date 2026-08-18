@@ -208,11 +208,11 @@ describe('Unified Sequence and Schedule System', () => {
 
     test('sequence intro still waits phase duration then advances', async () => {
         const sm = createIntroMachine({ intro: { duration: 2, sequence: 'intro-seq' } });
-        let waited = 0;
-        sm.wait = async (ms) => { waited = ms; };
+        const waits = [];
+        sm.wait = async (ms) => { waits.push(ms); };
 
         await sm.transitionToPhase('intro');
-        assert(waited === 2000, 'expected sequence intro to wait phase duration');
+        assert(waits[0] === 2000, 'expected sequence intro to wait phase duration');
         assert(sm.state === 'gameplay', 'expected sequence intro to advance after wait');
     });
 
@@ -226,5 +226,58 @@ describe('Unified Sequence and Schedule System', () => {
         sm.currentPhase = 'abort';
         await sm._completeIntroPhase();
         assert(sm.state !== 'gameplay', 'expected abort to cancel later intro-to-gameplay advance');
+    });
+
+    test('completePhase intro advances a schedule intro before remaining hits 0', async () => {
+        const sm = createIntroMachine({ intro: { schedule: 'intro-sched' } });
+
+        await sm.transitionToPhase('intro');
+        assert(sm.state === 'intro', 'expected to start in intro');
+        assert(sm.remaining === 2, 'expected intro remaining from schedule duration');
+
+        const ok = await sm.completePhase('intro');
+        assert(ok === true, 'expected completePhase intro to succeed');
+        assert(sm.state === 'gameplay', 'expected intro to advance to gameplay before remaining hits 0');
+    });
+
+    test('completePhase intro is ignored when not in intro', async () => {
+        const sm = createIntroMachine({ intro: { schedule: 'intro-sched' } });
+        sm.state = 'gameplay';
+        sm.currentPhase = 'gameplay';
+
+        const ok = await sm.completePhase('intro');
+        assert(ok === false, 'expected completePhase intro to no-op outside intro');
+        assert(sm.state === 'gameplay', 'expected gameplay state to be unchanged');
+    });
+
+    test('completePhase closing advances solved toward reset', async () => {
+        const sm = createIntroMachine({ intro: { duration: 1, sequence: 'noop' } });
+        sm.phases.solved = { duration: 5, sequence: 'noop' };
+        sm.state = 'solved';
+        sm.currentPhase = 'solved';
+
+        const ok = await sm.completePhase('closing');
+        assert(ok === true, 'expected completePhase closing to succeed from solved');
+        assert(sm.state !== 'solved', 'expected to leave the solved closing phase');
+    });
+
+    test('completePhase reset returns to ready', async () => {
+        const sm = createIntroMachine({ intro: { duration: 1, sequence: 'noop' } });
+        sm.state = 'reset';
+        sm.currentPhase = 'reset';
+
+        const ok = await sm.completePhase('reset');
+        assert(ok === true, 'expected completePhase reset to succeed');
+        assert(sm.state === 'ready', 'expected reset to complete to ready');
+    });
+
+    test('completePhase rejects unknown targets and wrong-phase closing', async () => {
+        const sm = createIntroMachine({ intro: { duration: 1, sequence: 'noop' } });
+        sm.state = 'intro';
+        sm.currentPhase = 'intro';
+
+        assert(await sm.completePhase('gameplay') === false, 'expected unknown complete target to fail');
+        assert(await sm.completePhase('closing') === false, 'expected complete closing to no-op in intro');
+        assert(sm.state === 'intro', 'expected intro state to be unchanged');
     });
 });

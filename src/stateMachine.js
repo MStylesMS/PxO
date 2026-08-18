@@ -1149,10 +1149,40 @@ class GameStateMachine extends EventEmitter {
         await this._completeIntroPhase(transitionToken);
       }
     } else if (phaseName === 'reset') {
-      // If we ever enter an explicit 'reset' phase, complete to ready afterwards
-      this.changeState('ready', { reason: 'reset_phase_completed' });
-      this.publishEvent('reset_completed');
-      this.publishState();
+      this._completeResetPhase(transitionToken);
+    }
+  }
+
+  /**
+   * Finish a timer-driven phase early (or from a trigger).
+   * Allowed targets: intro, closing, reset.
+   * Wrong-phase and unknown targets no-op with a warning and return false.
+   */
+  async completePhase(target) {
+    const normalized = String(target || '').trim().toLowerCase();
+
+    switch (normalized) {
+      case 'intro':
+        if (this.state !== 'intro') {
+          log.warn(`[PhaseEngine] completePhase('intro') ignored: current state is '${this.state}'`);
+          return false;
+        }
+        return await this._completeIntroPhase();
+      case 'closing':
+        if (!this._isClosingPhase(this.state)) {
+          log.warn(`[PhaseEngine] completePhase('closing') ignored: current state is '${this.state}'`);
+          return false;
+        }
+        return await this._completeClosingPhase();
+      case 'reset':
+        if (this.state !== 'reset') {
+          log.warn(`[PhaseEngine] completePhase('reset') ignored: current state is '${this.state}'`);
+          return false;
+        }
+        return this._completeResetPhase();
+      default:
+        log.warn(`[PhaseEngine] completePhase unknown target '${target}'; use intro, closing, or reset`);
+        return false;
     }
   }
 
@@ -1163,7 +1193,7 @@ class GameStateMachine extends EventEmitter {
    */
   async _completeIntroPhase(transitionToken = this._phaseTransitionToken) {
     if (transitionToken !== this._phaseTransitionToken || this.state !== 'intro') {
-      return;
+      return false;
     }
 
     const bridgeResult = await this.sequenceRunner.runControlSequence('intro-to-gameplay-sequence', { gameMode: this.gameType });
@@ -1175,10 +1205,62 @@ class GameStateMachine extends EventEmitter {
     }
 
     if (transitionToken !== this._phaseTransitionToken || this.state !== 'intro') {
-      return;
+      return false;
     }
 
     await this.transitionToPhase('gameplay');
+    return true;
+  }
+
+  /**
+   * Finish solved/failed (or other closing phase) and advance to reset.
+   * Shared by the closing countdown hitting 0 and {:complete "closing"} triggers.
+   */
+  async _completeClosingPhase(transitionToken = this._phaseTransitionToken) {
+    if (transitionToken !== this._phaseTransitionToken || !this._isClosingPhase(this.state)) {
+      return false;
+    }
+
+    this.stopUnifiedTimer();
+
+    const phase = this.state;
+    const closingResult = await this.sequenceRunner.runControlSequence('closing-complete-sequence', {
+      gameMode: this.gameType,
+      phase
+    });
+    if (!closingResult.ok && closingResult.error !== 'sequence_not_found') {
+      this.publishWarning('closing_complete_sequence_failed', {
+        message: `closing-complete-sequence failed: ${closingResult.error || 'unknown_error'}`,
+        phase,
+        error: closingResult.error || 'unknown_error'
+      });
+    }
+
+    if (transitionToken !== this._phaseTransitionToken || !this._isClosingPhase(this.state)) {
+      return false;
+    }
+
+    if (this.phases && this.phases.reset) {
+      await this.transitionToPhase('reset');
+    } else {
+      await this._runResetSequence();
+    }
+    return true;
+  }
+
+  /**
+   * Finish the reset phase and return to ready.
+   * Shared by sequence-reset post-wait and {:complete "reset"} triggers.
+   */
+  _completeResetPhase(transitionToken = this._phaseTransitionToken) {
+    if (transitionToken !== this._phaseTransitionToken || this.state !== 'reset') {
+      return false;
+    }
+
+    this.changeState('ready', { reason: 'reset_phase_completed' });
+    this.publishEvent('reset_completed');
+    this.publishState();
+    return true;
   }
 
   // Trigger end-of-game outcomes and route to proper closing phase
@@ -2673,25 +2755,7 @@ class GameStateMachine extends EventEmitter {
         } catch (e) { log.warn('closing phase schedule tick error', e.message); }
 
         if (this.resetRemaining === 0) {
-          this.stopUnifiedTimer();
-
-          (async () => {
-            const closingResult = await this.sequenceRunner.runControlSequence('closing-complete-sequence', { gameMode: this.gameType, phase: this.state });
-            if (!closingResult.ok && closingResult.error !== 'sequence_not_found') {
-              this.publishWarning('closing_complete_sequence_failed', {
-                message: `closing-complete-sequence failed: ${closingResult.error || 'unknown_error'}`,
-                phase: this.state,
-                error: closingResult.error || 'unknown_error'
-              });
-            }
-
-            // Auto-advance to explicit reset phase if defined; otherwise fallback to reset sequence
-            if (this.phases && this.phases['reset']) {
-              this.transitionToPhase('reset');
-            } else {
-              this._runResetSequence();
-            }
-          })();
+          this._completeClosingPhase().catch(e => log.warn(`closing completion failed: ${e.message}`));
         }
       }
       // per-second state publication handled by heartbeat

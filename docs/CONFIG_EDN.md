@@ -79,7 +79,7 @@ PxO now enforces strict phase syntax:
   - Phase-level `:duration`/`:seconds` is invalid and causes validation errors
   - Schedules are phase-only containers; they cannot be nested inside triggers, sequences, hints, or other schedules
 - A phase cannot define both `:sequence` and `:schedule`
-- Intro may use either form. Sequence intros hold for the phase `:duration`. Schedule intros hold for the named schedule duration, fire `:at` entries on the intro countdown, then auto-advance to gameplay when remaining reaches 0.
+- Intro may use either form. Sequence intros hold for the phase `:duration`. Schedule intros hold for the named schedule duration, fire `:at` entries on the intro countdown, then auto-advance to gameplay when remaining reaches 0. A trigger may finish intro early with `{:complete "intro"}`; the schedule duration is then a hang timeout if that event never arrives.
 
 Valid examples:
 
@@ -263,6 +263,13 @@ To keep trigger rules maintainable, define named input sources in `:inputs` and 
     :condition {:value "1"}
     :actions [{:end "win"}]
   }
+
+  :terminal-entered-login {
+    :source :terminal-events
+    :condition {:event "stateChange" :to "login"}
+    :when-phase :intro
+    :actions [{:complete "intro"}]
+  }
 }
 ```
 
@@ -275,6 +282,7 @@ Trigger action rules:
   - `{:zone "door-lock" :payload "1"}` for payload-only actions targeting an `mqtt-raw` zone
   - `{:command "publish" :topic "paradox/test" :payload {...}}` for raw MQTT publish actions
   - `{:end "win"}` or `{:end "fail"}` for phase-ending actions
+  - `{:complete "intro"}`, `{:complete "closing"}`, or `{:complete "reset"}` to finish the current timer-driven phase early (intro → gameplay, solved/failed → reset, reset → ready). Wrong-phase calls are ignored. Do not use `complete` for gameplay outcomes; use `:end` instead.
 - Legacy typed trigger actions such as `{:type :cue ...}` and `{:type :game ...}` are no longer supported.
 - Schedules are phase-only. Trigger actions cannot use `:schedule`, and `:fire` must not target a named schedule.
 

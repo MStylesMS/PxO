@@ -1,4 +1,4 @@
-const { executeTriggerAction, normalizeTriggerEndCommand } = require('../src/game');
+const { executeTriggerAction, normalizeTriggerEndCommand, normalizeTriggerCompleteTarget } = require('../src/game');
 
 describe('trigger action executor', () => {
   let sm;
@@ -9,7 +9,8 @@ describe('trigger action executor', () => {
       _buildFireContext: jest.fn((action) => ({ text: action.text })),
       fireByName: jest.fn(),
       handleCommand: jest.fn(),
-      executeCueAction: jest.fn()
+      executeCueAction: jest.fn(),
+      completePhase: jest.fn().mockResolvedValue(true)
     };
     logger = {
       info: jest.fn(),
@@ -48,6 +49,35 @@ describe('trigger action executor', () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Unsupported trigger action'));
   });
 
+  test('maps complete targets through completePhase without handleCommand', async () => {
+    await executeTriggerAction({ complete: 'intro' }, 'terminal-entered-login', { sm, log: logger });
+    await executeTriggerAction({ complete: 'Closing' }, 'win-video-done', { sm, log: logger });
+    await executeTriggerAction({ complete: 'reset' }, 'reset-ready', { sm, log: logger });
+
+    expect(sm.completePhase).toHaveBeenNthCalledWith(1, 'intro');
+    expect(sm.completePhase).toHaveBeenNthCalledWith(2, 'closing');
+    expect(sm.completePhase).toHaveBeenNthCalledWith(3, 'reset');
+    expect(sm.handleCommand).not.toHaveBeenCalled();
+  });
+
+  test('rejects unknown complete targets', async () => {
+    const result = await executeTriggerAction({ complete: 'gameplay' }, 'bad-complete', { sm, log: logger });
+
+    expect(result).toBe(false);
+    expect(sm.completePhase).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('invalid complete action'));
+  });
+
+  test('returns false when completePhase no-ops', async () => {
+    sm.completePhase.mockResolvedValue(false);
+
+    const result = await executeTriggerAction({ complete: 'intro' }, 'terminal-entered-login', { sm, log: logger });
+
+    expect(result).toBe(false);
+    expect(sm.completePhase).toHaveBeenCalledWith('intro');
+    expect(sm.handleCommand).not.toHaveBeenCalled();
+  });
+
   test('rejects unsupported trigger action shapes', async () => {
     const result = await executeTriggerAction({ schedule: 'not-allowed' }, 'bad-trigger', { sm, log: logger });
 
@@ -64,5 +94,16 @@ describe('normalizeTriggerEndCommand', () => {
     expect(normalizeTriggerEndCommand('fail')).toBe('fail');
     expect(normalizeTriggerEndCommand('failed')).toBe('fail');
     expect(normalizeTriggerEndCommand('unknown')).toBeNull();
+  });
+});
+
+describe('normalizeTriggerCompleteTarget', () => {
+  test('normalizes intro/closing/reset and rejects other values', () => {
+    expect(normalizeTriggerCompleteTarget('intro')).toBe('intro');
+    expect(normalizeTriggerCompleteTarget('Closing')).toBe('closing');
+    expect(normalizeTriggerCompleteTarget('reset')).toBe('reset');
+    expect(normalizeTriggerCompleteTarget('gameplay')).toBeNull();
+    expect(normalizeTriggerCompleteTarget('win')).toBeNull();
+    expect(normalizeTriggerCompleteTarget('')).toBeNull();
   });
 });

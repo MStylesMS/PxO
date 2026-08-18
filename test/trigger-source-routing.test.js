@@ -193,4 +193,57 @@ describe('modular trigger transformation', () => {
     expect(transformed.global.triggers.escapeRoomRules[0]['when-phase']).toBe('gameplay');
     expect(transformed.global.triggers.escapeRoomRules[0].whenPhase).toBe('gameplay');
   });
+
+  test('preserves outer :source when rule uses nested :trigger map', () => {
+    const config = {
+      global: {
+        settings: {
+          'default-mode': 'demo',
+          'game-heartbeat-ms': 1000
+        },
+        mqtt: {
+          broker: 'localhost',
+          'game-topic': 'paradox/houdini/game'
+        },
+        inputs: {
+          'terminal-events': {
+            topic: 'paradox/houdini/terminal/events'
+          }
+        },
+        triggers: {
+          'terminal-entered-login': {
+            description: 'PxT FSM entered login state',
+            source: 'terminal-events',
+            trigger: { condition: { event: 'stateChange', to: 'login' } },
+            'when-phase': 'intro',
+            actions: [{ complete: 'intro' }]
+          }
+        },
+        sequences: {},
+        cues: {},
+        hints: {}
+      },
+      'game-modes': {
+        demo: {
+          'short-label': 'Demo',
+          'game-label': 'Demo',
+          phases: {
+            intro: { duration: 5, sequence: 'noop' },
+            gameplay: { duration: 60, sequence: 'noop' },
+            abort: { sequence: 'noop' },
+            reset: { sequence: 'noop' }
+          }
+        }
+      }
+    };
+
+    const transformed = ModularConfigAdapter.transform(config);
+    const rule = transformed.global.triggers.escapeRoomRules[0];
+
+    expect(rule.name).toBe('terminal-entered-login');
+    expect(rule.trigger.source).toBe('terminal-events');
+    expect(rule.trigger.condition).toEqual({ event: 'stateChange', to: 'login' });
+    expect(rule['when-phase']).toBe('intro');
+    expect(rule.actions).toEqual([{ complete: 'intro' }]);
+  });
 });

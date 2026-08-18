@@ -773,7 +773,7 @@ class ConfigValidator {
         const discriminators = this.getTriggerActionDiscriminators(action);
 
         if (discriminators.length === 0) {
-            this.addError(`Trigger action in ${context} must have a valid discriminator (fire, zone action, raw MQTT, end)`);
+            this.addError(`Trigger action in ${context} must have a valid discriminator (fire, zone action, raw MQTT, end, complete)`);
         } else if (discriminators.length > 1) {
             this.addError(`Trigger action in ${context} has multiple discriminators: ${discriminators.join(', ')}`);
         }
@@ -789,6 +789,14 @@ class ConfigValidator {
             const allowed = new Set(['win', 'solve', 'solved', 'sovled', 'fail', 'failed', 'lose', 'loss']);
             if (!allowed.has(normalized)) {
                 this.addError(`Trigger action ${context} end must be one of: solve, fail (win is also accepted as an alias for solve)`);
+            }
+        }
+
+        if (action.complete !== undefined) {
+            const normalized = String(action.complete).trim().toLowerCase();
+            const allowed = new Set(['intro', 'closing', 'reset']);
+            if (!allowed.has(normalized)) {
+                this.addError(`Trigger action ${context} complete must be one of: intro, closing, reset`);
             }
         }
 
@@ -1087,6 +1095,7 @@ class ConfigValidator {
         if (this.isRawMqttCommand(action)) discriminators.push('raw-mqtt');
         if ((action.zone || action.zones) && (action.command || this.targetsOnlyMqttRawZones(action))) discriminators.push('zone-action');
         if (action.end) discriminators.push('end');
+        if (action.complete) discriminators.push('complete');
 
         if (action.type !== undefined) discriminators.push('type (PROHIBITED)');
         if (action.cue !== undefined) discriminators.push('cue (PROHIBITED)');

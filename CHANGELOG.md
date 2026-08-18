@@ -8,12 +8,15 @@ All notable changes to PxO are documented here.
 
 ### Added
 
+- Trigger action `{:complete "intro"|"closing"|"reset"}` finishes the current timer-driven phase early (intro → gameplay, solved/failed → reset, reset → ready) using the same paths as the phase countdown. Wrong-phase calls are ignored. Gameplay outcomes remain `{:end "win"|"fail"}`.
+- Nested EDN `:trigger` maps now inherit outer `:source` / `:topic` / `:condition` (inner keys still win), so hybrid Moscow-style rules subscribe correctly.
 - Gameplay JSONL lines now include **`t_sec`** (elapsed seconds from gameplay start) alongside `wall_time` and `game_time_remaining`, matching the PxS speech-log time axis.
 - `session_header` payload enrichment: `game_name`, `gameplay_started_at` (ISO UTC), plus existing `edn_base` / `mode`.
 - Optional INI `[global] game_name` for display name in analytics headers (defaults to EDN basename).
 
 ### Docs
 
+- `docs/CONFIG_EDN.md` documents `:complete` trigger actions and that schedule intro duration can be a hang timeout when intro completes from an event.
 - `docs/CONFIG_INI.md` and `docs/MQTT_API.md` document stem pairing with PxS `.speech.jsonl` and the `t_sec` field.
 
 ---
