@@ -118,4 +118,113 @@ describe('Unified Sequence and Schedule System', () => {
         const missingDuration = sm.validatePhaseStructure({ sequence: 'a' }, 'p2', 'gm');
         assert(missingDuration.errors.length > 0, 'expected error when sequence phase is missing duration');
     });
+
+    function createIntroMachine({ intro }) {
+        const localCfg = {
+            global: {
+                mqtt: { 'game-topic': 'game' },
+                settings: {}
+            },
+            game: {
+                test: {
+                    phases: {
+                        intro,
+                        gameplay: { duration: 60, sequence: 'noop' },
+                        abort: { duration: 0, sequence: 'noop' },
+                        reset: { duration: 0, sequence: 'noop' }
+                    }
+                }
+            }
+        };
+        const sm = new StateMachine({
+            cfg: localCfg,
+            mqtt: { publish: () => { }, subscribe: () => { }, on: () => { } }
+        });
+        sm.gameType = 'test';
+        sm.currentGameMode = 'test';
+        sm.state = 'ready';
+        sm.phases = {
+            intro,
+            gameplay: { duration: 60, sequence: 'noop' },
+            abort: { duration: 0, sequence: 'noop' },
+            reset: { duration: 0, sequence: 'noop' }
+        };
+        sm.startUnifiedTimer = () => { };
+        sm.stopUnifiedTimer = () => { };
+        sm.sequenceRunner.runControlSequence = async () => ({ ok: true });
+        sm.sequenceRunner.resolveSequence = (name) => {
+            if (name === 'intro-sched') {
+                return {
+                    duration: 2,
+                    schedule: [
+                        { at: 2, fire: 'start-intro' },
+                        { at: 1, fire: 'mid-intro' },
+                        { at: 0, fire: 'end-intro' }
+                    ]
+                };
+            }
+            if (name === 'intro-seq') return { sequence: [{ fire: 'start-intro' }] };
+            if (name === 'noop') return { sequence: [] };
+            return undefined;
+        };
+        sm.fireByName = jest.fn(async () => { });
+        sm.wait = async () => { };
+        return sm;
+    }
+
+    async function tickIntro(sm) {
+        sm.remaining = Math.max(0, sm.remaining - 1);
+        const data = sm._phaseSchedules.get('intro');
+        (data?.entries || []).forEach(item => {
+            if (item.at === sm.remaining) {
+                sm._executeScheduleEntry('intro', item.entry, item.at);
+            }
+        });
+        if (sm.remaining === 0) {
+            await sm._completeIntroPhase();
+        }
+    }
+
+    test('schedule intro does not auto-advance until remaining hits 0', async () => {
+        const sm = createIntroMachine({ intro: { schedule: 'intro-sched' } });
+        const fired = [];
+        sm.fireByName = jest.fn(async (name) => { fired.push(name); });
+
+        await sm.transitionToPhase('intro');
+        assert(sm.state === 'intro', 'expected schedule intro to remain in intro after start');
+        assert(sm.remaining === 2, 'expected intro remaining from schedule duration');
+        assert(fired.includes('start-intro'), 'expected start-at-duration cue to fire immediately');
+        assert(!fired.includes('mid-intro'), 'did not expect mid-intro cue before first tick');
+
+        await tickIntro(sm);
+        assert(sm.state === 'intro', 'expected intro to hold after first tick');
+        assert(sm.remaining === 1, 'expected remaining to tick down during intro');
+        assert(fired.includes('mid-intro'), 'expected mid-intro schedule cue at remaining=1');
+
+        await tickIntro(sm);
+        assert(fired.includes('end-intro'), 'expected :at 0 cue before leaving intro');
+        assert(sm.state === 'gameplay', 'expected schedule intro to advance when remaining hits 0');
+    });
+
+    test('sequence intro still waits phase duration then advances', async () => {
+        const sm = createIntroMachine({ intro: { duration: 2, sequence: 'intro-seq' } });
+        let waited = 0;
+        sm.wait = async (ms) => { waited = ms; };
+
+        await sm.transitionToPhase('intro');
+        assert(waited === 2000, 'expected sequence intro to wait phase duration');
+        assert(sm.state === 'gameplay', 'expected sequence intro to advance after wait');
+    });
+
+    test('aborted schedule intro does not later jump to gameplay', async () => {
+        const sm = createIntroMachine({ intro: { schedule: 'intro-sched' } });
+
+        await sm.transitionToPhase('intro');
+        assert(sm.state === 'intro', 'expected to start in intro');
+        sm._phaseTransitionToken += 1;
+        sm.state = 'abort';
+        sm.currentPhase = 'abort';
+        await sm._completeIntroPhase();
+        assert(sm.state !== 'gameplay', 'expected abort to cancel later intro-to-gameplay advance');
+    });
 });

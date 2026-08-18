@@ -1142,20 +1142,43 @@ class GameStateMachine extends EventEmitter {
 
     // Post-execution logic (e.g., auto-transition)
     if (phaseName === 'intro') {
-      const bridgeResult = await this.sequenceRunner.runControlSequence('intro-to-gameplay-sequence', { gameMode: this.gameType });
-      if (!bridgeResult.ok && bridgeResult.error !== 'sequence_not_found') {
-        this.publishWarning('intro_to_gameplay_sequence_failed', {
-          message: `intro-to-gameplay-sequence failed: ${bridgeResult.error || 'unknown_error'}`,
-          error: bridgeResult.error || 'unknown_error'
-        });
+      const isScheduleIntro = phaseConfig.schedule !== undefined;
+      // Sequence intros wait inside executePhase(), then complete here.
+      // Schedule intros with duration > 0 stay until the unified timer hits 0.
+      if (!isScheduleIntro || !(Number.isFinite(duration) && duration > 0)) {
+        await this._completeIntroPhase(transitionToken);
       }
-      this.transitionToPhase('gameplay');
     } else if (phaseName === 'reset') {
       // If we ever enter an explicit 'reset' phase, complete to ready afterwards
       this.changeState('ready', { reason: 'reset_phase_completed' });
       this.publishEvent('reset_completed');
       this.publishState();
     }
+  }
+
+  /**
+   * Finish intro and advance to gameplay.
+   * Shared by sequence intros (after executePhase wait) and schedule intros (timer remaining === 0).
+   * Aborts if another phase transition already superseded this intro.
+   */
+  async _completeIntroPhase(transitionToken = this._phaseTransitionToken) {
+    if (transitionToken !== this._phaseTransitionToken || this.state !== 'intro') {
+      return;
+    }
+
+    const bridgeResult = await this.sequenceRunner.runControlSequence('intro-to-gameplay-sequence', { gameMode: this.gameType });
+    if (!bridgeResult.ok && bridgeResult.error !== 'sequence_not_found') {
+      this.publishWarning('intro_to_gameplay_sequence_failed', {
+        message: `intro-to-gameplay-sequence failed: ${bridgeResult.error || 'unknown_error'}`,
+        error: bridgeResult.error || 'unknown_error'
+      });
+    }
+
+    if (transitionToken !== this._phaseTransitionToken || this.state !== 'intro') {
+      return;
+    }
+
+    await this.transitionToPhase('gameplay');
   }
 
   // Trigger end-of-game outcomes and route to proper closing phase
@@ -2570,9 +2593,9 @@ class GameStateMachine extends EventEmitter {
 
       // Handle different states in single unified timer
       if (this.state === 'intro') {
-        // Countdown for intro phase (display only; transition handled by sequence completion)
+        // Countdown for intro. Sequence intros also wait in executePhase();
+        // schedule intros complete here when remaining hits 0.
         this.remaining = Math.max(0, this.remaining - 1);
-        // Fire any phase-scoped schedules registered for intro at matching remaining values
         try {
           for (const [phaseKey, data] of this._phaseSchedules) {
             if (phaseKey !== 'intro') continue;
@@ -2584,6 +2607,11 @@ class GameStateMachine extends EventEmitter {
             });
           }
         } catch (e) { log.warn('intro phase schedule tick error', e.message); }
+
+        if (this.remaining === 0) {
+          this.stopUnifiedTimer();
+          this._completeIntroPhase().catch(e => log.warn(`intro completion failed: ${e.message}`));
+        }
       } else if (this.state === 'gameplay') {
         this.remaining = Math.max(0, this.remaining - 1);
 

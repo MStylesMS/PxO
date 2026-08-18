@@ -79,6 +79,7 @@ PxO now enforces strict phase syntax:
   - Phase-level `:duration`/`:seconds` is invalid and causes validation errors
   - Schedules are phase-only containers; they cannot be nested inside triggers, sequences, hints, or other schedules
 - A phase cannot define both `:sequence` and `:schedule`
+- Intro may use either form. Sequence intros hold for the phase `:duration`. Schedule intros hold for the named schedule duration, fire `:at` entries on the intro countdown, then auto-advance to gameplay when remaining reaches 0.
 
 Valid examples:
 
@@ -88,7 +89,14 @@ Valid examples:
   :gameplay {:schedule "demo-gameplay-schedule"}
 }
 
+;; Equivalent schedule-based intro (duration inherited from the schedule):
+;; :intro {:schedule "demo-intro-schedule"}
+
 :sequences {
+  :demo-intro-schedule {:duration 60
+                        :schedule [{:at 60 :fire :lights-intro}
+                                   {:at 60 :fire :play-intro-audio}
+                                   {:at  0 :fire :stop-intro-audio}]}
   :demo-gameplay-schedule {:duration 120
                            :schedule [{:at 120 :fire :start-clock}
                                       {:at 30 :fire :hint-mm-5}]}

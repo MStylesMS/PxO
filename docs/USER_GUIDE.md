@@ -562,12 +562,14 @@ PxO enforces strict phase definition rules:
   - Schedule duration is inherited from the named schedule definition
   - Schedules are phase-only containers and cannot be nested inside triggers, sequences, hints, or other schedules
 - A phase may define only one of `:sequence` or `:schedule`
+- Intro may use either form. A sequence intro holds for the phase `:duration`. A schedule intro holds for the inherited schedule duration and auto-advances to gameplay at 0.
 
 Example:
 
 ```clojure
 :phases {
   :intro {:duration 45 :sequence "standard-intro"}
+  ;; or: :intro {:schedule "standard-intro-schedule"}
   :gameplay {:schedule "standard-gameplay-schedule"}
   :solved {:schedule "standard-solved-schedule"}
   :failed {:schedule "standard-failed-schedule"}
@@ -575,6 +577,9 @@ Example:
 }
 
 :sequences {
+  :standard-intro-schedule {:duration 45
+                            :schedule [{:at 45 :fire :play-intro}
+                                       {:at  0 :fire :stop-intro}]}
   :standard-gameplay-schedule {:duration 1800
                                :schedule [{:at 1800 :fire :start-clock}
                                           {:at 300 :fire :hint-mm-5}]}
