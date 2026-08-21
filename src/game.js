@@ -5,6 +5,7 @@ const { loadConfig } = require('./config');
 const log = require('./logger');
 const GameStateMachine = require('./stateMachine');
 const { getUiTopics } = require('./engineUtils');
+const { isLogicSourceName, logicSourceNodeName, virtualLogicTopic } = require('./logic/bindings');
 const { loadIniConfig } = require('./ini-config-loader');
 const LogCleanup = require('./log-cleanup');
 const { GameplayLogger } = require('./gameplay-logger');
@@ -58,7 +59,12 @@ function _publishMqttMetadata(mqtt, cfg, sm) {
         { command: 'setTime', description: 'Set remaining time (seconds: number)' },
         { command: 'executeHint', description: 'Fire a hint by id (id: string)' },
         { command: 'listhints', description: 'Publish hints registry to hintsRegistry topic' },
-        { command: 'getconfig', description: 'Publish full UI config to config topic' }
+        { command: 'getconfig', description: 'Publish full UI config to config topic' },
+        { command: 'solvePuzzle', description: 'Force a logic-graph node true (id: string)' },
+        { command: 'resetPuzzle', description: 'Reset a logic-graph node (id: string)' },
+        { command: 'enablePuzzle', description: 'Enable a logic-graph node (id: string)' },
+        { command: 'disablePuzzle', description: 'Disable a logic-graph node (id: string)' },
+        { command: 'bypassPuzzle', description: 'Bypass a logic-graph node as solved (id: string)' }
       ]
     };
     mqtt.publish(`${gameTopic}/schema`, schemaPayload, { retain: true });
@@ -229,6 +235,11 @@ function buildTriggerRules(rawTriggerRules, inputSources) {
       let resolvedTopic = typeof trigger.topic === 'string' ? trigger.topic.trim() : '';
       const sourceNameRaw = trigger.source || rule.source;
       const sourceName = typeof sourceNameRaw === 'string' ? sourceNameRaw.trim() : '';
+      const logicNode = isLogicSourceName(sourceName) ? logicSourceNodeName(sourceName) : null;
+
+      if (!resolvedTopic && logicNode) {
+        resolvedTopic = virtualLogicTopic(logicNode);
+      }
 
       if (!resolvedTopic && sourceName && inputSources.has(sourceName)) {
         resolvedTopic = inputSources.get(sourceName).topic;
@@ -243,7 +254,7 @@ function buildTriggerRules(rawTriggerRules, inputSources) {
         return null;
       }
 
-      if (sourceName && !inputSources.has(sourceName)) {
+      if (sourceName && !inputSources.has(sourceName) && !logicNode) {
         diagnostics.unknownSourceRules.push({
           name: rule.name || `rule-${index + 1}`,
           index,
@@ -259,7 +270,8 @@ function buildTriggerRules(rawTriggerRules, inputSources) {
           ...trigger,
           condition: (trigger.condition && typeof trigger.condition === 'object') ? trigger.condition : {},
           topic: resolvedTopic,
-          source: sourceName || trigger.source
+          source: sourceName || trigger.source,
+          logicNode: logicNode || null
         }
       };
     })
@@ -823,10 +835,54 @@ async function main(rawArgs = process.argv.slice(2)) {
 
   function initializeTriggers() {
     triggerRules.forEach(rule => {
+      const topic = rule?.trigger?.topic;
+      if (!topic || rule?.trigger?.logicNode) return;
       const sourceLabel = rule?.trigger?.source ? ` (source ${rule.trigger.source})` : '';
-      log.info(`Subscribing to trigger: ${rule.name} on topic ${rule.trigger.topic}${sourceLabel}`);
-      mqtt.subscribe(rule.trigger.topic);
+      log.info(`Subscribing to trigger: ${rule.name} on topic ${topic}${sourceLabel}`);
+      mqtt.subscribe(topic);
     });
+  }
+
+  function initializeLogicInputs() {
+    const engine = sm.logicEngine;
+    if (!engine || engine.graph.size === 0) return;
+    engine.getTopics().forEach((topic) => {
+      log.info(`Subscribing to logic input topic ${topic}`);
+      mqtt.subscribe(topic);
+    });
+    log.info(`[logic] ${engine.graph.size} node(s) active; subscribed to ${engine.getTopics().length} topic(s)`);
+  }
+
+  async function dispatchLogicTriggerChanges(changes) {
+    if (!Array.isArray(changes) || changes.length === 0) return;
+    for (const change of changes) {
+      const virtual = virtualLogicTopic(change.node);
+      const matching = triggerRules.filter((rule) => rule.trigger.topic === virtual);
+      const payload = {
+        node: change.node,
+        output: change.output,
+        value: change.value,
+        previous: change.previous
+      };
+      if (isTruthyChange(change)) {
+        sm.publishEvent('puzzle_solved', { puzzle: change.node, output: change.output });
+      }
+      for (const rule of matching) {
+        try {
+          await handleTrigger(virtual, payload, rule);
+        } catch (error) {
+          log.error(`Failed to handle logic trigger ${rule.name}:`, error);
+        }
+      }
+    }
+  }
+
+  function isTruthyChange(change) {
+    const prev = change.previous;
+    const next = change.output;
+    const prevTrue = prev === true || prev === 1 || (typeof prev === 'number' && prev !== 0);
+    const nextTrue = next === true || next === 1 || (typeof next === 'number' && next !== 0) || (typeof next === 'string' && next.length > 0);
+    return !prevTrue && nextTrue;
   }
 
   async function handleTrigger(topic, payload, rule) {
@@ -1074,6 +1130,14 @@ async function main(rawArgs = process.argv.slice(2)) {
       }
 
       maybeLogSensorInput(topic, payload);
+
+      if (sm.logicEngine && sm.logicEngine.graph.size > 0) {
+        Promise.resolve(sm.logicEngine.handleMessage(topic, payload))
+          .then((changes) => dispatchLogicTriggerChanges(changes))
+          .catch((error) => {
+            log.error(`Failed to evaluate logic graph for ${topic}:`, error);
+          });
+      }
 
       // Check for trigger rules first
       const matchingRules = triggerRules.filter(rule => rule.trigger.topic === topic);
@@ -1342,6 +1406,7 @@ async function main(rawArgs = process.argv.slice(2)) {
 
   // Initialize trigger subscriptions
   initializeTriggers();
+  initializeLogicInputs();
 
   // Publish hints registry, UI config, and light scenes on startup and after broker reconnect
   publishHintsRegistry();
@@ -1353,6 +1418,7 @@ async function main(rawArgs = process.argv.slice(2)) {
     publishLightScenes();
     if (chatLoggingEnabled) publishChatHistory();
     initializeTriggers(); // Re-subscribe to triggers after reconnect
+    initializeLogicInputs();
   });
 
   mqtt.on('disconnected', () => {

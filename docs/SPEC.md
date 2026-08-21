@@ -803,6 +803,18 @@ JavaScript timers (setTimeout/setInterval) have ~10ms variance:
 
 ---
 
+## Puzzle logic graph
+
+PxO does not hardcode per-room puzzles. Optional `:global :logic` declares a reactive graph of named nodes. Each node has a parametric `:type` (`:match`, `:sequence`, `:count-true`, `:scale`, …), inputs (MQTT signals or other nodes), and optional `:on-true` / `:on-false` / `:on-change` actions using the same vocabulary as triggers.
+
+This is additive: rooms without `:logic` are unchanged. Win/lose still funnels through `_triggerEnd`; a primary puzzle fires `{:end "win"}` from `:on-true`.
+
+External MQTT microservices (Option G) already work: a self-hosted process publishes to the broker, and PxO consumes the topic via `:inputs` + `:triggers` or a `:mqtt-input` node. PxO does not own that process's lifecycle.
+
+See `docs/pending/PR_PUZZLE_LOGIC.md`, `docs/pending/PUZZLE_SHAPES.md`, and `docs/pending/PUZZLE_RECIPE_BOOK.md`.
+
+---
+
 ## Extension Points
 
 ### Adding Zone Adapters

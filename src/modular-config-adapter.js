@@ -246,6 +246,7 @@ class ModularConfigAdapter {
         'additional-phases': modular.global['additional-phases'] || {},
         'command-sequences': modular.global['command-sequences'] || {},
         inputs: inputSources,
+        logic: modular.global.logic || {},
         triggers: {
           escapeRoomRules: triggerRules
         }

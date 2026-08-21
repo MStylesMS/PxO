@@ -4,6 +4,7 @@ const { secondsToMMSS } = require('./util');
 const AdapterRegistry = require('./adapters/adapterRegistry');
 const SequenceRunner = require('./sequenceRunner');
 const Hints = require('./hints');
+const { LogicEngine } = require('./logic');
 const {
 
   getCommandsTopic,
@@ -71,6 +72,27 @@ class GameStateMachine extends EventEmitter {
     this.currentPhaseConfig = null; // current phase definition object
     this.globalSequences = {}; // flattened from canonical runtime sequence registries for reference resolution
     this.gameplayLogger = null;
+
+    const logicConfig = cfg.global?.logic || {};
+    const inputSources = cfg.global?.inputs || {};
+    this.logicEngine = new LogicEngine({
+      logicConfig,
+      inputSources,
+      logger: log,
+      onAction: async (action, meta) => {
+        const { executeTriggerAction } = require('./game');
+        await executeTriggerAction(action, `logic:${meta.node}`, { sm: this, log });
+      }
+    });
+    if (this.logicEngine.graph.size > 0) {
+      log.info(`[logic] Initialized with ${this.logicEngine.graph.size} node(s)`);
+      (this.logicEngine.warnings || []).forEach((entry) => {
+        log.warn(`[logic] ${entry.message}`);
+      });
+      (this.logicEngine.errors || []).forEach((entry) => {
+        log.error(`[logic] ${entry.message}`);
+      });
+    }
   }
 
   setGameplayLogger(gameplayLogger) {
@@ -1123,6 +1145,9 @@ class GameStateMachine extends EventEmitter {
     });
 
     this.publishEvent('phase_transition', { from: prevPhase, to: phaseName, duration });
+    if (phaseName === 'gameplay' && this.logicEngine) {
+      this.logicEngine.markGameplayStart();
+    }
     this.publishState();
 
     // Start unified timer for phases that have visible countdowns or scheduled events
@@ -1387,6 +1412,7 @@ class GameStateMachine extends EventEmitter {
               if (action.title !== undefined) options.title = action.title;
               if (action.variant !== undefined) options.variant = action.variant;
               if (action.pin !== undefined) options.pin = action.pin;
+              if (action.bars !== undefined) options.bars = action.bars;
 
               // Execute command through adapter registry
               log.debug(`executeCueAction: calling zones.execute(zone='${zoneName}', command='${command}', options=${JSON.stringify(options)})`);
@@ -1906,6 +1932,9 @@ class GameStateMachine extends EventEmitter {
           confirmText: 'Are you sure?'
         },
     };
+    if (this.logicEngine && this.logicEngine.graph.size > 0) {
+      statePayload.logic = this.logicEngine.getSnapshot();
+    }
     this.mqtt.publish(`${gameTopic}/state`, statePayload);
   }
 
@@ -2156,6 +2185,27 @@ class GameStateMachine extends EventEmitter {
     }
   }
 
+  async _logicPuzzleCommand(commandName, cmd, method, eventName, warningPrefix) {
+    const id = cmd && (cmd.id || cmd.puzzle || cmd.name || cmd.value);
+    if (!id || !this.logicEngine) {
+      this.publishWarning(`${warningPrefix}_missing_id`, { payload: cmd });
+      return false;
+    }
+    const node = this.logicEngine.graph.nodes.get(String(id));
+    if (!node) {
+      this.publishWarning(`${warningPrefix}_unknown`, {
+        id: String(id),
+        available: [...this.logicEngine.graph.nodes.keys()]
+      });
+      return false;
+    }
+    log.info(`[logic] Operator ${commandName} '${id}'`);
+    this.publishEvent(eventName, { puzzle: String(id), source: 'operator' });
+    await this.logicEngine[method](String(id));
+    this.publishState();
+    return true;
+  }
+
   // Legacy reset schedule system removed - replaced with sequences
 
   async handleCommand(cmd) {
@@ -2290,6 +2340,16 @@ class GameStateMachine extends EventEmitter {
         const action = cmd && (cmd.action || cmd.value);
         return this.markAction(action);
       }
+      case 'solvePuzzle':
+        return this._logicPuzzleCommand('solvePuzzle', cmd, 'forceSolve', 'puzzle_solved', 'solve_puzzle');
+      case 'resetPuzzle':
+        return this._logicPuzzleCommand('resetPuzzle', cmd, 'forceReset', 'puzzle_reset', 'reset_puzzle');
+      case 'enablePuzzle':
+        return this._logicPuzzleCommand('enablePuzzle', cmd, 'forceEnable', 'puzzle_enabled', 'enable_puzzle');
+      case 'disablePuzzle':
+        return this._logicPuzzleCommand('disablePuzzle', cmd, 'forceDisable', 'puzzle_disabled', 'disable_puzzle');
+      case 'bypassPuzzle':
+        return this._logicPuzzleCommand('bypassPuzzle', cmd, 'forceBypass', 'puzzle_bypassed', 'bypass_puzzle');
       case 'pauseResetTimer':
         return this.pauseResetTimer();
       case 'resumeResetTimer':
@@ -2521,6 +2581,7 @@ class GameStateMachine extends EventEmitter {
     this.stopUnifiedTimer();
     if (this.clearAllPhaseSchedules) this.clearAllPhaseSchedules();
     this._closingOutcomeMediaFired.clear();
+    if (this.logicEngine) this.logicEngine.reset();
     this.changeState('resetting', { reason: 'reset_sequence_initiated', gameMode });
     this.publishEvent('resetting');
 
@@ -2783,6 +2844,11 @@ class GameStateMachine extends EventEmitter {
     interval = Number(interval) || 1000;
     if (interval < 50) interval = 50; // protect against absurdly small values
     this.heartbeat = setInterval(() => {
+      if (this.logicEngine) {
+        Promise.resolve(this.logicEngine.tick()).catch((err) => {
+          log.warn(`[logic] tick failed: ${err && err.message}`);
+        });
+      }
       this.publishState();
       // Clean up expired disabled hints every 10 seconds
       if (Date.now() % 10000 < interval) {

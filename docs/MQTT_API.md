@@ -85,6 +85,12 @@ paradox/houdini/pxio/gpio/door              -> PxIO-produced direct GPIO state
 
 PxO does not require PFx as a proxy for PxIO or other producer apps. All integrations are broker-based.
 
+### External MQTT microservices (Option G)
+
+A service that is **not** started by PxO can still drive the room. It publishes to any topic; PxO consumes that topic through `:global :inputs` + `:triggers`, or through a `:logic` `:mqtt-input` node. PxO does not check that the service is alive at game start and does not stop it on reset. That is the supported unmanaged pattern; use a Phase 2 managed helper (Option F) if you need lifecycle.
+
+Example: a standalone safe-logic process publishes `{"solved": true}` to `paradox/<room>/external/safe/state`. Declare that topic in `:inputs` and fire a cue from a trigger, or feed it into the logic graph as `:mqtt-input`.
+
 ### Gameplay Analytics Capture (JSONL)
 
 When gameplay analytics logging is enabled, PxO captures selected MQTT-driven gameplay signals into a separate JSONL file stream.
@@ -217,7 +223,12 @@ Published **retained** to `{baseTopic}/schema` at startup. Describes all support
     { "command": "setTime",     "description": "Set remaining time (seconds: number)" },
     { "command": "executeHint", "description": "Fire a hint by id (id: string)" },
     { "command": "listhints",   "description": "Publish hints registry to hintsRegistry topic" },
-    { "command": "getconfig",   "description": "Publish full UI config to config topic" }
+    { "command": "getconfig",   "description": "Publish full UI config to config topic" },
+    { "command": "solvePuzzle", "description": "Force a logic-graph node true (id: string)" },
+    { "command": "resetPuzzle", "description": "Reset a logic-graph node's state (id: string)" },
+    { "command": "enablePuzzle", "description": "Enable a logic-graph node (id: string)" },
+    { "command": "disablePuzzle", "description": "Disable a logic-graph node (id: string)" },
+    { "command": "bypassPuzzle", "description": "Bypass a logic-graph node as solved (id: string)" }
   ]
 }
 ```
@@ -528,6 +539,7 @@ Published to: `{baseTopic}/state`
 - `timeRemaining`: Seconds remaining (if in timed phase)
 - `hintsDelivered`: Number of hints delivered
 - `sequencesRunning`: Array of currently executing sequence names
+- `logic`: Present when the game defines `:global :logic`. Map of node name → `{ type, output, enabled, bypassed }` for operator UIs.
 
 ---
 
@@ -982,6 +994,11 @@ client.on('message', (topic, message) => {
 | `abort` | none | Immediate abort phase |
 | `triggerPhase` | `phase` | Transition to named phase |
 | `executeHint` | `id` | Execute hint by id |
+| `solvePuzzle` | `id` (or `puzzle` / `name`) | Force a logic-graph node true and fire its `:on-true` |
+| `resetPuzzle` | `id` (or `puzzle` / `name`) | Clear a logic-graph node's state and bypass |
+| `enablePuzzle` | `id` (or `puzzle` / `name`) | Clear operator disable |
+| `disablePuzzle` | `id` (or `puzzle` / `name`) | Ignore hardware; output false unless already latched |
+| `bypassPuzzle` | `id` (or `puzzle` / `name`) | Force true, fire `:on-true` once, count as solved |
 | `emergencyStop` | none | Preemptive full cleanup + reset |
 | `shutdown` | none | Shutdown |
 | `reboot` | none | Restart PxO software |

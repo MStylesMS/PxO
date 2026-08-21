@@ -292,6 +292,61 @@ Compatibility notes:
 - If a rule references an unknown source and has no explicit topic, the rule is skipped with a warning.
 - Trigger phase guards are optional via `:when-phase` (string or vector). If provided, the trigger is evaluated only when the current phase matches.
 
+### External MQTT microservices (Option G — already supported)
+
+An external service can drive gameplay without PxO managing its lifecycle. Connect it to the broker independently and declare its topic as an `:inputs` source. PxO already subscribes and matches `:triggers` against those messages. There is no process supervisor, no liveness check at game start, and no automatic cleanup — those failure modes belong to the room operator (or to Phase 2 Option F, a managed helper).
+
+```clojure
+:inputs {
+  :external-safe {:topic "paradox/spycatcher/moscow/external/safe/state"
+                  :producer :external
+                  :kind :event
+                  :description "Self-hosted safe-logic microservice"}
+}
+
+:triggers {
+  :safe-from-helper {
+    :source :external-safe
+    :condition {:solved true}
+    :when-phase :gameplay
+    :actions [{:fire "seq-safe-solved"}]
+  }
+}
+```
+
+Inside a `:logic` graph the same pattern is a `:mqtt-input` node (see below). Either path is valid; use triggers when a single condition should fire a cue, and a graph node when the value must compose with other puzzles.
+
+### Logic graph (`:global :logic`)
+
+Optional. Rooms without this block are unchanged. Named nodes form a reactive graph: MQTT / GPIO inputs and other node outputs feed parametric types (`:match`, `:sequence`, `:count-true`, `:scale`, …). Full type library: [`pending/PUZZLE_SHAPES.md`](pending/PUZZLE_SHAPES.md). Architecture: [`pending/PR_PUZZLE_LOGIC.md`](pending/PR_PUZZLE_LOGIC.md).
+
+Input sources used by the graph may declare polarity and payload field names:
+
+```clojure
+:inputs {:gpio-events {:topic "paradox/room/gpio/events"
+                       :signal-key :pin
+                       :value-key :value
+                       :active-low true}}
+
+:logic {:breaker {:type :match
+                  :inputs [:gpio-events/F1 :gpio-events/F2]
+                  :target {:F1 1 :F2 0}
+                  :latch true
+                  :on-true [{:fire "seq-breaker-solved"}]}
+        :keypad  {:type :sequence
+                  :input {:source :gpio-events :signal "Keypad"
+                          :value-key :key :when {:value "0"}}
+                  :target ["1" "3" "5" "7" "pound"]
+                  :match-last true
+                  :on-true [{:fire "seq-keypad-solved"} {:end "win"}]}}
+```
+
+Namespaced keywords (`:gpio-events/F1`) address an input signal. Bare keywords address another node. `:target` is always **logical** on/off: raw `"0"`/`"1"` strings are coerced, then inverted when `:active-low` is set (binding > node > source).
+
+Node action lists (`:on-true`, `:on-false`, `:on-change`) use the same vocabulary as trigger `:actions`. Trigger `:source :logic/<node-name>` is also supported; the synthetic payload is `{:node "breaker" :output true :value 1 :previous 0}`.
+
+The graph resets on `reset` / `ready`. Operator commands (`id` / `puzzle` / `name`): `solvePuzzle`, `resetPuzzle` (also clears bypass), `enablePuzzle`, `disablePuzzle`, `bypassPuzzle`. Shared gate fields (`:enabled`, `:enable-after`, `:bypass`, delays) are in [`PUZZLE_SHAPES.md`](pending/PUZZLE_SHAPES.md). Recipes: [`PUZZLE_RECIPE_BOOK.md`](pending/PUZZLE_RECIPE_BOOK.md).
+
 ### Top-Level Keys
 
 ```clojure

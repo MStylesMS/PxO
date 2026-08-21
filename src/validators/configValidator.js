@@ -9,6 +9,8 @@
  * 5. Prohibited syntax detection
  */
 
+const { buildGraph } = require('../logic/graph');
+
 class ConfigValidator {
     constructor() {
         this.config = null;
@@ -73,6 +75,10 @@ class ConfigValidator {
 
         if (global.triggers) {
             this.validateTriggers(global.triggers, 'global.triggers');
+        }
+
+        if (global.logic) {
+            this.validateLogicGraph(global.logic, global.inputs || {}, 'global.logic');
         }
 
         // Validate cues
@@ -734,6 +740,40 @@ class ConfigValidator {
         });
     }
 
+    validateLogicGraph(logic, inputs, context) {
+        if (!logic || typeof logic !== 'object' || Array.isArray(logic)) {
+            this.addError(`Logic graph in ${context} must be a map of node name → definition`);
+            return;
+        }
+
+        const built = buildGraph(logic, { inputSources: inputs || {} });
+        (built.errors || []).forEach((entry) => {
+            this.addError(entry.message, entry.node ? `${context}.${entry.node}` : context);
+        });
+        (built.warnings || []).forEach((entry) => {
+            this.addWarning(entry.message, entry.node ? `${context}.${entry.node}` : context);
+        });
+
+        Object.entries(logic).forEach(([nodeName, def]) => {
+            if (!def || typeof def !== 'object' || nodeName.startsWith('_')) return;
+            const lists = [
+                ['on-true', def['on-true'] || def.onTrue],
+                ['on-false', def['on-false'] || def.onFalse],
+                ['on-change', def['on-change'] || def.onChange]
+            ];
+            lists.forEach(([field, actions]) => {
+                if (actions === undefined) return;
+                if (!Array.isArray(actions)) {
+                    this.addError(`Logic node '${nodeName}' :${field} must be an array of actions`, `${context}.${nodeName}.${field}`);
+                    return;
+                }
+                actions.forEach((action, index) => {
+                    this.validateTriggerAction(action, `${context}.${nodeName}.${field}[${index}]`);
+                });
+            });
+        });
+    }
+
     validateTriggerRule(rule, context, triggerName) {
         if (!rule || typeof rule !== 'object') {
             this.addError(`Trigger '${triggerName}' in ${context} must be an object`);
@@ -983,6 +1023,13 @@ class ConfigValidator {
         // Check command-sequences if at global level
         if (config['command-sequences']) {
             this.collectSequenceNames(config['command-sequences'], `${context}.command-sequences`, registerName);
+        }
+
+        if (config.logic) {
+            Object.keys(config.logic).forEach((name) => {
+                if (!name || name.startsWith('_')) return;
+                registerName(name, `${context}.logic.${name}`);
+            });
         }
 
         // Report duplicates within this scope only
