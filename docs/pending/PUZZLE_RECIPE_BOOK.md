@@ -25,6 +25,24 @@ Write `:target` in **logical** on/off (`1` = ON). If the GPIO source is `:active
 
 ---
 
+## Breaker ON-order (`:sequence`, no `:match-last`)
+
+Flip numbered breakers ON in a fixed order. SpyCatcher Moscow uses **265143**. Only F1–F6 ON edges (raw `value "0"`) count; a wrong ON restarts the prefix.
+
+```clojure
+:breaker {:type :sequence
+          :input {:source :gpio-events
+                  :value-key :pin
+                  :when {:pin ["F1" "F2" "F3" "F4" "F5" "F6"] :value "0"}
+                  :active-low false}
+          :target ["F2" "F6" "F5" "F1" "F4" "F3"]
+          :reset-on-wrong true
+          :latch true
+          :on-true [{:fire "seq-breaker-solved"}]}
+```
+
+---
+
 ## Last-N keypad (`:sequence` + `:match-last`)
 
 Players mash keys. Whenever the last N keys equal the code (including `#`), it solves. No enter key, no timeout.

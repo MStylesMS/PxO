@@ -171,7 +171,7 @@ An external service connects to the broker independently. PxO has no knowledge o
 
 ## Affected rooms
 
-- **SpyCatcher Moscow** — first consumer. Breakers (`:match` `010101`), map (`:match` `0101010`), keypad (`:sequence` last-N `1234#`), progress bar (`:count-true` + `:scale` → wallclock `announce`), keypad `:end "win"`. Safe / enigma / terminal stay on existing triggers and are also exposed as latched `:passthrough` nodes so progress counts them.
+- **SpyCatcher Moscow** — first consumer. Breakers (`:sequence` ON order `265143`), map (`:match` M1+M2+M4 present; Shiraz GPIO TBD / assumed solved), keypad (`:sequence` last-N `1234#`), progress bar (`:count-true` + `:scale` → wallclock `announce`), keypad `:end "win"`. Safe / enigma / terminal stay on existing triggers and are also exposed as latched `:passthrough` nodes so progress counts them.
 - SpyCatcher Washington — Phase 2 consumer of the same graph.
 - Houdini's Challenge, Agent22, existing rooms: zero impact until they add a `:logic` block.
 

@@ -14,13 +14,13 @@ These are the live values wired in `rooms/spycatcher/config/moscow.edn`. Logical
 
 | Node | Type | Live target |
 |---|---|---|
-| `:breaker` | `:match` | `010101` → `{:F1 0 :F2 1 :F3 0 :F4 1 :F5 0 :F6 1}` |
-| `:map` | `:match` | `0101010` → `{:M1 0 :M2 1 :M3 0 :M4 1 :M5 0 :M6 1 :M7 0}` |
+| `:breaker` | `:sequence` | ON order **265143** → `["F2" "F6" "F5" "F1" "F4" "F3"]` (prefix; reset-on-wrong; only F1–F6 ON edges) |
+| `:map` | `:match` | Tokens present on **Pyongyang (M1), Islamabad (M2), St. Petersburg (M4)**. Shiraz GPIO is unknown and is treated as already solved (not in `:inputs`). |
 | `:keypad` | `:sequence` | `1234#` → `["1" "2" "3" "4" "pound"]` (`:match-last true`; `#` is part of the target, not `:enter`) |
 
 Notes:
 
-- Breaker and map targets are **logical** on/off. Never write raw pin strings in `:target`.
+- Breaker is an **ON-edge sequence**, not a static on/off pattern. Map targets are **logical** on/off for the known city readers. Never write raw pin strings in a `:match` `:target`.
 - Keypad keys are the PxIO `key` field: `"1"`–`"9"`, `"0"`, `"asterik"`, `"pound"`. Matching is a sliding window over the last N pressed keys. There is no timeout and no reset-on-wrong.
 - Hardware caveat: `rooms/spycatcher/docs/KEYPAD-WIP.md` — the physical keypad may not yet scan correctly. Software can be verified by publishing synthetic MQTT events.
 
