@@ -40,6 +40,13 @@ describe('GameplayLogger', () => {
             mode: '60min',
             gameplayDurationSec: 3600,
             topic: 'paradox/houdini/commands',
+            passport: {
+                groupId: 'g-test-1',
+                game: 'houdini',
+                name: 'Test Group',
+                size: 5,
+                types: ['friends', 'experienced']
+            },
             tsMs: fixedStart
         });
 
@@ -67,12 +74,16 @@ describe('GameplayLogger', () => {
         expect(lines[0].payload.edn_base).toBe('houdini');
         expect(lines[0].payload.mode).toBe('60min');
         expect(lines[0].payload.gameplay_started_at).toBe(new Date(fixedStart).toISOString());
+        expect(lines[0].payload.groupId).toBe('g-test-1');
+        expect(lines[0].payload.game).toBe('houdini');
+        expect(lines[0].payload.types).toEqual(['friends', 'experienced']);
         // Internal buffer timestamp must not leak to disk
         expect(lines[0]._tsMs).toBeUndefined();
 
         const phase = lines.find((line) => line.event_type === 'phase_transition');
         expect(phase).toBeTruthy();
         expect(phase.t_sec).toBe(5);
+        expect(phase.groupId).toBe('g-test-1');
         expect(phase._tsMs).toBeUndefined();
 
         const summary = lines.find((line) => line.event_type === 'session_summary');

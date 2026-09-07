@@ -49,7 +49,8 @@ function _publishMqttMetadata(mqtt, cfg, sm) {
       application: 'pxo',
       commandsTopic: `${gameTopic}/commands`,
       commands: [
-        { command: 'start', description: 'Start or resume the game' },
+        { command: 'start', description: 'Start or resume the game (optional groupId, game, name, size, types passport fields)' },
+        { command: 'setPassport', description: 'Update lean group passport fields without restarting' },
         { command: 'pause', description: 'Pause the countdown timer' },
         { command: 'resume', description: 'Resume the countdown timer' },
         { command: 'reset', description: 'Reset game to ready state' },
@@ -656,6 +657,11 @@ async function main(rawArgs = process.argv.slice(2)) {
   // Legacy media registry is no longer needed.
 
   const sm = new GameStateMachine({ cfg, mqtt });
+  const iniGameSlug =
+    (iniConfig.global?.game && String(iniConfig.global.game).trim()) ||
+    (iniConfig.global?.game_slug && String(iniConfig.global.game_slug).trim()) ||
+    null;
+  if (iniGameSlug) sm.setDefaultGame(iniGameSlug);
   sm.init();
 
   const gameplayGameName =
@@ -1278,6 +1284,7 @@ async function main(rawArgs = process.argv.slice(2)) {
                     mode,
                     topic,
                     gameplayDurationSec,
+                    passport: sm.getGroupPassport(),
                     tsMs: Date.now()
                   });
                 }

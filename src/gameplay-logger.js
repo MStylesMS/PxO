@@ -82,7 +82,7 @@ class GameplayLogger {
         return (tsMs - this.lastAcceptedStartMs) >= 2000;
     }
 
-    beginPendingRun({ startCommand, mode, gameplayDurationSec, topic, tsMs = Date.now() }) {
+    beginPendingRun({ startCommand, mode, gameplayDurationSec, topic, tsMs = Date.now(), passport = null }) {
         this.lastAcceptedStartMs = tsMs;
         this.pending = {
             startTsMs: tsMs,
@@ -90,6 +90,7 @@ class GameplayLogger {
             mode: mode || null,
             startCommand: startCommand || 'start',
             topic: topic || null,
+            passport: passport && typeof passport === 'object' ? { ...passport } : null,
             buffer: []
         };
         this.lastMode = this.pending.mode || this.lastMode;
@@ -127,25 +128,31 @@ class GameplayLogger {
             filePath,
             startedAtMs: startTsMs,
             gameplayDurationMs: this.pending.gameplayDurationMs,
-            mode: mode || this.pending.mode || this.getCurrentMode?.() || null
+            mode: mode || this.pending.mode || this.getCurrentMode?.() || null,
+            passport: this.pending.passport ? { ...this.pending.passport } : null
         };
 
         const headerMode = this.session.mode || null;
         const gameplayStartedAt = new Date(startTsMs).toISOString();
+        const headerPayload = {
+            reason,
+            game_name: this.gameName,
+            edn_base: this.ednBase,
+            mode: headerMode,
+            gameplay_started_at: gameplayStartedAt,
+            file_name: path.basename(filePath),
+            start_command: this.pending.startCommand
+        };
+        if (this.session.passport) {
+            Object.assign(headerPayload, this._passportFields(this.session.passport));
+            headerPayload.passport = { ...this.session.passport };
+        }
         this._writeLine({
             event_type: 'session_header',
             wall_time: formatWallTime(startTsMs),
             game_time_remaining: formatRemaining(this.pending.gameplayDurationMs),
             t_sec: 0,
-            payload: {
-                reason,
-                game_name: this.gameName,
-                edn_base: this.ednBase,
-                mode: headerMode,
-                gameplay_started_at: gameplayStartedAt,
-                file_name: path.basename(filePath),
-                start_command: this.pending.startCommand
-            }
+            payload: headerPayload
         }, startTsMs);
 
         this._writeLine({
@@ -238,6 +245,17 @@ class GameplayLogger {
         this._append('sensor_changed', payload, Date.now());
     }
 
+    _passportFields(passport) {
+        if (!passport || typeof passport !== 'object') return {};
+        const out = {};
+        if (passport.groupId) out.groupId = passport.groupId;
+        if (passport.game) out.game = passport.game;
+        if (passport.name != null) out.group_name = passport.name;
+        if (passport.size != null) out.group_size = passport.size;
+        if (Array.isArray(passport.types) && passport.types.length) out.types = passport.types.slice();
+        return out;
+    }
+
     _append(eventType, payload, tsMs = Date.now(), options = {}) {
         const record = {
             event_type: eventType,
@@ -247,6 +265,11 @@ class GameplayLogger {
             // Kept on buffered records so commit can compute t_sec from the real event time.
             _tsMs: tsMs
         };
+
+        const passport = (this.session && this.session.passport) || (this.pending && this.pending.passport);
+        if (passport) {
+            Object.assign(record, this._passportFields(passport));
+        }
 
         if (this.session) {
             this._writeLine(record, tsMs);

@@ -122,8 +122,23 @@ Paradox Speech (PxS) writes a sibling speech archive with the **same stem**:
 - `mode`
 - `gameplay_started_at` — ISO-8601 UTC of gameplay start
 - `file_name`, `start_command`, `reason` (as before)
+- **Group passport** (when provided on `start` / carried from PxM): `groupId`, `game`, optional `group_name` / `group_size` / `types`, plus nested `passport` object
 
-Captured:
+Subsequent JSONL lines also carry top-level `groupId` / `game` (and related fields) when a passport is active, so multi-chamber visits can join logs.
+
+### Start command passport fields
+
+Optional on `{command:"start", ...}` or `{command:"setPassport", ...}`:
+
+| Field | Notes |
+|-------|--------|
+| `groupId` | UUID; generated if omitted on start |
+| `game` | Room slug (also INI `global.game`) |
+| `name` | Free text |
+| `size` | Player count |
+| `types` | Array of keywords (multi-select): friends, family, coworkers, kids, adults, elderly, novices, experienced, strangers |
+
+Retained `{baseTopic}/state` includes the same lean fields under `passport` when set. Cleared on `reset`.
 
 - Inbound commands to `{baseTopic}/commands` and their outcomes
 - Phase transitions and top-level gameplay/control sequence lifecycle events

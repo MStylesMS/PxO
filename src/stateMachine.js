@@ -6,6 +6,7 @@ const SequenceRunner = require('./sequenceRunner');
 const Hints = require('./hints');
 const { LogicEngine } = require('./logic');
 const { HelperSupervisor } = require('./helpers/helperSupervisor');
+const { normalizePassport, passportLogFields } = require('./groupPassport');
 const {
 
   getCommandsTopic,
@@ -73,6 +74,10 @@ class GameStateMachine extends EventEmitter {
     this.currentPhaseConfig = null; // current phase definition object
     this.globalSequences = {}; // flattened from canonical runtime sequence registries for reference resolution
     this.gameplayLogger = null;
+    this.groupPassport = null;
+    this.defaultGame =
+      (cfg.global && (cfg.global.game || cfg.global.gameSlug || cfg.global['game-slug'])) ||
+      null;
 
     const logicConfig = cfg.global?.logic || {};
     const inputSources = cfg.global?.inputs || {};
@@ -111,6 +116,37 @@ class GameStateMachine extends EventEmitter {
 
   setGameplayLogger(gameplayLogger) {
     this.gameplayLogger = gameplayLogger || null;
+  }
+
+  setDefaultGame(gameSlug) {
+    if (gameSlug != null && String(gameSlug).trim()) {
+      this.defaultGame = String(gameSlug).trim();
+    }
+  }
+
+  getGroupPassport() {
+    return this.groupPassport ? { ...this.groupPassport } : null;
+  }
+
+  /**
+   * Apply lean passport from a start / setPassport command.
+   * @param {object} cmd
+   * @param {{ generateId?: boolean }} [opts]
+   */
+  applyGroupPassport(cmd, opts = {}) {
+    const passport = normalizePassport(cmd, {
+      defaultGame: this.defaultGame,
+      generateId: opts.generateId !== false,
+    });
+    if (!passport.startedAt) {
+      passport.startedAt = new Date().toISOString();
+    }
+    this.groupPassport = passport;
+    return passport;
+  }
+
+  clearGroupPassport() {
+    this.groupPassport = null;
   }
 
   _normalizePhaseType(phaseType) {
@@ -1953,6 +1989,10 @@ class GameStateMachine extends EventEmitter {
           confirmText: 'Are you sure?'
         },
     };
+    if (this.groupPassport) {
+      Object.assign(statePayload, passportLogFields(this.groupPassport));
+      statePayload.passport = { ...this.groupPassport };
+    }
     if (this.logicEngine && this.logicEngine.graph.size > 0) {
       statePayload.logic = this.logicEngine.getSnapshot();
     }
@@ -2261,7 +2301,18 @@ class GameStateMachine extends EventEmitter {
       }
       case 'start': {
         const mode = cmd && (cmd.mode || cmd.value || cmd.gameType);
+        this.applyGroupPassport(cmd || {}, { generateId: true });
         return await this._startViaSequences(mode || this.currentGameMode || (Object.keys(this.cfg.game || {})[0]));
+      }
+      case 'setPassport': {
+        const hasId = !!(cmd && (
+          cmd.groupId || cmd.group_id ||
+          (cmd.passport && (cmd.passport.groupId || cmd.passport.group_id))
+        ));
+        this.applyGroupPassport(cmd || {}, { generateId: !hasId });
+        this.publishState();
+        this.publishEvent('passport_updated', { passport: this.getGroupPassport() });
+        return true;
       }
       case 'solve': {
         this._triggerEnd('win');
@@ -2930,6 +2981,7 @@ class GameStateMachine extends EventEmitter {
     this.changeState('resetting', { reason: 'direct_reset_method', version });
     this.mode = null;
     this.remaining = 0;
+    this.clearGroupPassport();
 
     this.publishEvent('reset_started', { version });
     this.publishState();
