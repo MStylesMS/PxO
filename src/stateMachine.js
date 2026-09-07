@@ -5,6 +5,7 @@ const AdapterRegistry = require('./adapters/adapterRegistry');
 const SequenceRunner = require('./sequenceRunner');
 const Hints = require('./hints');
 const { LogicEngine } = require('./logic');
+const { HelperSupervisor } = require('./helpers/helperSupervisor');
 const {
 
   getCommandsTopic,
@@ -92,6 +93,19 @@ class GameStateMachine extends EventEmitter {
       (this.logicEngine.errors || []).forEach((entry) => {
         log.error(`[logic] ${entry.message}`);
       });
+    }
+
+    // Option F — managed helpers (optional; empty = no-op)
+    const helperDefs = cfg.global?.helpers || cfg.helpers || [];
+    this.helperSupervisor = new HelperSupervisor({
+      definitions: helperDefs,
+      mqtt,
+      logger: log,
+      publishWarning: (code, details) => this.publishWarning(code, details),
+      publishEvent: (name, details) => this.publishEvent(name, details),
+    });
+    if (this.helperSupervisor.listDefinitions().length > 0) {
+      log.info(`[helpers] Registered ${this.helperSupervisor.listDefinitions().length} helper definition(s)`);
     }
   }
 
@@ -1149,6 +1163,13 @@ class GameStateMachine extends EventEmitter {
       this.logicEngine.markGameplayStart();
     }
     this.publishState();
+
+    // Option F: start/stop helpers for the new phase (best-effort; never blocks transition)
+    try {
+      this.helperSupervisor?.syncForPhase(phaseName);
+    } catch (err) {
+      log.warn(`[helpers] syncForPhase failed: ${err && err.message ? err.message : err}`);
+    }
 
     // Start unified timer for phases that have visible countdowns or scheduled events
     // - intro/gameplay: use `remaining`
@@ -2886,6 +2907,7 @@ class GameStateMachine extends EventEmitter {
 
     this.stopUnifiedTimer();
     this._runAdjustTimeSequence('pause');
+    try { this.helperSupervisor?.syncForPhase('paused'); } catch (_) { /* ignore */ }
     this.publishEvent('paused');
     this.publishState();
   }
@@ -2898,6 +2920,7 @@ class GameStateMachine extends EventEmitter {
     // Adapter commands are handled via sequences/config; no direct clock calls
     this.startUnifiedTimer();
     this._runAdjustTimeSequence('resume');
+    try { this.helperSupervisor?.syncForPhase('gameplay'); } catch (_) { /* ignore */ }
     this.publishEvent('resumed');
     this.publishState();
   }
@@ -2910,6 +2933,9 @@ class GameStateMachine extends EventEmitter {
 
     this.publishEvent('reset_started', { version });
     this.publishState();
+
+    // Option F: tear down helpers before reset sequences (fire-and-forget)
+    Promise.resolve(this.helperSupervisor?.stopAll({ reason: 'reset' })).catch(() => {});
 
     // Execute reset sequence (replaces legacy setup sequence)
     this._runResetSequence();
@@ -2962,6 +2988,9 @@ class GameStateMachine extends EventEmitter {
 
     // Immediate hard cleanup first.
     stopAllAcrossZones(this.zones);
+    try {
+      await this.helperSupervisor?.stopAll({ reason: 'emergency_stop' });
+    } catch (_) { /* best effort */ }
 
     const emergencyResult = await this.sequenceRunner.runControlSequence('emergency-stop-sequence', {
       gameMode: this.gameType,

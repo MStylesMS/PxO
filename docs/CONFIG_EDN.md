@@ -347,6 +347,25 @@ Node action lists (`:on-true`, `:on-false`, `:on-change`) use the same vocabular
 
 The graph resets on `reset` / `ready`. Operator commands (`id` / `puzzle` / `name`): `solvePuzzle`, `resetPuzzle` (also clears bypass), `enablePuzzle`, `disablePuzzle`, `bypassPuzzle`. Shared gate fields (`:enabled`, `:enable-after`, `:bypass`, delays) are in [`PUZZLE_SHAPES.md`](pending/PUZZLE_SHAPES.md). Recipes: [`PUZZLE_RECIPE_BOOK.md`](pending/PUZZLE_RECIPE_BOOK.md).
 
+### Managed helpers (`:global :helpers`) — Option F
+
+Optional. Declares external programs PxO starts/stops with the phase lifecycle (e.g. TFD Simon). Helpers speak MQTT only; see [`HELPERS.md`](HELPERS.md).
+
+```clojure
+:helpers [{:id :simon
+           :cmd ["node" "/opt/paradox/rooms/tfd/helpers/simon.js"]
+           :env {}
+           :topic "paradox/tfd/elevator/helpers/simon"
+           :active-phases ["gameplay" "paused"]
+           :restart-on-crash true
+           :ready-event "ready"
+           :stop-grace-ms 2000
+           :max-restarts 5
+           :restart-backoff-ms 1000}]
+```
+
+Default `:active-phases` is `["gameplay" "paused"]`. Helpers stay alive across GM pause (clock freeze only — the child is not paused). Helpers are SIGTERM'd on reset, emergency stop, and process exit.
+
 ### Top-Level Keys
 
 ```clojure

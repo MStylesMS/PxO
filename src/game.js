@@ -1455,20 +1455,19 @@ async function main(rawArgs = process.argv.slice(2)) {
     }).catch(() => { /* best effort */ });
   });
 
-  process.on('SIGINT', () => {
-    log.info('SIGINT, cleaning up and exiting');
+  const shutdown = async (reason) => {
+    if (shuttingDown) return;
     shuttingDown = true;
-    if (gameplayLogger) gameplayLogger.endSession({ reason: 'sigint' });
+    log.info(`${reason}, cleaning up and exiting`);
+    if (gameplayLogger) gameplayLogger.endSession({ reason: reason.toLowerCase() });
+    try {
+      await sm.helperSupervisor?.stopAll({ reason: reason.toLowerCase() });
+    } catch (_) { /* best effort */ }
     mqtt.disconnect();
     setTimeout(() => process.exit(0), 100);
-  });
-  process.on('SIGTERM', () => {
-    log.info('SIGTERM, cleaning up and exiting');
-    shuttingDown = true;
-    if (gameplayLogger) gameplayLogger.endSession({ reason: 'sigterm' });
-    mqtt.disconnect();
-    setTimeout(() => process.exit(0), 100);
-  });
+  };
+  process.on('SIGINT', () => { shutdown('SIGINT'); });
+  process.on('SIGTERM', () => { shutdown('SIGTERM'); });
 }
 
 module.exports = Object.assign(module.exports || {}, {

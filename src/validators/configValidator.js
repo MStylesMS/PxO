@@ -81,6 +81,10 @@ class ConfigValidator {
             this.validateLogicGraph(global.logic, global.inputs || {}, 'global.logic');
         }
 
+        if (global.helpers) {
+            this.validateHelpers(global.helpers, 'global.helpers');
+        }
+
         // Validate cues
         if (global.cues) {
             this.validateCues(global.cues, 'global');
@@ -737,6 +741,49 @@ class ConfigValidator {
         Object.entries(triggers).forEach(([triggerName, triggerDef]) => {
             if (triggerName.startsWith('_')) return;
             this.validateTriggerRule(triggerDef, `${context}.${triggerName}`, triggerName);
+        });
+    }
+
+    /**
+     * Option F — managed helper subprocess declarations (:global :helpers).
+     */
+    validateHelpers(helpers, context) {
+        if (!Array.isArray(helpers)) {
+            this.addError(`Helpers in ${context} must be a vector of maps`);
+            return;
+        }
+
+        const seen = new Set();
+        helpers.forEach((helper, index) => {
+            const path = `${context}[${index}]`;
+            if (!helper || typeof helper !== 'object' || Array.isArray(helper)) {
+                this.addError(`Helper ${path} must be a map`);
+                return;
+            }
+            const idRaw = helper.id ?? helper.name;
+            const id = idRaw != null ? String(idRaw).replace(/^:/, '').trim() : '';
+            if (!id) {
+                this.addError(`Helper ${path} requires :id`);
+            } else if (seen.has(id)) {
+                this.addError(`Duplicate helper id '${id}' in ${context}`);
+            } else {
+                seen.add(id);
+            }
+
+            const cmd = helper.cmd ?? helper.command;
+            const cmdOk = (Array.isArray(cmd) && cmd.length > 0) || (typeof cmd === 'string' && cmd.trim());
+            if (!cmdOk) {
+                this.addError(`Helper ${path} requires :cmd (string or non-empty vector)`);
+            }
+
+            const phases = helper['active-phases'] ?? helper.activePhases ?? helper['start-phases'];
+            if (phases !== undefined && !Array.isArray(phases) && typeof phases !== 'string') {
+                this.addError(`Helper ${path} :active-phases must be a string or vector`);
+            }
+
+            if (helper.env !== undefined && (typeof helper.env !== 'object' || Array.isArray(helper.env))) {
+                this.addError(`Helper ${path} :env must be a map`);
+            }
         });
     }
 
