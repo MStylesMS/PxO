@@ -245,6 +245,9 @@ class ModularConfigAdapter {
         'system-sequences': modular.global['system-sequences'] || {},
         'additional-phases': modular.global['additional-phases'] || {},
         'command-sequences': modular.global['command-sequences'] || {},
+        ...(Array.isArray(modular.global.helpers) && modular.global.helpers.length
+          ? { helpers: modular.global.helpers }
+          : {}),
         inputs: inputSources,
         logic: modular.global.logic || {},
         triggers: {
