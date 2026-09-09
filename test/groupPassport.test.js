@@ -31,6 +31,19 @@ describe('groupPassport', () => {
     expect(p.types).toEqual(['family', 'novices']);
   });
 
+  test('normalizePassport keeps spaced names and notes; drops blank name', () => {
+    const named = normalizePassport({
+      game: 'tfd',
+      name: 'Group 1 on 09/09/2026',
+      notes: ' birthday ',
+    });
+    expect(named.name).toBe('Group 1 on 09/09/2026');
+    expect(named.notes).toBe('birthday');
+
+    const blank = normalizePassport({ game: 'tfd', name: '   ' }, { generateId: false });
+    expect(blank.name).toBeUndefined();
+  });
+
   test('nested passport object and defaultGame', () => {
     const p = normalizePassport({
       passport: { groupId: 'abc-123', types: ['experienced'] },

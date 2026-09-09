@@ -73,7 +73,10 @@ function normalizePassport(cmd = {}, opts = {}) {
     ? String(gameRaw).trim()
     : (opts.defaultGame ? String(opts.defaultGame).trim() : null);
 
-  const name = pick('name', 'groupName', 'group_name');
+  const nameRaw = pick('name', 'groupName', 'group_name');
+  const name = nameRaw != null && String(nameRaw).trim() ? String(nameRaw).trim() : undefined;
+  const notesRaw = pick('notes', 'note');
+  const notes = notesRaw != null && String(notesRaw).trim() ? String(notesRaw).trim() : undefined;
   const sizeRaw = pick('size', 'groupSize', 'group_size', 'players');
   let size = null;
   if (sizeRaw !== undefined && sizeRaw !== null && sizeRaw !== '') {
@@ -98,7 +101,8 @@ function normalizePassport(cmd = {}, opts = {}) {
     groupId: groupId || null,
     game: game || null,
   };
-  if (name != null) passport.name = String(name);
+  if (name) passport.name = name;
+  if (notes) passport.notes = notes;
   if (size != null) passport.size = size;
   if (types.length) passport.types = types;
   if (hintCount != null) passport.hintCount = hintCount;
@@ -122,6 +126,7 @@ function passportLogFields(passport) {
   if (passport.groupId) out.groupId = passport.groupId;
   if (passport.game) out.game = passport.game;
   if (passport.name != null) out.group_name = passport.name;
+  if (passport.notes != null) out.notes = passport.notes;
   if (passport.size != null) out.group_size = passport.size;
   if (Array.isArray(passport.types) && passport.types.length) out.types = passport.types.slice();
   return out;

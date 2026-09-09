@@ -55,6 +55,39 @@ function normalizeCmd(raw) {
   return null;
 }
 
+/** Flatten :global :settings into string keys (`simon-entry-window-s` → value). */
+function flattenSettings(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [k, v] of Object.entries(raw)) {
+    if (v == null || typeof v === 'object') continue;
+    out[String(k).replace(/^:/, '')] = v;
+  }
+  return out;
+}
+
+/**
+ * Expand `{{setting-key}}` in helper :env values from :global :settings.
+ * Unknown placeholders become empty strings.
+ */
+function expandHelperEnv(env, settings) {
+  const src = env && typeof env === 'object' && !Array.isArray(env) ? env : {};
+  const flat = flattenSettings(settings);
+  const out = {};
+  for (const [key, val] of Object.entries(src)) {
+    if (typeof val !== 'string') {
+      out[key] = val;
+      continue;
+    }
+    out[key] = val.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, raw) => {
+      const name = String(raw).replace(/^:/, '').trim();
+      const found = flat[name];
+      return found == null ? '' : String(found);
+    });
+  }
+  return out;
+}
+
 function normalizeHelperDefs(definitions) {
   if (!definitions) return [];
   const list = Array.isArray(definitions) ? definitions : [definitions];
@@ -106,6 +139,7 @@ class HelperSupervisor {
    * @param {function} [opts.publishWarning]
    * @param {function} [opts.publishEvent]
    * @param {function} [opts.spawnImpl] — inject for tests
+   * @param {object} [opts.settings] — :global :settings; expands {{key}} in helper :env
    * @param {function} [opts.now] — inject clock for tests
    */
   constructor({
@@ -115,9 +149,11 @@ class HelperSupervisor {
     publishWarning = null,
     publishEvent = null,
     spawnImpl = null,
+    settings = null,
     now = null,
   } = {}) {
     this.defs = normalizeHelperDefs(definitions);
+    this.settings = flattenSettings(settings);
     this.defsById = new Map(this.defs.map((d) => [d.id, d]));
     this.mqtt = mqtt;
     this.log = logger || console;
@@ -203,7 +239,7 @@ class HelperSupervisor {
     const [bin, ...args] = def.cmd;
     const env = {
       ...process.env,
-      ...def.env,
+      ...expandHelperEnv(def.env, this.settings),
       PXO_HELPER_ID: def.id,
       PXO_HELPER_TOPIC: def.topic || '',
       PXO_HELPER_PHASE: this._phase || '',
@@ -407,4 +443,6 @@ class HelperSupervisor {
 module.exports = {
   HelperSupervisor,
   normalizeHelperDefs,
+  flattenSettings,
+  expandHelperEnv,
 };

@@ -251,6 +251,7 @@ class GameplayLogger {
         if (passport.groupId) out.groupId = passport.groupId;
         if (passport.game) out.game = passport.game;
         if (passport.name != null) out.group_name = passport.name;
+        if (passport.notes != null) out.notes = passport.notes;
         if (passport.size != null) out.group_size = passport.size;
         if (Array.isArray(passport.types) && passport.types.length) out.types = passport.types.slice();
         return out;

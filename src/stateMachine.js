@@ -106,6 +106,7 @@ class GameStateMachine extends EventEmitter {
       definitions: helperDefs,
       mqtt,
       logger: log,
+      settings: cfg.global?.settings || {},
       publishWarning: (code, details) => this.publishWarning(code, details),
       publishEvent: (name, details) => this.publishEvent(name, details),
     });

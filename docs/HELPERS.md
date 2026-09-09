@@ -38,6 +38,8 @@ Optional `:ready-event` — when the helper publishes `{ "event": "<name>" }` on
 
 Environment injected: `PXO_HELPER_ID`, `PXO_HELPER_TOPIC`, `PXO_HELPER_PHASE`.
 
+Helper `:env` string values may include `{{setting-key}}` placeholders. At spawn, PxO substitutes from `:global :settings` (e.g. `"SIMON_ENTRY_WINDOW_S" "{{simon-entry-window-s}}"`). Unknown keys become empty strings.
+
 ---
 
 ## EDN example

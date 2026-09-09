@@ -1,7 +1,7 @@
 'use strict';
 
 const { EventEmitter } = require('events');
-const { HelperSupervisor, normalizeHelperDefs } = require('../src/helpers/helperSupervisor');
+const { HelperSupervisor, normalizeHelperDefs, expandHelperEnv } = require('../src/helpers/helperSupervisor');
 
 function mockChild({ exitAfterMs = null, exitCode = 0 } = {}) {
   const ee = new EventEmitter();
@@ -164,5 +164,29 @@ describe('HelperSupervisor', () => {
 
     mqtt.emit('message', 'paradox/tfd/elevator/helpers/simon/events', Buffer.from(JSON.stringify({ event: 'ready' })));
     expect(sup.isReady('simon')).toBe(true);
+  });
+
+  test('expands {{setting-key}} from :global :settings into helper env', () => {
+    expect(expandHelperEnv(
+      { SIMON_ENTRY_WINDOW_S: '{{simon-entry-window-s}}', LITERAL: 'x' },
+      { 'simon-entry-window-s': 10 }
+    )).toEqual({ SIMON_ENTRY_WINDOW_S: '10', LITERAL: 'x' });
+
+    const spawnImpl = jest.fn(() => mockChild());
+    const sup = new HelperSupervisor({
+      definitions: [{
+        id: 'simon',
+        cmd: ['node', 'x'],
+        env: { SIMON_ROUNDS: '{{simon-rounds}}' },
+        'active-phases': ['gameplay'],
+      }],
+      settings: { 'simon-rounds': 3 },
+      spawnImpl,
+      logger: { info() {}, warn() {} },
+    });
+    sup.syncForPhase('gameplay');
+    const env = spawnImpl.mock.calls[0][2].env;
+    expect(env.SIMON_ROUNDS).toBe('3');
+    expect(env.PXO_HELPER_ID).toBe('simon');
   });
 });
