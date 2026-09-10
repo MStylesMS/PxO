@@ -608,7 +608,9 @@ class ConfigValidator {
 
         // Validate specific step types
         if (step.wait !== undefined) {
-            if (typeof step.wait !== 'number' || step.wait < 0) {
+            const waitNum = Number(step.wait);
+            const waitToken = typeof step.wait === 'string' && /^\{\{\w+\}\}$/.test(step.wait);
+            if (!waitToken && (!Number.isFinite(waitNum) || waitNum < 0)) {
                 this.addError(`Wait step in ${context} must have positive numeric duration`);
             }
         }

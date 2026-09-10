@@ -165,6 +165,7 @@ class SequenceRunner {
 
     // Run a resolved sequence definition.
     async runSequenceDefNew(name, seqDef, context = {}) {
+        context = { ...this.settingsContext(), ...context };
         const { gameMode } = context;
         const stack = context._stack || [];
         const depth = stack.length;
@@ -239,11 +240,12 @@ class SequenceRunner {
         // Resolve template variables in the step using the context
         const resolvedStep = this.resolveVariables(step, context);
 
-        // Handle :wait command
+        // Handle :wait command (number, or {{setting}} resolved from game settings)
         if (resolvedStep.wait !== undefined) {
-            const duration = typeof resolvedStep.wait === 'number' ? resolvedStep.wait : 1;
-            log.info(`Waiting ${duration} seconds`);
-            await new Promise(resolve => setTimeout(resolve, duration * 1000));
+            const duration = Number(resolvedStep.wait);
+            const seconds = Number.isFinite(duration) ? duration : 1;
+            log.info(`Waiting ${seconds} seconds`);
+            await new Promise(resolve => setTimeout(resolve, seconds * 1000));
             return;
         }
 
@@ -460,6 +462,20 @@ class SequenceRunner {
         }
     }
 
+    settingsContext() {
+        const settings = (this.cfg && this.cfg.global && this.cfg.global.settings)
+            || (this.stateMachine && this.stateMachine.cfg && this.stateMachine.cfg.global
+                && this.stateMachine.cfg.global.settings)
+            || {};
+        const out = {};
+        Object.entries(settings).forEach(([key, value]) => {
+            out[key] = value;
+            const camel = String(key).replace(/-([a-z])/g, (_, ch) => ch.toUpperCase());
+            out[camel] = value;
+        });
+        return out;
+    }
+
     buildRuntimeContext(context = {}) {
         const remaining = this.stateMachine && typeof this.stateMachine.remaining === 'number'
             ? this.stateMachine.remaining
@@ -497,7 +513,7 @@ class SequenceRunner {
             } catch (_) { /* ignore */ }
         }
 
-        return { ...derived, ...context };
+        return { ...this.settingsContext(), ...derived, ...context };
     }
 
     async runControlSequence(name, context = {}) {
