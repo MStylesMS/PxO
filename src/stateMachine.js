@@ -1459,6 +1459,7 @@ class GameStateMachine extends EventEmitter {
               // Handle media control parameters
               if (action.loop !== undefined) options.loop = action.loop;
               if (action.autoPlay !== undefined) options.autoPlay = action.autoPlay;
+              if (action.id !== undefined) options.id = action.id;
 
               // Add name/scene to options for lights commands
               if (action.name) options.name = action.name;

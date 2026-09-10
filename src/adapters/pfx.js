@@ -80,11 +80,11 @@ class PfxAdapterBase {
         break;
 
       case 'stopBackground':
-        this.stopBackground(options.fadeTime);
+        this.stopBackground(options.fadeTime, options);
         break;
 
       case 'stopSpeech':
-        this.stopSpeech(options.fadeTime);
+        this.stopSpeech(options.fadeTime, options);
         break;
 
       case 'stopAudio':
@@ -240,6 +240,7 @@ class PfxAdapterBase {
   playBackground(file, loop = true, options = {}) {
     const command = { command: 'playBackground', file };
     if (loop !== undefined) command.loop = !!loop;
+    if (options.id) command.id = options.id;
     // Absolute volume takes priority over relative adjustments
     if (options.volume !== undefined) {
       command.volume = options.volume;
@@ -266,6 +267,7 @@ class PfxAdapterBase {
   }
   playSpeech(file, options = {}) {
     const command = { command: 'playSpeech', file };
+    if (options.id) command.id = options.id;
     // Absolute volume takes priority over relative adjustments
     if (options.volume !== undefined) {
       command.volume = options.volume;
@@ -303,16 +305,20 @@ class PfxAdapterBase {
     this.mqtt.publish(this.commandTopic, command);
   }
 
-  stopBackground(fadeTime) {
+  stopBackground(fadeTime, options = {}) {
     const command = { command: 'stopBackground' };
     if (fadeTime !== undefined) command.fadeTime = fadeTime;
+    if (options.id) command.id = options.id;
+    if (options.file) command.file = options.file;
     log.info(`[MQTT] ${this.commandTopic} → ${JSON.stringify(command)}`);
     this.mqtt.publish(this.commandTopic, command);
   }
 
-  stopSpeech(fadeTime) {
+  stopSpeech(fadeTime, options = {}) {
     const command = { command: 'stopSpeech' };
     if (fadeTime !== undefined) command.fadeTime = fadeTime;
+    if (options.id) command.id = options.id;
+    if (options.file) command.file = options.file;
     log.info(`[MQTT] ${this.commandTopic} → ${JSON.stringify(command)}`);
     this.mqtt.publish(this.commandTopic, command);
   }
