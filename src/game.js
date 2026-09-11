@@ -49,8 +49,9 @@ function _publishMqttMetadata(mqtt, cfg, sm) {
       application: 'pxo',
       commandsTopic: `${gameTopic}/commands`,
       commands: [
-        { command: 'start', description: 'Start or resume the game (optional groupId, game, name, size, types passport fields)' },
+        { command: 'start', description: 'Start or resume the game (optional groupId, game, name, size, types, mediaId passport fields)' },
         { command: 'setPassport', description: 'Update lean group passport fields without restarting' },
+        { command: 'switchMedia', description: 'Store mediaId on passport/state only (no zone fan-out; PxM owns player pack switch)' },
         { command: 'pause', description: 'Pause the countdown timer' },
         { command: 'resume', description: 'Resume the countdown timer' },
         { command: 'reset', description: 'Reset game to ready state' },

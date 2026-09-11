@@ -1,5 +1,6 @@
 ﻿const fs = require('fs');
 const path = require('path');
+const { passportLogFields } = require('./groupPassport');
 
 function pad2(n) {
     return String(n).padStart(2, '0');
@@ -144,7 +145,7 @@ class GameplayLogger {
             start_command: this.pending.startCommand
         };
         if (this.session.passport) {
-            Object.assign(headerPayload, this._passportFields(this.session.passport));
+            Object.assign(headerPayload, passportLogFields(this.session.passport));
             headerPayload.passport = { ...this.session.passport };
         }
         this._writeLine({
@@ -245,16 +246,10 @@ class GameplayLogger {
         this._append('sensor_changed', payload, Date.now());
     }
 
-    _passportFields(passport) {
-        if (!passport || typeof passport !== 'object') return {};
-        const out = {};
-        if (passport.groupId) out.groupId = passport.groupId;
-        if (passport.game) out.game = passport.game;
-        if (passport.name != null) out.group_name = passport.name;
-        if (passport.notes != null) out.notes = passport.notes;
-        if (passport.size != null) out.group_size = passport.size;
-        if (Array.isArray(passport.types) && passport.types.length) out.types = passport.types.slice();
-        return out;
+    updatePassport(passport) {
+        const copy = passport && typeof passport === 'object' ? { ...passport } : null;
+        if (this.session) this.session.passport = copy;
+        if (this.pending) this.pending.passport = copy;
     }
 
     _append(eventType, payload, tsMs = Date.now(), options = {}) {
@@ -269,7 +264,7 @@ class GameplayLogger {
 
         const passport = (this.session && this.session.passport) || (this.pending && this.pending.passport);
         if (passport) {
-            Object.assign(record, this._passportFields(passport));
+            Object.assign(record, passportLogFields(passport));
         }
 
         if (this.session) {

@@ -6,7 +6,7 @@ const SequenceRunner = require('./sequenceRunner');
 const Hints = require('./hints');
 const { LogicEngine } = require('./logic');
 const { HelperSupervisor } = require('./helpers/helperSupervisor');
-const { normalizePassport, passportLogFields } = require('./groupPassport');
+const { normalizePassport, passportLogFields, readMediaId } = require('./groupPassport');
 const {
 
   getCommandsTopic,
@@ -131,10 +131,17 @@ class GameStateMachine extends EventEmitter {
 
   /**
    * Apply lean passport from a start / setPassport command.
+   * Illegal mediaId publishes a warning and is not stored; start still proceeds.
+   * Omitted mediaId leaves the previously retained pack unchanged.
    * @param {object} cmd
    * @param {{ generateId?: boolean }} [opts]
    */
   applyGroupPassport(cmd, opts = {}) {
+    const media = readMediaId(cmd);
+    if (media.status === 'illegal') {
+      this._warnInvalidMediaId(media.raw);
+    }
+    const previousMediaId = this.groupPassport && this.groupPassport.mediaId;
     const passport = normalizePassport(cmd, {
       defaultGame: this.defaultGame,
       generateId: opts.generateId !== false,
@@ -142,12 +149,66 @@ class GameStateMachine extends EventEmitter {
     if (!passport.startedAt) {
       passport.startedAt = new Date().toISOString();
     }
+    // start / setPassport do not clear a pack (null is switchMedia-only).
+    if (passport.mediaId == null && previousMediaId != null) {
+      passport.mediaId = previousMediaId;
+    }
     this.groupPassport = passport;
+    this._syncLoggerPassport();
     return passport;
+  }
+
+  /**
+   * Store / clear mediaId on the orchestrator passport only.
+   * Does not fan out switchMedia to PFx / zones (PxM owns player fan-out).
+   * refresh is ignored — PxO does not resolve media paths.
+   */
+  applySwitchMedia(cmd = {}) {
+    const media = readMediaId(cmd);
+    if (media.status === 'ok') {
+      if (!this.groupPassport) {
+        this.groupPassport = normalizePassport({}, {
+          defaultGame: this.defaultGame,
+          generateId: false,
+        });
+      } else {
+        this.groupPassport = { ...this.groupPassport };
+      }
+      this.groupPassport.mediaId = media.value;
+      this._syncLoggerPassport();
+      return true;
+    }
+    if (media.status === 'clear') {
+      if (this.groupPassport && this.groupPassport.mediaId != null) {
+        const next = { ...this.groupPassport };
+        delete next.mediaId;
+        this.groupPassport = next;
+        this._syncLoggerPassport();
+      }
+      return true;
+    }
+    this._warnInvalidMediaId(media.raw, media.status === 'omit'
+      ? 'switchMedia requires mediaId (positive integer) or null to clear'
+      : undefined);
+    return true;
+  }
+
+  _warnInvalidMediaId(raw, message) {
+    this.publishWarning('invalid_media_id', {
+      message: message || 'mediaId must be a positive integer matching ^[1-9][0-9]{0,8}$',
+      mediaId: raw
+    });
+  }
+
+  _syncLoggerPassport() {
+    if (this.gameplayLogger && typeof this.gameplayLogger.updatePassport === 'function') {
+      this.gameplayLogger.updatePassport(this.groupPassport);
+    }
   }
 
   clearGroupPassport() {
     this.groupPassport = null;
+    this._syncLoggerPassport();
   }
 
   _normalizePhaseType(phaseType) {
@@ -2314,6 +2375,11 @@ class GameStateMachine extends EventEmitter {
         this.applyGroupPassport(cmd || {}, { generateId: !hasId });
         this.publishState();
         this.publishEvent('passport_updated', { passport: this.getGroupPassport() });
+        return true;
+      }
+      case 'switchMedia': {
+        this.applySwitchMedia(cmd || {});
+        this.publishState();
         return true;
       }
       case 'solve': {

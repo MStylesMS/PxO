@@ -122,9 +122,9 @@ Paradox Speech (PxS) writes a sibling speech archive with the **same stem**:
 - `mode`
 - `gameplay_started_at` — ISO-8601 UTC of gameplay start
 - `file_name`, `start_command`, `reason` (as before)
-- **Group passport** (when provided on `start` / carried from PxM): `groupId`, `game`, optional `group_name` / `group_size` / `types`, plus nested `passport` object
+- **Group passport** (when provided on `start` / carried from PxM): `groupId`, `game`, optional `group_name` / `group_size` / `types` / `mediaId`, plus nested `passport` object
 
-Subsequent JSONL lines also carry top-level `groupId` / `game` (and related fields) when a passport is active, so multi-chamber visits can join logs.
+Subsequent JSONL lines also carry top-level `groupId` / `game` (and related fields, including `mediaId` when set) when a passport is active, so multi-chamber visits can join logs.
 
 ### Start command passport fields
 
@@ -137,8 +137,11 @@ Optional on `{command:"start", ...}` or `{command:"setPassport", ...}`:
 | `name` | Free text |
 | `size` | Player count |
 | `types` | Array of keywords (multi-select): friends, family, coworkers, kids, adults, elderly, novices, experienced, strangers |
+| `mediaId` | Optional catalog Version ID (JSON number or decimal string matching `^[1-9][0-9]{0,8}$`). Stored on the passport and echoed on retained `{baseTopic}/state` and JSONL. Illegal values publish `{baseTopic}/warnings` (`invalid_media_id`) and are not stored; the rest of `start` still proceeds. Omit the field to leave a previously retained pack unchanged. PxO does **not** rewrite EDN `:file` strings and does **not** resolve media paths. Optional `refresh` on `start` is for players; PxO ignores it. |
 
-Retained `{baseTopic}/state` includes the same lean fields under `passport` when set. Cleared on `reset`.
+Retained `{baseTopic}/state` includes the same lean fields under `passport` when set, and a top-level `mediaId` when a pack is set. Omit `mediaId` entirely when unset. Cleared on `reset`.
+
+`switchMedia` on the game commands topic stores or clears `mediaId` on the orchestrator passport/state only (so a single-chamber room without PxM can still set it). PxO does **not** fan out `switchMedia` to PFx or other zones — that is PxM’s job. `mediaId: null` on `switchMedia` clears the pack. Unknown extra fields are ignored; the command does not tear down the process.
 
 - Inbound commands to `{baseTopic}/commands` and their outcomes
 - Phase transitions and top-level gameplay/control sequence lifecycle events
@@ -229,6 +232,8 @@ Published **retained** to `{baseTopic}/schema` at startup. Describes all support
   "commandsTopic": "paradox/houdini/commands",
   "commands": [
     { "command": "start",       "description": "Start or resume the game" },
+    { "command": "setPassport", "description": "Update lean group passport fields without restarting" },
+    { "command": "switchMedia", "description": "Store mediaId on passport/state (no zone fan-out)" },
     { "command": "pause",       "description": "Pause the countdown timer" },
     { "command": "resume",      "description": "Resume the countdown timer" },
     { "command": "reset",       "description": "Reset game to ready state" },
@@ -282,6 +287,8 @@ PxO accepts both modern short commands and legacy `*Game` aliases for compatibil
 
 Preferred commands:
 - `start`
+- `setPassport`
+- `switchMedia`
 - `pause`
 - `resume`
 - `solve`

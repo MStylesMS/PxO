@@ -3,6 +3,7 @@
 const {
   normalizePassport,
   normalizeTypes,
+  passportLogFields,
   CANONICAL_TYPES,
 } = require('../src/groupPassport');
 
@@ -51,5 +52,40 @@ describe('groupPassport', () => {
     expect(p.groupId).toBe('abc-123');
     expect(p.game).toBe('tfd');
     expect(p.types).toEqual(['experienced']);
+  });
+
+  test('normalizePassport stores valid mediaId 2', () => {
+    const fromNumber = normalizePassport({ game: 'tfd', mediaId: 2 }, { generateId: false });
+    expect(fromNumber.mediaId).toBe(2);
+
+    const fromString = normalizePassport({
+      passport: { groupId: 'abc', mediaId: '2' },
+    }, { generateId: false });
+    expect(fromString.mediaId).toBe(2);
+
+    expect(passportLogFields(fromNumber).mediaId).toBe(2);
+  });
+
+  test('normalizePassport skips illegal mediaId', () => {
+    const cases = [0, '0', 'v1', '02', '../etc', '', '1.5', -2];
+    for (const mediaId of cases) {
+      const p = normalizePassport({ game: 'tfd', mediaId }, { generateId: false });
+      expect(p.mediaId).toBeUndefined();
+    }
+    expect(passportLogFields({ groupId: 'x', game: 'tfd' }).mediaId).toBeUndefined();
+  });
+
+  test('normalizePassport omit mediaId leaves passport unchanged', () => {
+    const p = normalizePassport({
+      game: 'tfd',
+      name: 'Crew A',
+      size: 4,
+    }, { generateId: false });
+    expect(p.mediaId).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(p, 'mediaId')).toBe(false);
+    expect(p.game).toBe('tfd');
+    expect(p.name).toBe('Crew A');
+    expect(p.size).toBe(4);
+    expect(passportLogFields(p)).not.toHaveProperty('mediaId');
   });
 });

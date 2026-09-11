@@ -17,6 +17,43 @@ const CANONICAL_TYPES = Object.freeze([
   'strangers',
 ]);
 
+/** Suite media pack id: JSON number or decimal string, no leading zeros. */
+const MEDIA_ID_RE = /^[1-9][0-9]{0,8}$/;
+
+function hasOwn(obj, key) {
+  return obj != null && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+/**
+ * Sanitize a media pack id.
+ * @returns {{ status: 'omit'|'ok'|'illegal'|'clear', value?: number, raw?: * }}
+ */
+function sanitizeMediaId(raw) {
+  if (raw === undefined) return { status: 'omit' };
+  if (raw === null) return { status: 'clear', raw };
+  const asString = typeof raw === 'number' && Number.isFinite(raw)
+    ? String(raw)
+    : String(raw).trim();
+  if (MEDIA_ID_RE.test(asString)) {
+    return { status: 'ok', value: Number(asString) };
+  }
+  return { status: 'illegal', raw };
+}
+
+/**
+ * Read optional mediaId from a start / setPassport / switchMedia payload
+ * (top-level or nested passport). Absent → omit; JSON null → clear.
+ */
+function readMediaId(cmd = {}) {
+  const src = cmd && typeof cmd === 'object' ? cmd : {};
+  const nested = src.passport && typeof src.passport === 'object' ? src.passport : {};
+  if (hasOwn(src, 'mediaId')) return sanitizeMediaId(src.mediaId);
+  if (hasOwn(src, 'media_id')) return sanitizeMediaId(src.media_id);
+  if (hasOwn(nested, 'mediaId')) return sanitizeMediaId(nested.mediaId);
+  if (hasOwn(nested, 'media_id')) return sanitizeMediaId(nested.media_id);
+  return { status: 'omit' };
+}
+
 function randomGroupId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -110,6 +147,9 @@ function normalizePassport(cmd = {}, opts = {}) {
   if (gameTime != null) passport.gameTime = gameTime;
   if (startedAt) passport.startedAt = String(startedAt);
 
+  const media = readMediaId(src);
+  if (media.status === 'ok') passport.mediaId = media.value;
+
   return passport;
 }
 
@@ -129,13 +169,17 @@ function passportLogFields(passport) {
   if (passport.notes != null) out.notes = passport.notes;
   if (passport.size != null) out.group_size = passport.size;
   if (Array.isArray(passport.types) && passport.types.length) out.types = passport.types.slice();
+  if (passport.mediaId != null) out.mediaId = passport.mediaId;
   return out;
 }
 
 module.exports = {
   CANONICAL_TYPES,
+  MEDIA_ID_RE,
   randomGroupId,
   normalizeTypes,
+  sanitizeMediaId,
+  readMediaId,
   normalizePassport,
   passportLogFields,
 };

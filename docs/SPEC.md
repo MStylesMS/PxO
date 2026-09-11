@@ -626,6 +626,8 @@ Control command sequence hooks (resolved from `global.system-sequences`):
 - `machineReboot` â†’ `machine-reboot-sequence` (OS-level reboot)
 - `restartAdapters` â†’ `restart-adapters`
 
+PxO echoes an optional suite **media pack** id (`mediaId`) on `start` / `setPassport` / `switchMedia`, retained game `state`, and gameplay JSONL. It does not rewrite EDN `:file` strings, does not resolve `{media_dir}/{mediaId}/{file}`, and does not fan out `switchMedia` to zones (PxM owns player pack switch). Illegal ids are warned and dropped; omit leaves a previously retained pack unchanged. Optional `refresh` is ignored.
+
 ### Game State Publishing
 
 Published to: `{baseTopic}/state`
