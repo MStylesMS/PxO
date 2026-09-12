@@ -177,4 +177,56 @@ describe('logic engine', () => {
     expect(engine.getSnapshot().keypad.enabled).toBe(true);
     expect(engine.getSnapshot().keypad.output).toBeTruthy();
   });
+
+  test('reset clears timeout startedAt so re-arm does not fire immediately', async () => {
+    let now = 1_000;
+    const { engine, actions } = makeEngine({
+      arm: {
+        type: 'passthrough',
+        input: { const: false },
+        latch: true
+      },
+      hurry: {
+        type: 'timeout',
+        start: 'arm',
+        'duration-ms': 5_000,
+        'reset-on-false': true,
+        'on-true': [{ fire: 'hurry-vo' }]
+      }
+    });
+    engine.nowFn = () => now;
+
+    await engine.forceSolve('arm');
+    expect(engine.nodeState.get('hurry').startedAt).toBe(1_000);
+
+    now = 7_000;
+    await engine.tick(now);
+    expect(engine.getSnapshot().hurry.output).toBe(true);
+    expect(actions.some((a) => a.action.fire === 'hurry-vo')).toBe(true);
+
+    const firesBeforeReset = actions.filter((a) => a.action.fire === 'hurry-vo').length;
+    engine.reset();
+    expect(engine.getSnapshot().hurry.output).toBe(false);
+    expect(engine.nodeState.get('hurry').startedAt).toBe(0);
+    expect(engine.getSnapshot().arm.output).toBe(false);
+
+    now = 8_000;
+    await engine.tick(now);
+    expect(engine.getSnapshot().hurry.output).toBe(false);
+    expect(actions.filter((a) => a.action.fire === 'hurry-vo')).toHaveLength(firesBeforeReset);
+
+    await engine.forceSolve('arm');
+    expect(engine.nodeState.get('hurry').startedAt).toBe(8_000);
+    expect(engine.getSnapshot().hurry.output).toBe(false);
+
+    now = 10_000;
+    await engine.tick(now);
+    expect(engine.getSnapshot().hurry.output).toBe(false);
+    expect(actions.filter((a) => a.action.fire === 'hurry-vo')).toHaveLength(firesBeforeReset);
+
+    now = 13_500;
+    await engine.tick(now);
+    expect(engine.getSnapshot().hurry.output).toBe(true);
+    expect(actions.filter((a) => a.action.fire === 'hurry-vo').length).toBeGreaterThan(firesBeforeReset);
+  });
 });

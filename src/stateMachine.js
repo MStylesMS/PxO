@@ -1237,6 +1237,13 @@ class GameStateMachine extends EventEmitter {
     this.clearAllPhaseSchedules();
     this._closingOutcomeMediaFired.clear();
 
+    // Auto end-of-game reset phase must clear the full logic graph (latches,
+    // timeout startedAt, gates, gameplayStartedAt). Operator `_runResetSequence`
+    // already resets; this covers solved/failed → reset → ready without that path.
+    if (phaseName === 'reset' && this.logicEngine) {
+      this.logicEngine.reset();
+    }
+
     // Setup for new phase
     this.currentPhase = phaseName;
     this.currentPhaseConfig = phaseConfig;
@@ -2577,6 +2584,11 @@ class GameStateMachine extends EventEmitter {
     if (!validationResult.valid) {
       log.warn(`Game configuration validation failed for mode '${gameType}'. Some features may not work correctly.`);
     }
+
+    // Clear logic graph before intro/arming so stale timeout startedAt / latches
+    // from a prior run (or ready-period activity) cannot fire immediately.
+    // Idempotent with the auto-reset-phase / operator-reset clears above.
+    if (this.logicEngine) this.logicEngine.reset();
 
     // Start the game by transitioning to the 'intro' phase.
     // The phase engine will handle the rest of the flow.
