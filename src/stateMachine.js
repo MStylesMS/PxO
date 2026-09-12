@@ -75,6 +75,7 @@ class GameStateMachine extends EventEmitter {
     this.globalSequences = {}; // flattened from canonical runtime sequence registries for reference resolution
     this.gameplayLogger = null;
     this.groupPassport = null;
+    this.roomTest = false;
     this.defaultGame =
       (cfg.global && (cfg.global.game || cfg.global.gameSlug || cfg.global['game-slug'])) ||
       null;
@@ -2056,6 +2057,9 @@ class GameStateMachine extends EventEmitter {
       Object.assign(statePayload, passportLogFields(this.groupPassport));
       statePayload.passport = { ...this.groupPassport };
     }
+    if (this.roomTest) {
+      statePayload.test = true;
+    }
     if (this.logicEngine && this.logicEngine.graph.size > 0) {
       statePayload.logic = this.logicEngine.getSnapshot();
     }
@@ -2364,7 +2368,13 @@ class GameStateMachine extends EventEmitter {
       }
       case 'start': {
         const mode = cmd && (cmd.mode || cmd.value || cmd.gameType);
-        this.applyGroupPassport(cmd || {}, { generateId: true });
+        const isTest = cmd && (cmd.test === true || cmd.test === 'true' || cmd.test === 1);
+        this.roomTest = !!isTest;
+        if (isTest) {
+          this.clearGroupPassport();
+        } else {
+          this.applyGroupPassport(cmd || {}, { generateId: true });
+        }
         return await this._startViaSequences(mode || this.currentGameMode || (Object.keys(this.cfg.game || {})[0]));
       }
       case 'setPassport': {
@@ -2721,6 +2731,7 @@ class GameStateMachine extends EventEmitter {
     this.stopUnifiedTimer();
     if (this.clearAllPhaseSchedules) this.clearAllPhaseSchedules();
     this._closingOutcomeMediaFired.clear();
+    this.roomTest = false;
     if (this.logicEngine) this.logicEngine.reset();
     this.changeState('resetting', { reason: 'reset_sequence_initiated', gameMode });
     this.publishEvent('resetting');
@@ -3049,6 +3060,7 @@ class GameStateMachine extends EventEmitter {
     this.changeState('resetting', { reason: 'direct_reset_method', version });
     this.mode = null;
     this.remaining = 0;
+    this.roomTest = false;
     this.clearGroupPassport();
 
     this.publishEvent('reset_started', { version });

@@ -279,6 +279,8 @@ PxO is designed to work with:
 
 ## MQTT Broker Setup
 
+Paradox multi-host rooms use **Eclipse Mosquitto on every bridged machine**. With Mosquitto bridge rules that use `topic … both`, set `try_private true` on the bridge connection so mirrored publishes do not echo back as duplicate local commands. That handshake only works Mosquitto↔Mosquitto — keep the same broker product on all connected hosts (patch versions may lag).
+
 ### Install Mosquitto (Ubuntu/Debian)
 
 ```bash

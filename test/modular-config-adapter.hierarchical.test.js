@@ -122,4 +122,18 @@ describe('ModularConfigAdapter hierarchical sequences', () => {
         expect(runtimeConfig.global['trigger-sources']).toBeUndefined();
         expect(runtimeConfig.global.triggerSources).toBeUndefined();
     });
+
+    test('passes through global.settings for sequence {{templates}}', () => {
+        const runtimeConfig = ModularConfigAdapter.transform(createConfig({
+            global: {
+                settings: {
+                    'default-mode': 'demo',
+                    'intro-delay-s': 20
+                }
+            }
+        }));
+
+        expect(runtimeConfig.global.settings['intro-delay-s']).toBe(20);
+        expect(runtimeConfig.global.defaultMode).toBe('demo');
+    });
 });

@@ -230,6 +230,8 @@ class ModularConfigAdapter {
         gameHeartbeatMs: settings['game-heartbeat-ms'],
         introDebounceMs: settings['intro-debounce-ms'],
         timeRemainingPretext: settings['time-remaining-pretext'],
+        // Keep the full settings map so EDN {{camelCase}} waits (introDelayS, etc.) resolve.
+        settings,
         mqtt: { ...(modular.global.mqtt || {}), topics },
         media: Object.keys(mediaRoot).length > 0 ? {
           ...mediaRoot,

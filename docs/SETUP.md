@@ -32,7 +32,9 @@ node src/game.js --version
 
 ### 2. Install MQTT Broker
 
-**Mosquitto** (recommended):
+**Mosquitto** (required for Paradox multi-host setups):
+
+Use **Eclipse Mosquitto on every machine that shares MQTT** (Pi chambers, hub, optional Windows laptop). Bridged `topic … both` rules need Mosquitto’s private-bridge handshake (`try_private true`) so mirrored publishes do not echo back as duplicate local commands. Other brokers (HiveMQ, RabbitMQ MQTT, etc.) do not support that handshake.
 
 ```bash
 # Debian/Ubuntu/Raspberry Pi OS
@@ -56,7 +58,7 @@ brew services start mosquitto
 
 **Windows**:
 
-Download from [https://mosquitto.org/download/](https://mosquitto.org/download/)
+Download from [https://mosquitto.org/download/](https://mosquitto.org/download/). If this workstation will bridge to another Paradox broker, keep Mosquitto on both ends and set `try_private true` on the bridge `connection` block (see below).
 
 ### 3. Create Configuration
 
@@ -489,6 +491,23 @@ password_file /etc/mosquitto/passwd
 # ACL (optional)
 acl_file /etc/mosquitto/acl
 ```
+
+### Multi-host bridges (`try_private`)
+
+When two Paradox hosts each run Mosquitto and you mirror topics with `both`, set this on the **bridge** (outgoing) connection so the remote Mosquitto treats the link as a bridge and suppresses echo loops:
+
+```conf
+connection bridge-to-hub
+address hub.local:1883
+try_private true
+topic paradox/example/# both 0
+```
+
+- **Same broker product:** Mosquitto on every bridged machine (patch versions may lag; that is fine).
+- **Issue without it:** local apps can see the same MQTT command twice (e.g. double `playBackground`).
+- Set `try_private false` only when bridging to a non-Mosquitto broker, and prefer split `in`/`out` topic rules in that case.
+
+Room example: TFD chamber bridges in `rooms/tfd/config/mosquitto/20-bridge-to-tfd-*.conf` and [MQTT-BRIDGE.md](../../../rooms/tfd/docs/MQTT-BRIDGE.md).
 
 ### Create User (Optional)
 
