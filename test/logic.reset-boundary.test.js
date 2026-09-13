@@ -142,6 +142,37 @@ describe('logic graph reset at auto reset / new-game boundaries', () => {
     assert(sm.logicEngine.getSnapshot().hurry.output === true, 'expected hurry after fresh duration');
   });
 
+  test('start from ready re-enters intro when currentPhase is still intro', async () => {
+    const sm = createMachine({ now: () => 1_000 });
+    const transitions = [];
+    const originalTransition = sm.transitionToPhase.bind(sm);
+    sm.transitionToPhase = async (phaseName) => {
+      transitions.push(phaseName);
+      return originalTransition(phaseName);
+    };
+
+    sm.state = 'ready';
+    sm.currentPhase = 'intro';
+    sm.currentPhaseConfig = sm.phases.intro;
+
+    const started = await sm._startViaSequences('test');
+    assert(started === true, 'expected start to succeed');
+    assert(transitions[0] === 'intro', 'expected intro to run again');
+  });
+
+  test('operator reset clears currentPhase so the next start can re-enter intro', async () => {
+    const sm = createMachine({ now: () => 1_000 });
+    sm._resolveResetDefinition = () => ({ config: null, type: null });
+    sm.state = 'intro';
+    sm.currentPhase = 'intro';
+    sm.currentPhaseConfig = sm.phases.intro;
+
+    const ok = await sm._runResetSequence();
+    assert(ok === true, 'expected operator reset to succeed');
+    assert(sm.state === 'ready', 'expected operator reset to ready');
+    assert(sm.currentPhase === null, 'expected currentPhase cleared on ready');
+  });
+
   test('operator _runResetSequence still clears the graph (idempotent with phase reset)', async () => {
     let now = 1_000;
     const sm = createMachine({ now: () => now });

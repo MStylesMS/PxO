@@ -1401,6 +1401,16 @@ class GameStateMachine extends EventEmitter {
   }
 
   /**
+   * Drop the last phase name without running a transition.
+   * Ready is not a phase; leaving currentPhase set makes the next
+   * transitionToPhase(same-name) no-op (Start Room Test after reset).
+   */
+  _releasePhase() {
+    this.currentPhase = null;
+    this.currentPhaseConfig = null;
+  }
+
+  /**
    * Finish the reset phase and return to ready.
    * Shared by sequence-reset post-wait and {:complete "reset"} triggers.
    */
@@ -1409,6 +1419,7 @@ class GameStateMachine extends EventEmitter {
       return false;
     }
 
+    this._releasePhase();
     this.changeState('ready', { reason: 'reset_phase_completed' });
     this.publishEvent('reset_completed');
     this.publishState();
@@ -2590,6 +2601,11 @@ class GameStateMachine extends EventEmitter {
     // Idempotent with the auto-reset-phase / operator-reset clears above.
     if (this.logicEngine) this.logicEngine.reset();
 
+    // Ready does not own a phase name. Operator reset leaves currentPhase at
+    // the last hang (elevator keeps the 450s clock on intro), so start would
+    // no-op as "Already in phase intro". Always re-enter intro from ready.
+    this._releasePhase();
+
     // Start the game by transitioning to the 'intro' phase.
     // The phase engine will handle the rest of the flow.
     await this.transitionToPhase('intro');
@@ -2759,6 +2775,7 @@ class GameStateMachine extends EventEmitter {
 
     if (!hasExecutableReset) {
       log.info(`[PhaseEngine] No reset sequence defined for mode '${gameMode || 'unknown'}'; skipping.`);
+      this._releasePhase();
       this.changeState('ready', { reason: 'reset_sequence_skipped', gameMode });
       this.idleCounter = 0;
       this.publishEvent('reset_sequence_skipped', { mode: gameMode });
@@ -2778,6 +2795,7 @@ class GameStateMachine extends EventEmitter {
       }
 
       if (result && result.ok) {
+        this._releasePhase();
         this.changeState('ready', {
           reason: 'reset_sequence_complete',
           sequence: this._runningSequence,
