@@ -82,6 +82,18 @@ describe('HelperSupervisor', () => {
     expect(sup.isRunning('simon')).toBe(false);
   });
 
+  test('starts helpers whose active phases include ready', () => {
+    const spawnImpl = jest.fn(() => mockChild());
+    const sup = new HelperSupervisor({
+      definitions: [{ id: 'flow', cmd: ['node', 'x'], 'active-phases': ['ready', 'intro', 'gameplay'] }],
+      spawnImpl,
+      logger: { info() {}, warn() {} },
+    });
+    sup.syncForPhase('ready');
+    expect(spawnImpl).toHaveBeenCalledTimes(1);
+    expect(sup.isRunning('flow')).toBe(true);
+  });
+
   test('does not start helpers outside active phases', () => {
     const spawnImpl = jest.fn(() => mockChild());
     const sup = new HelperSupervisor({

@@ -2124,6 +2124,15 @@ class GameStateMachine extends EventEmitter {
       to: newState,
       context
     });
+
+    // Ready/resetting are not PhaseEngine phases, so enterPhase never runs.
+    // Keep Option F helpers aligned with the current state on every transition
+    // (boot + operator reset land on ready via changeState only).
+    try {
+      this.helperSupervisor?.syncForPhase(newState);
+    } catch (err) {
+      log.warn(`[helpers] syncForPhase failed: ${err && err.message ? err.message : err}`);
+    }
   }
 
   getPhaseDuration(phase) {
@@ -3096,11 +3105,16 @@ class GameStateMachine extends EventEmitter {
     this.publishEvent('reset_started', { version });
     this.publishState();
 
-    // Option F: tear down helpers before reset sequences (fire-and-forget)
-    Promise.resolve(this.helperSupervisor?.stopAll({ reason: 'reset' })).catch(() => {});
-
-    // Execute reset sequence (replaces legacy setup sequence)
-    this._runResetSequence();
+    // Stop helpers, then run reset. Do not fire-and-forget stopAll — spawn
+    // during ready is skipped while _stoppingAll is true.
+    (async () => {
+      try {
+        await this.helperSupervisor?.stopAll({ reason: 'reset' });
+      } catch (_) { /* best effort */ }
+      await this._runResetSequence();
+    })().catch((err) => {
+      log.warn(`Reset sequence failed: ${err && err.message ? err.message : err}`);
+    });
   }
 
   async _runAbortSequence({ source = 'command', force = false } = {}) {
